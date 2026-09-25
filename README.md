@@ -1,30 +1,88 @@
-# Model Watch — mass real-time retrieval
-# Scope: Anthropic, OpenAI, OpenRouter + all no-billing FREE models usable in OpenCode
-# Cadence: on-use (run when needed) | Storage: raw JSON + store.sqlite | Reports: MD + XLSX + JSON
-# Retention: raw/analysis/reports keep latest run only (auto-pruned); store.sqlite keeps history for diffs
+# ModelAnalysis
 
-## Layout
-- `retrieval/fetch_models.py` — 1. Data Retrieval Process
-- `analysis/analyze.py` — 2. Data Analysis
-- `reports/build_report.py` — 3. Report
-- `raw/` — latest snapshot `YYYY-MM-DD_HHMM_models.json` (+ `_errors.log` for that run)
-- `analysis/store.sqlite` — history; diffs compare against the previous day
-- `reports/` — latest `YYYY-MM-DD_HHMM_summary.md`, `_models.xlsx`, `_models.json`
+On-use snapshot of usable free LLM catalogs. Pulls OpenRouter, OpenAI, Anthropic, and Artificial Analysis, filters to strict-$0 free models, and writes a ranked Markdown + Excel + JSON report.
 
-## On-use run (PowerShell)
+No keys required for a public run. No billing. Keys stay local and are never committed.
+
+## Features
+
+- Public-first retrieval — OpenRouter works with no keys; authed sources are skipped gracefully when keys are absent
+- Strict-$0 free filter — text-output models with zero prompt + completion pricing (or `:free` suffix), routers excluded
+- Quality ranking — OpenRouter free list joined to Artificial Analysis Intelligence Index where available
+- Diffs vs history — new / removed model IDs compared against local SQLite history
+- One-command run — `run.ps1` refreshes snapshot → analysis → report, keeping only the latest run
+
+## Quickstart
+
+Requirements: Python 3 and PowerShell.
+
 ```powershell
+pip install -r requirements.txt
 powershell -File run.ps1
 ```
-Or step by step:
+
+Public-only run needs no keys. For the full catalog, add keys (see Configuration).
+
+Step by step:
+
 ```powershell
 python retrieval/fetch_models.py
 python analysis/analyze.py
 python reports/build_report.py
 ```
 
-## Keys (local env only, never committed)
-See `.env.example`. Public-only run works with no keys (OpenRouter only).
-Full catalog needs: `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `OPENROUTER_API_KEY` (optional, raises limits), `AA_API_KEY` (scores/prices).
+## What you get
+
+After a run, all dated with `YYYY-MM-DD_HHMM`:
+
+| Output | Path |
+|---|---|
+| Human-readable ranking | `reports/<stamp>_summary.md` |
+| Spreadsheet (summary, free_rank, aa_top15, diff) | `reports/<stamp>_models.xlsx` |
+| Machine-readable analysis | `reports/<stamp>_models.json` |
+| Raw provider snapshot | `raw/<stamp>_models.json` |
+| History for diffs | `analysis/store.sqlite` |
+
+Only the latest run is kept on disk (auto-pruned each run). Generated outputs are gitignored; source is what gets committed.
+
+The summary lists: combined free rank (top 20), full strict-$0 free list with OpenCode IDs (`openrouter/<id>`), AA Top 15 by Intelligence Index, native Anthropic IDs, OpenAI retired IDs, and new/removed diffs.
+
+## Configuration
+
+Keys are local-only (`.env`, OS env, or `User` env vars). Never committed. See `.env.example`.
+
+| Key | Needed for | Required? |
+|---|---|---|
+| _(none)_ | OpenRouter public catalog | No |
+| `OPENAI_API_KEY` | OpenAI `/v1/models` listing | Only for OpenAI section |
+| `ANTHROPIC_API_KEY` | Anthropic `/v1/models` listing | Only for Anthropic section |
+| `OPENROUTER_API_KEY` | Higher OpenRouter rate limits | Optional |
+| `AA_API_KEY` | Artificial Analysis scores/prices | Only for AA sections |
+| `NVIDIA_API_KEY`, `GOOGLE_AI_STUDIO_KEY` | Reserved for future validation | Not used in v1 |
 
 ## Free rule
-Strict $0 at retrieval time. Trials/limits allowed IFF no billing info required (account + API key max).
+
+A model counts as free only if it costs $0 at retrieval time: zero prompt + completion price (or `:free` ID), text-only output, no `openrouter/*` router entries. Trials and rate limits are fine as long as no billing info is required (account + API key at most).
+
+## Project structure
+
+```
+retrieval/fetch_models.py  — stage 1: fetch snapshots from all providers
+analysis/analyze.py        — stage 2: normalize, free-filter, rank, diff vs SQLite
+reports/build_report.py    — stage 3: write MD + XLSX + JSON report
+raw/                       — timestamped snapshots (gitignored)
+analysis/store.sqlite      — local history (gitignored)
+reports/                   — dated reports (gitignored)
+docs/                      — user guide and pipeline internals
+```
+
+## Docs
+
+- `docs/USER_GUIDE.md` — setup, running, reading reports, troubleshooting
+- `docs/PIPELINE.md` — pipeline internals, schemas, and extension points (maintainer reference)
+
+## Notes and limits
+
+- Provider rate limits and data-use policies change; the limits table in reports is hand-maintained (last checked 2026-09-25) — verify in provider docs before heavy use.
+- Per-model OpenCode compatibility is not verified by this tool.
+- Snapshots are point-in-time; re-run on use to refresh.
