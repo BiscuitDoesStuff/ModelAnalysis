@@ -1,0 +1,9 @@
+.env
+raw/*.json
+raw/_errors.log
+analysis/store.sqlite
+analysis/*_analysis.json
+reports/*_models.json
+reports/*_models.xlsx
+reports/*_summary.md
+__pycache__/
