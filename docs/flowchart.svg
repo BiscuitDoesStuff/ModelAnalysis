@@ -1,0 +1,82 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="620" font-family="Segoe UI, Arial, sans-serif">
+  <style>
+    .box { fill: #0f172a; stroke: #38bdf8; stroke-width: 1.5; rx: 10; }
+    .title { fill: #e2e8f0; font-size: 15px; font-weight: 700; }
+    .sub { fill: #94a3b8; font-size: 12px; }
+    .file { fill: #1e293b; stroke: #64748b; stroke-width: 1.2; rx: 8; }
+    .file-t { fill: #e2e8f0; font-size: 12.5px; font-weight: 600; }
+    .file-s { fill: #94a3b8; font-size: 11px; }
+    .arrow { stroke: #38bdf8; stroke-width: 2; fill: none; marker-end: url(#ah); }
+    .arrow-dim { stroke: #64748b; stroke-width: 1.6; fill: none; marker-end: url(#ah2); }
+    .label { fill: #7dd3fc; font-size: 11px; }
+  </style>
+  <defs>
+    <marker id="ah" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#38bdf8"/></marker>
+    <marker id="ah2" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#64748b"/></marker>
+  </defs>
+  <rect width="900" height="620" fill="#020617" rx="12"/>
+
+  <text x="30" y="38" fill="#f8fafc" font-size="20" font-weight="800">ModelAnalysis — pipeline flowchart</text>
+  <text x="30" y="58" fill="#64748b" font-size="12">run.ps1 runs stages in order, stops on first failure</text>
+
+  <!-- run.ps1 -->
+  <rect x="30" y="75" width="840" height="46" rx="10" fill="#082f49" stroke="#38bdf8" stroke-width="1.5"/>
+  <text x="46" y="103" fill="#e0f2fe" font-size="14" font-weight="700">run.ps1  →  stage 1 → stage 2 → stage 3  (prune to latest run at each stage)</text>
+
+  <!-- providers -->
+  <rect class="file" x="30" y="145" width="200" height="86"/>
+  <text class="file-t" x="44" y="168">Providers</text>
+  <text class="file-s" x="44" y="187">OpenRouter (public, required)</text>
+  <text class="file-s" x="44" y="203">OpenAI / Anthropic / AA</text>
+  <text class="file-s" x="44" y="219">(keyed, optional)</text>
+
+  <rect class="file" x="30" y="245" width="200" height="60"/>
+  <text class="file-t" x="44" y="267">Keys (local only)</text>
+  <text class="file-s" x="44" y="286">.env / env vars, never committed</text>
+
+  <!-- stage 1 -->
+  <rect class="box" x="270" y="145" width="280" height="160"/>
+  <text class="title" x="286" y="172">1 · retrieval/fetch_models.py</text>
+  <text class="sub" x="286" y="192">GET catalogs · retry 3x + backoff</text>
+  <text class="sub" x="286" y="210">missing key → {"skipped"} · 4xx fast-fail</text>
+  <text class="sub" x="286" y="228">OR fail → exit 1, no snapshot</text>
+  <text class="sub" x="286" y="246">writes raw/&lt;stamp&gt;_models.json</text>
+  <text class="sub" x="286" y="264">_errors.log · prune keep 1</text>
+
+  <!-- stage 2 -->
+  <rect class="box" x="590" y="145" width="280" height="160"/>
+  <text class="title" x="606" y="172">2 · analysis/analyze.py</text>
+  <text class="sub" x="606" y="192">normalize · strict-$0 free filter</text>
+  <text class="sub" x="606" y="210">AA slug-match ranking (top 30)</text>
+  <text class="sub" x="606" y="228">upsert store.sqlite · diff new/removed</text>
+  <text class="sub" x="606" y="246">writes analysis/&lt;stamp&gt;_analysis.json</text>
+  <text class="sub" x="606" y="264">prune keep 1 · history in SQLite</text>
+
+  <!-- stage 3 -->
+  <rect class="box" x="270" y="350" width="600" height="150"/>
+  <text class="title" x="286" y="377">3 · reports/build_report.py</text>
+  <text class="sub" x="286" y="397">reads newest analysis/*_analysis.json → writes one &lt;stamp&gt; triple:</text>
+  <text class="sub" x="286" y="417">summary.md (rank 20 · free list + openrouter/ IDs · AA top 15 · diffs · limits)</text>
+  <text class="sub" x="286" y="437">models.json (full object) · models.xlsx (summary · free_rank · aa_top15 · diff)</text>
+  <text class="sub" x="286" y="457">needs openpyxl or xlsx skipped · prune older stamps</text>
+  <text class="sub" x="286" y="477">OpenCode IDs: openrouter/&lt;or_id&gt; · verify limits in provider docs</text>
+
+  <!-- outputs -->
+  <rect class="file" x="30" y="350" width="200" height="150"/>
+  <text class="file-t" x="44" y="373">Outputs (gitignored)</text>
+  <text class="file-s" x="44" y="393">raw/ snapshot + _errors.log</text>
+  <text class="file-s" x="44" y="411">analysis/ JSON + store.sqlite</text>
+  <text class="file-s" x="44" y="429">reports/ MD + XLSX + JSON</text>
+  <text class="file-s" x="44" y="447">latest run only (auto-pruned)</text>
+  <text class="file-s" x="44" y="465">source is what gets committed</text>
+
+  <!-- arrows -->
+  <line class="arrow-dim" x1="230" y1="175" x2="268" y2="175"/>
+  <line class="arrow-dim" x1="230" y1="275" x2="268" y2="260"/>
+  <line class="arrow" x1="550" y1="225" x2="588" y2="225"/>
+  <text class="label" x="553" y="215">snapshot</text>
+  <line class="arrow" x1="590" y1="330" x2="590" y2="348"/>
+  <text class="label" x="600" y="342">analysis JSON</text>
+  <line class="arrow-dim" x1="230" y1="425" x2="268" y2="425"/>
+  <text class="label" x="120" y="520" fill="#64748b">legend: blue = flow · gray = inputs/outputs</text>
+</svg>
