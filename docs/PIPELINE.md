@@ -15,7 +15,7 @@ alerts/check_churn.py     → console churn summary + reports/<stamp>_churn_aler
 
 ## Stage 1 — retrieval (`retrieval/fetch_models.py`)
 
-- Hybrid: OpenRouter public first (no key), authed sources only when keys exist.
+- Hybrid: public catalogs first (OpenRouter required; NVIDIA/ZenMux/Zen keyless), authed sources only when keys exist.
 - `get()` retries 3x with backoff on 5xx/network errors; 4xx fails fast. All retries/failures append to `raw/_errors.log` (truncated at run start).
 - Endpoints: OpenRouter `GET /api/v1/models`; OpenAI `GET /v1/models` (`Authorization: Bearer`); Anthropic `GET /v1/models` (`x-api-key` + `anthropic-version: 2023-06-01`); Groq `GET /openai/v1/models` (OpenAI-compatible, `Authorization: Bearer`); Cerebras `GET /v1/models` (OpenAI-compatible, `Authorization: Bearer`); NVIDIA `GET /v1/models` on `integrate.api.nvidia.com` (public, keyless); ZenMux `GET /api/v1/models` (public, keyless; richest schema: display names, modalities, context, per-MToken pricings); OpenCode Zen `GET /zen/v1/models` on `opencode.ai` (public, keyless; bare-slug IDs, `-free` suffixed free routes); AA `GET /api/v2/data/llms/models` (`x-api-key`).
 - Missing keys return `{"skipped": "no <KEY>"}`; exceptions return `{"error": ...}` via `safe()`. OpenRouter failure exits 1 with no snapshot. Groq/Cerebras need `GROQ_API_KEY` / `CEREBRAS_API_KEY`; when absent their catalogs are skipped and analysis proceeds without them.
@@ -32,11 +32,11 @@ Free classification (`or_rows[].free`), all must hold:
 2. `(architecture.output_modalities) == ["text"]`; AND
 3. id does not start with `openrouter/`.
 
-AA rows: `{id: slug|id, name, creator, score: evaluations.artificial_analysis_intelligence_index, cost_blended: pricing.price_1m_blended_3_to_1, zero_price: input==0 and output==0}`. Top 15 by score; `aa_free_unverified` = zero-price IDs (billing/account NOT checked).
+AA rows: `{id: slug|id, name, creator, score: evaluations.artificial_analysis_intelligence_index, cost_blended: pricing.price_1m_blended_3_to_1, zero_price: input==0 and output==0}`. Zero-price IDs are billing/account-unverified by definition.
 
 Provisional-free (Phase 1, fully automatic, no human registry): per canonical row `free_status` ∈ `verified` (OR strict-free) / `provisional-l1` (AA $0 + OR listing exists) / `provisional-l0` (AA $0 only) / `none`, plus `free_evidence[]` (`or:strict-free`, `aa:zero-price`, `or:listed`). `free` bool and `F` group stay verified-only. Output adds `free_status_counts{verified, provisional-l1, provisional-l0, none}`.
 
-Combined rank: strict-free OpenRouter rows joined to AA by exact normalized-slug match — `norm(id) = re.sub(r"[^a-z0-9]", "", lower(id))` applied to `or_id.split(":")[0].split("/")[-1]`. No match → `aa_score 0`, `aa_match ""`. Top 30 by score.
+Canonical dedupe (reports-layer union; raw snapshots untouched): all providers merge by normalized tail slug — `norm(id) = re.sub(r"[^a-z0-9]", "", lower(id))` applied to `id.split(":")[0].split("/")[-1]` — into `models[]` rows with `providers[]` tags. Same-slug merges from distinct OR listings are recorded in `collisions[]` (kept merged).
 
 SQLite (`analysis/store.sqlite`, table `models`):
 
@@ -44,7 +44,7 @@ SQLite (`analysis/store.sqlite`, table `models`):
 (id TEXT, source TEXT, day TEXT, free INT, PRIMARY KEY(id, source, day))
 ```
 
-Sources stored: openrouter (free = strict-free flag), openai / anthropic / groq / cerebras (free = 0). Legacy tables lacking `source` are renamed to `models_old_<stamp>` and rebuilt. Diffs compare current OpenRouter IDs against the max stored `day < today`: `new_ids_vs_history`, `removed_ids_vs_history` (capped at 50 in JSON, full counts in `new_total`/`removed_total`). OR free-flag flips for IDs present on both days are reported as `free_churn.or_flipped_to_paid|or_flipped_to_free`.
+Sources stored: openrouter (free = strict-free flag), openai / anthropic / groq / cerebras / nvidia / zenmux / zen (free = 0). Legacy tables lacking `source` are renamed to `models_old_<stamp>` and rebuilt. Diffs compare current OpenRouter IDs against the max stored `day < today`: `new_ids_vs_history`, `removed_ids_vs_history` (capped at 50 in JSON, full counts in `new_total`/`removed_total`). OR free-flag flips for IDs present on both days are reported as `free_churn.or_flipped_to_paid|or_flipped_to_free`.
 
 Churn (`free_history` table: `(slug TEXT, day TEXT, free_status TEXT, disp_id TEXT, PRIMARY KEY(slug, day))`, non-router canonical rows only): each run upserts the current day, then diffs against the max stored `day < today` → `free_churn{prev_day, flipped_to_paid (was free-ish, now none), flipped_to_free (was none, now free-ish), level_changed (free-ish → other free-ish level), disappeared (slug gone), new_slugs}`. Lists capped at 50 with `*_total` counts. Empty (`prev_day: null`) until a second distinct day exists — same convention as the OR diffs. The report passes `free_churn` through to JSON uncapped-meta, plus a one-line MD/HTML overview note when `prev_day` exists.
 
@@ -69,7 +69,6 @@ Input: newest `analysis/*_analysis.json` (`models[]` canonical rows). Outputs sh
 - `.md`: header counts + 9 sections, top 20 per list, gap flags inline. Provisional rows show `[F?]` in the groups bracket.
 - `.json`: 9 section keys uncapped + `quartiles` + `score_dist` (p10/p50/p90/max for threshold calibration) + `thresholds` + `routers_excluded` + `collisions` + `free_status_counts` + `*_verified_free_by_score` / `*_provisional_free_by_score` ratio splits + `free_churn` (same object as analysis).
 - `.html`: tabbed dashboard (Overview + 9 sections), per-tab search, click-to-copy OpenCode IDs, no dependencies. Overview shows a churn line (`→paid / →free / disappeared / new vs <prev_day>`) once two distinct days exist.
-- `.html`: tabbed dashboard (Overview + 9 sections), per-tab search, click-to-copy OpenCode IDs, no dependencies.
 - `.xlsx` (requires `openpyxl`, else `xlsx skipped`): `summary | All_Intel | All_Cost | All_Ratio | OCF_Intel | OCF_Cost | OCF_Ratio | OCF_Stack | OCF_Practical | OCF_Outliers`. Data sheets carry a `free_status` column (`verified` / `provisional-l1` / `provisional-l0` / `none`); `summary` carries `free_verified` / `provisional_l1` / `provisional_l0` counts.
 
 ## Stage 4 — alerts (`alerts/check_churn.py`)

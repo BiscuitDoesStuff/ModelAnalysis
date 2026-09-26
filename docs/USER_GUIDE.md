@@ -13,7 +13,7 @@ Everything a user needs to install, run, and read ModelAnalysis output. Maintain
 
 ## 2. Configure keys (optional)
 
-Public-only run works with no keys and covers the OpenRouter catalog.
+Public-only run needs no keys and covers the OpenRouter, NVIDIA, ZenMux, and OpenCode Zen catalogs.
 
 For more coverage, set any of these in OS / `User` environment variables or a local `.env` file (gitignored — never committed):
 
@@ -70,7 +70,7 @@ Excel (`reports/<stamp>_models.xlsx`) sheets (data sheets carry a `free_status` 
 | `OCF_Practical` | `tier, variant, winner, winner_score, winner_ratio, runner_up` (12 rows) |
 | `OCF_Outliers` | Bargains + overpriced + free gems |
 
-JSON (`reports/<stamp>_models.json`) holds the 9 sections uncapped (`all_intel`, `all_cost`, `all_ratio_*`, `ocf_*`, `ocf_stack{max,high,medium}`, `ocf_practical[]`, `ocf_outliers`, `quartiles`, `thresholds`) plus `free_churn` (free→paid / free→free flips, disappeared and new slugs vs the previous day; empty until two distinct days exist) for scripting.
+JSON (`reports/<stamp>_models.json`) holds the 9 sections uncapped (`all_intel`, `all_cost`, `all_ratio_*`, `ocf_*`, `ocf_stack{max,high,medium}`, `ocf_practical[]`, `ocf_outliers`, `quartiles`, `thresholds`) plus `free_churn` (free→paid flips, newly free, disappeared and new slugs vs the previous day; empty until two distinct days exist) for scripting.
 
 ## 5. Retention and storage
 
@@ -98,10 +98,10 @@ None of the above are committed (see `.gitignore`).
 
 **Do I need billing anywhere?** No. The free rule is strict $0 at retrieval time.
 
-**Which free list do I trust?** The F-tagged rows and free-gems block (strict $0 + text-only + no routers). `[F?]` rows are provisional (AA $0, account/billing not checked): L1 has a second OR listing and a callable ID, L0 is AA-only with no callable ID.
+**Which free list do I trust?** The F-tagged rows and free-gems block (strict $0 + text-only + no routers). `[F?]` rows are provisional (AA $0, account/billing not checked): L1 has a second OR listing and a callable ID, L0 has no OR listing (it may still carry NVIDIA/ZenMux/Zen native tags).
 
 **Why are stack tiers empty / flagged with gaps?** No scored model from that group qualified (often: no keys yet, or no free model scores 50+). Gaps are explicit, not errors.
 
-**How do I use a model in OpenCode?** Take the `openrouter/<id>` form from the free list or `free_rank` sheet.
+**How do I use a model in OpenCode?** Take the `openrouter/<id>` form from the free lists (`All_Ratio` / `OCF_Ratio` sheets) and check its limits in the provider docs.
 
 **How fresh is the data?** Point-in-time per run. Re-run on use.

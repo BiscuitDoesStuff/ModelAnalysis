@@ -1,16 +1,16 @@
 # ModelAnalysis
 
-On-use snapshot of usable free LLM catalogs. Pulls OpenRouter, OpenAI, Anthropic, and Artificial Analysis, filters to strict-$0 free models, and writes a ranked Markdown + Excel + JSON report.
+On-use snapshot of usable free LLM catalogs. Pulls OpenRouter, OpenAI, Anthropic, Groq, Cerebras, NVIDIA, ZenMux, OpenCode Zen, and Artificial Analysis, filters to strict-$0 free models plus provisional free candidates, and writes a ranked Markdown + Excel + JSON + HTML report.
 
 No keys required for a public run. No billing. Keys stay local and are never committed.
 
 ## Features
 
-- Public-first retrieval — OpenRouter works with no keys; authed sources are skipped gracefully when keys are absent
-- Strict-$0 free filter — text-output models with zero prompt + completion pricing (or `:free` suffix), routers excluded
-- Quality ranking — OpenRouter free list joined to Artificial Analysis Intelligence Index where available
-- Diffs vs history — new / removed model IDs compared against local SQLite history
-- One-command run — `run.ps1` refreshes snapshot → analysis → report, keeping only the latest run
+- Public-first retrieval — OpenRouter, NVIDIA, ZenMux, and OpenCode Zen work with no keys; authed sources are skipped gracefully when keys are absent
+- Strict-$0 free filter — text-output models with zero prompt + completion pricing (or `:free` suffix), routers excluded; AA-$0 rows without strict confirmation listed as provisional `[F?]`
+- Quality ranking — canonical deduped models joined to Artificial Analysis Intelligence Index where available
+- Diffs vs history — new / removed listings plus free-status churn (free→paid flips, disappearances) compared against local SQLite history
+- One-command run — `run.ps1` refreshes snapshot → analysis → report → churn alerts, keeping only the latest run
 
 ## Quickstart
 
@@ -41,7 +41,7 @@ After a run, all dated with `YYYY-MM-DD_HHMM`:
 | User-friendly dashboard (start here) | `reports/<stamp>_report.html` |
 | Human-readable ranking | `reports/<stamp>_summary.md` |
 | Churn alert (only on free→paid/disappearances) | `reports/<stamp>_churn_alert.md` |
-| Spreadsheet (summary, free_rank, aa_top15, diff) | `reports/<stamp>_models.xlsx` |
+| Spreadsheet (10 tabs: summary, All_* / OCF_* views, stack, practical, outliers) | `reports/<stamp>_models.xlsx` |
 | Machine-readable analysis | `reports/<stamp>_models.json` |
 | Raw provider snapshot | `raw/<stamp>_models.json` |
 | History for diffs | `analysis/store.sqlite` |

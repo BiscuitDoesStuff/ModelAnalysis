@@ -7,4 +7,5 @@ reports/*_models.json
 reports/*_models.xlsx
 reports/*_summary.md
 reports/*_report.html
+reports/*_churn_alert.md
 __pycache__/
