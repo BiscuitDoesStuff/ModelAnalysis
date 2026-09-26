@@ -50,15 +50,15 @@ Open `reports/<stamp>_report.html` in a browser — tabbed dashboard of all 9 se
 
 1. **All Data — Intelligence**: every model by score desc, `unscored` tail.
 2. **All Data — Cost**: cheapest first in blended $/1M, `cost-unknown` tail.
-3. **All Data — Ratio**: paid models by score/cost; then free ranked by score; then `unratable` tail. Free never enters the ratio (infinite).
-4–6. **OCF — Intelligence / Cost / Ratio**: same views filtered to OpenAI + Claude + strict-free rows.
-7. **OCF — Optimized stack**: Max (50+) / High (40+) / Medium (30+) tiers, score desc with ratio tiebreak. Each tier flags `gaps:` for any of O/C/F with no qualifier. Below 30 excluded from stack only.
+3. **All Data — Ratio**: paid models by score/cost; then verified-free ranked by score; then provisional-free `[F?]` by score; then `unratable` tail. Free never enters the ratio (infinite).
+4–6. **OCF — Intelligence / Cost / Ratio**: same views filtered to OpenAI + Claude + strict-free rows plus provisional-free `[F?]` (AA $0, billing unverified; exact level in JSON/XLSX).
+7. **OCF — Optimized stack**: Max (50+) / High (40+) / Medium (30+) tiers, score desc with ratio tiebreak. Callable ID required (`or_id`/native); AA-only rows stay in Intel/Cost/Ratio. Each tier flags `gaps:` for any of O/C/F with no verified qualifier (tier filled only by provisional still flags `F`). Below 30 excluded from stack only.
 8. **OCF — Practical picks**: winner + runner-up per tier for each access variant (OCF, OF, CF, F-only). `— (gap)` where a tier/variant has nothing.
-9. **OCF — Outliers**: bargains, overpriced, free gems (free + score 40+).
+9. **OCF — Outliers**: bargains, overpriced, free gems (verified/provisional free + score 40+, callable only).
 
-Row format: `` `id` [groups] — score — $/1M — ratio → `openrouter/id` ``. Groups: O = OpenAI, C = Claude, F = strict-free. Router listings (`openrouter/*`) are excluded from ranked views; the header shows the excluded count.
+Row format: `` `id` [groups] — score — $/1M — ratio → `openrouter/id` ``. Groups: O = OpenAI, C = Claude, F = strict-free, `F?` = provisional-free (AA $0, unverified). Router listings (`openrouter/*`) are excluded from ranked views; the header shows the excluded count.
 
-Excel (`reports/<stamp>_models.xlsx`) sheets:
+Excel (`reports/<stamp>_models.xlsx`) sheets (data sheets carry a `free_status` column: `verified` / `provisional-l1` / `provisional-l0` / `none`):
 
 | `summary` | Header counts + tier sizes + gaps |
 | `All_Intel`, `All_Cost`, `All_Ratio` | Full-list versions of MD sections 1–3 |
@@ -87,14 +87,14 @@ None of the above are committed (see `.gitignore`).
 | `run analysis first` | No `analysis/*_analysis.json`; run stage 2 first. |
 | `xlsx skipped: ...` | `openpyxl` missing — `pip install -r requirements.txt` and re-run stage 3. |
 | Mostly `unscored` / `cost-unknown` / empty stack | No AA / OpenAI / Anthropic keys — expected for public runs. Add keys and re-run. |
-| AA shows $0 prices but no free gems | AA $0 pricing alone is unverified (billing not checked); gem status needs the strict-free rule + score 40+. |
+| AA shows $0 prices but no free gems | AA $0 pricing alone lands in provisional `[F?]` (L1 with an OR listing, L0 AA-only; billing not checked); gem status needs score 40+ plus a callable ID. |
 | Diff always empty on first run | No previous day in `store.sqlite` yet; diffs populate from the second distinct day onward. |
 
 ## 7. FAQ
 
 **Do I need billing anywhere?** No. The free rule is strict $0 at retrieval time.
 
-**Which free list do I trust?** The F-tagged rows and free-gems block (strict $0 + text-only + no routers). AA $0 pricing alone is unverified — account/billing not checked.
+**Which free list do I trust?** The F-tagged rows and free-gems block (strict $0 + text-only + no routers). `[F?]` rows are provisional (AA $0, account/billing not checked): L1 has a second OR listing and a callable ID, L0 is AA-only with no callable ID.
 
 **Why are stack tiers empty / flagged with gaps?** No scored model from that group qualified (often: no keys yet, or no free model scores 50+). Gaps are explicit, not errors.
 

@@ -63,7 +63,7 @@ Keys are local-only (`.env`, OS env, or `User` env vars). Never committed. See `
 
 ## Free rule
 
-A model counts as free only if it costs $0 at retrieval time: zero prompt + completion price (or `:free` ID), text-only output, no `openrouter/*` router entries. Trials and rate limits are fine as long as no billing info is required (account + API key at most).
+A model counts as free only if it costs $0 at retrieval time: zero prompt + completion price (or `:free` ID), text-only output, no `openrouter/*` router entries. Trials and rate limits are fine as long as no billing info is required (account + API key at most). Artificial Analysis $0 rows without strict-free confirmation are listed separately as provisional `[F?]` (L1: AA $0 + OR listing, L0: AA $0 only).
 
 ## Project structure
 

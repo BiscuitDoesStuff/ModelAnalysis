@@ -24,6 +24,31 @@ def hier_key(r):
     return (-(s if s is not None else -1), -(x if x is not None else -1))
 
 
+def free_status_of(m):
+    fs = m.get("free_status")
+    if fs in ("verified", "provisional-l1", "provisional-l0", "none"):
+        return fs
+    return "verified" if m.get("free") else "none"
+
+
+def is_provisional(m):
+    return free_status_of(m) in ("provisional-l1", "provisional-l0")
+
+
+def has_callable(m):
+    if m.get("or_id"):
+        return True
+    provs = set(m.get("providers", []))
+    return bool(provs & {"openai", "anthropic", "openrouter"})
+
+
+def groups_display(m):
+    g = "".join(m.get("groups", [])) or ""
+    if is_provisional(m):
+        g = (g + "F?") if g else "F?"
+    return g or "–"
+
+
 def pct(vals, p):
     if not vals:
         return None
@@ -49,30 +74,43 @@ def build_sections(a):
     models = a.get("models", [])
     routers = [m["id"] for m in models if m.get("router")]
     models = [m for m in models if not m.get("router")]
-    ocf = [m for m in models if set(m.get("groups", [])) & OCF]
+    ocf = [m for m in models
+           if set(m.get("groups", [])) & OCF or is_provisional(m)]
 
     all_intel = sorted(models, key=lambda r: (-(r["score"] if r["score"] is not None else -1)))
     costed = sorted([m for m in models if m.get("cost_blended") is not None],
                     key=lambda r: r["cost_blended"])
     uncosted = [m for m in models if m.get("cost_blended") is None]
-    paid_ratio = sorted([m for m in models if not m.get("free") and m.get("ratio") is not None],
+    paid_ratio = sorted([m for m in models
+                         if free_status_of(m) == "none" and m.get("ratio") is not None],
                         key=lambda r: -r["ratio"])
-    free_block = sorted([m for m in models if m.get("free") and m.get("score") is not None],
+    free_block = sorted([m for m in models
+                         if free_status_of(m) == "verified" and m.get("score") is not None],
                         key=lambda r: -r["score"])
-    free_unscored = [m for m in models if m.get("free") and m.get("score") is None]
-    unratable = [m for m in models if not m.get("free") and m.get("ratio") is None]
+    provisional_block = sorted([m for m in models
+                                if is_provisional(m) and m.get("score") is not None],
+                               key=lambda r: -r["score"])
+    free_unscored = [m for m in models
+                     if free_status_of(m) == "verified" and m.get("score") is None]
+    provisional_unscored = [m for m in models
+                            if is_provisional(m) and m.get("score") is None]
+    unratable = [m for m in models
+                 if free_status_of(m) == "none" and m.get("ratio") is None]
 
     ocf_intel = [m for m in all_intel if m in ocf]
     ocf_costed = [m for m in costed if m in ocf]
     ocf_uncosted = [m for m in uncosted if m in ocf]
     ocf_ratio = [m for m in paid_ratio if m in ocf]
     ocf_free = [m for m in free_block if m in ocf]
+    ocf_provisional = [m for m in provisional_block if m in ocf]
     ocf_free_unscored = [m for m in free_unscored if m in ocf]
+    ocf_provisional_unscored = [m for m in provisional_unscored if m in ocf]
     ocf_unratable = [m for m in unratable if m in ocf]
 
     stack = {}
     for t in TIERS:
-        rows = sorted([m for m in ocf if m.get("tier") == t], key=hier_key)
+        rows = sorted([m for m in ocf if m.get("tier") == t and has_callable(m)],
+                      key=hier_key)
         present = set().union(*[set(m.get("groups", [])) for m in rows]) if rows else set()
         stack[t] = {"rows": rows, "gaps": sorted(OCF - present)}
 
@@ -85,7 +123,7 @@ def build_sections(a):
                               "winner": rows[0] if rows else None,
                               "runner_up": rows[1] if len(rows) > 1 else None})
 
-    elig = [m for m in ocf if not m.get("free") and m.get("score") is not None
+    elig = [m for m in ocf if free_status_of(m) == "none" and m.get("score") is not None
             and m.get("cost_blended") is not None]
     q = {"score_q1": pct([m["score"] for m in elig], 0.25),
          "score_q3": pct([m["score"] for m in elig], 0.75),
@@ -97,21 +135,28 @@ def build_sections(a):
                                 if m["score"] >= q["score_q3"] and m["cost_blended"] <= q["cost_q1"]]
         outliers["overpriced"] = [m for m in elig
                                   if m["score"] <= q["score_q1"] and m["cost_blended"] >= q["cost_q3"]]
-    outliers["free_gems"] = [m for m in ocf if m.get("free") and (m.get("score") or 0) >= 40]
+    outliers["free_gems"] = [m for m in ocf
+                             if (free_status_of(m) in ("verified", "provisional-l1", "provisional-l0"))
+                             and (m.get("score") or 0) >= 40 and has_callable(m)]
 
     return {"all_intel": all_intel, "costed": costed, "uncosted": uncosted,
             "paid_ratio": paid_ratio, "free_block": free_block,
-            "free_unscored": free_unscored, "unratable": unratable,
+            "provisional_block": provisional_block,
+            "free_unscored": free_unscored,
+            "provisional_unscored": provisional_unscored, "unratable": unratable,
             "ocf_intel": ocf_intel, "ocf_costed": ocf_costed, "ocf_uncosted": ocf_uncosted,
             "ocf_ratio": ocf_ratio, "ocf_free": ocf_free,
-            "ocf_free_unscored": ocf_free_unscored, "ocf_unratable": ocf_unratable,
+            "ocf_provisional": ocf_provisional,
+            "ocf_free_unscored": ocf_free_unscored,
+            "ocf_provisional_unscored": ocf_provisional_unscored,
+            "ocf_unratable": ocf_unratable,
             "stack": stack, "practical": practical, "outliers": outliers,
             "quartiles": q, "ocf_count": len(ocf), "model_count": len(models),
             "routers": routers}
 
 
 def row_md(m):
-    g = "".join(m.get("groups", [])) or "-"
+    g = groups_display(m) if groups_display(m) != "–" else "-"
     s = m["score"] if m.get("score") is not None else "unscored"
     c = m["cost_blended"] if m.get("cost_blended") is not None else "cost-unknown"
     r = m["ratio"] if m.get("ratio") is not None else "-"
@@ -142,7 +187,7 @@ def html_table(rows, note=""):
         oc = opencode_ids(m.get("or_id", ""))
         h.append("<tr><td><code>" + esc(m["id"]) + "</code>" +
                  (f"<br><span class='nm'>{esc(m.get('name', ''))}</span>" if m.get("name") else "") +
-                 "</td><td>" + esc("".join(m.get("groups", [])) or "–") + "</td><td>" + esc(fmt_score(m)) +
+                 "</td><td>" + esc(groups_display(m)) + "</td><td>" + esc(fmt_score(m)) +
                  "</td><td>" + esc(fmt_cost(m)) + "</td><td>" +
                  esc(m["ratio"] if m.get("ratio") is not None else "–") + "</td><td>" +
                  (f"<code class='copy' onclick=\"copyId(this)\" title='click to copy'>{esc(oc)}</code>" if oc else "–") +
@@ -153,12 +198,15 @@ def html_table(rows, note=""):
 
 def build_html(a, s, stamp):
     th = a.get("thresholds", {"max": 50, "high": 40, "medium": 30})
+    fsc = a.get("free_status_counts", {})
     chips = (f"<span class='chip'>Models {s['model_count']}</span>"
              f"<span class='chip'>OCF {s['ocf_count']}</span>"
              f"<span class='chip'>Scored {sum(1 for m in a.get('models', []) if m.get('score') is not None)}</span>"
              f"<span class='chip'>Max {len(s['stack']['max']['rows'])}</span>"
              f"<span class='chip'>High {len(s['stack']['high']['rows'])}</span>"
              f"<span class='chip'>Medium {len(s['stack']['medium']['rows'])}</span>"
+             f"<span class='chip'>F verified {fsc.get('verified', sum(1 for m in a.get('models', []) if free_status_of(m) == 'verified'))}</span>"
+             f"<span class='chip'>F? prov {fsc.get('provisional-l1', 0) + fsc.get('provisional-l0', 0)}</span>"
              f"<span class='chip dim'>Routers {len(s['routers'])} excluded</span>")
 
     def sec(tid, title, body):
@@ -172,7 +220,8 @@ def build_html(a, s, stamp):
     nav = "".join(f"<button data-t='t-{tid}' onclick='showTab(this)'>{t}</button>" for tid, t in tabs)
 
     ov = f"<p>Snapshot <b>{esc(stamp)}</b> · thresholds {th['max']}/{th['high']}/{th['medium']} " \
-         "(below 30 in All views only) · free models never enter ratios, ranked by score instead.</p>"
+         "(below 30 in All views only) · free models never enter ratios, ranked by score instead. " \
+         "[F?] = provisional free (AA $0, billing unverified; exact level in JSON/XLSX).</p>"
     ov += "<div class='cards'>"
     for t in TIERS:
         rows = s["stack"][t]["rows"]
@@ -203,7 +252,7 @@ def build_html(a, s, stamp):
     out = "".join(f"<h3>{t}</h3>" + html_table(s["outliers"][k]) for k, t in
                   [("bargains", "Bargains — top-quartile score, bottom-quartile cost"),
                    ("overpriced", "Overpriced — bottom-quartile score, top-quartile cost"),
-                   ("free_gems", "Free gems — free, score 40+")])
+                   ("free_gems", "Free gems — verified/provisional free, score 40+")])
 
     body = (sec("overview", "Overview", ov) +
             sec("all-intel", "1 · All Data — Intelligence", html_table(s["all_intel"])) +
@@ -211,12 +260,14 @@ def build_html(a, s, stamp):
                 (f"<p class='note'>Cost unknown: {len(s['uncosted'])} — " + esc(", ".join(m["id"] for m in s["uncosted"][:50])) + "</p>" if s["uncosted"] else "")) +
             sec("all-ratio", "3 · All Data — Ratio (paid) + free by score",
                 "<h3>Paid by ratio</h3>" + html_table(s["paid_ratio"]) +
-                "<h3>Free by score</h3>" + html_table(s["free_block"])) +
+                "<h3>Verified free by score</h3>" + html_table(s["free_block"]) +
+                "<h3>Provisional free [F?] by score</h3>" + html_table(s["provisional_block"])) +
             sec("ocf-intel", "4 · OCF — Intelligence", html_table(s["ocf_intel"])) +
             sec("ocf-cost", "5 · OCF — Cost", html_table(s["ocf_costed"])) +
             sec("ocf-ratio", "6 · OCF — Ratio + free by score",
                 "<h3>Paid by ratio</h3>" + html_table(s["ocf_ratio"]) +
-                "<h3>Free by score</h3>" + html_table(s["ocf_free"])) +
+                "<h3>Verified free by score</h3>" + html_table(s["ocf_free"]) +
+                "<h3>Provisional free [F?] by score</h3>" + html_table(s["ocf_provisional"])) +
             sec("stack", "7 · OCF — Optimized stack", stack_html) +
             sec("practical", "8 · OCF — Practical picks", prac) +
             sec("outliers", "9 · OCF — Outliers", out))
@@ -273,6 +324,10 @@ def main():
          f"Tiers Max {len(s['stack']['max']['rows'])} / High {len(s['stack']['high']['rows'])} / "
          f"Medium {len(s['stack']['medium']['rows'])} | "
          f"Thresholds {th['max']}/{th['high']}/{th['medium']} | <30 excluded from stack only | "
+         f"F verified {sum(1 for m in a.get('models', []) if free_status_of(m) == 'verified')} | "
+         f"F? provisional L1/L0 "
+         f"{sum(1 for m in a.get('models', []) if free_status_of(m) == 'provisional-l1')}/"
+         f"{sum(1 for m in a.get('models', []) if free_status_of(m) == 'provisional-l0')} | "
          f"Routers {len(s['routers'])} excluded\n",
          "\n## 1. All Data — Intelligence\n"]
     L += [row_md(m) for m in s["all_intel"][:MD_CAP]]
@@ -283,13 +338,16 @@ def main():
     if s["uncosted"]:
         L.append(f"\n_cost-unknown ({len(s['uncosted'])}), e.g: " +
                  ", ".join(f"`{m['id']}`" for m in s["uncosted"][:MD_CAP]) + "_\n")
-    L += ["\n## 3. All Data — Intelligence/Cost Ratio (paid only; free ranked by score below)\n"]
+    L += ["\n## 3. All Data — Intelligence/Cost Ratio (paid; verified-free by score; provisional [F?] by score)\n"]
     L += [row_md(m) for m in s["paid_ratio"][:MD_CAP]]
-    L += ["\n_Free by score_\n"]
+    L += ["\n_Verified free by score_\n"]
     L += [row_md(m) for m in s["free_block"][:MD_CAP]]
-    if s["free_unscored"]:
-        L.append(f"_Free unscored ({len(s['free_unscored'])}): " +
-                 ", ".join(f"`{m['id']}`" for m in s["free_unscored"][:MD_CAP]) + "_\n")
+    L += ["\n_Provisional free [F?] by score (AA $0, billing unverified)_\n"]
+    L += [row_md(m) for m in s["provisional_block"][:MD_CAP]]
+    if s["free_unscored"] or s["provisional_unscored"]:
+        L.append(f"_Free unscored verified ({len(s['free_unscored'])})"
+                 + (", ".join(f"`{m['id']}`" for m in s["free_unscored"][:MD_CAP]) if s["free_unscored"] else "—") +
+                 f" | provisional unscored ({len(s['provisional_unscored'])})_\n")
     L += ["\n## 4. OCF — Intelligence\n"]
     L += [row_md(m) for m in s["ocf_intel"][:MD_CAP]]
     L += ["\n## 5. OCF — Cost\n"]
@@ -298,8 +356,10 @@ def main():
         L.append(f"\n_cost-unknown ({len(s['ocf_uncosted'])})_\n")
     L += ["\n## 6. OCF — Intelligence/Cost Ratio\n"]
     L += [row_md(m) for m in s["ocf_ratio"][:MD_CAP]]
-    L += ["\n_Free by score_\n"]
+    L += ["\n_Verified free by score_\n"]
     L += [row_md(m) for m in s["ocf_free"][:MD_CAP]]
+    L += ["\n_Provisional free [F?] by score_\n"]
+    L += [row_md(m) for m in s["ocf_provisional"][:MD_CAP]]
     L += ["\n## 7. OCF — Optimized stack\n"]
     for t in TIERS:
         gaps = f" — gaps: {','.join(s['stack'][t]['gaps'])}" if s["stack"][t]["gaps"] else ""
@@ -314,17 +374,20 @@ def main():
     L += ["\n## 9. OCF — Outliers\n"]
     for cls, title in [("bargains", "Bargains (top-quartile score, bottom-quartile cost)"),
                        ("overpriced", "Overpriced (bottom-quartile score, top-quartile cost)"),
-                       ("free_gems", "Free gems (free, score 40+)")]:
+                       ("free_gems", "Free gems (verified/provisional free, score 40+)")]:
         L.append(f"\n### {title}\n")
         L += [row_md(m) for m in s["outliers"][cls][:MD_CAP]] or ["_(none)_\n"]
     L.append("\n_Free excluded from ratio (infinite); ratios use " +
-             f"{a.get('cost_method', 'blended $/1M')}. OCF = OpenAI + Claude + strict-free. " +
+             f"{a.get('cost_method', 'blended $/1M')}. OCF = OpenAI + Claude + strict-free + provisional [F?] " +
+             "(AA $0, billing unverified; stack/practical need a callable or_id/native ID, " +
+             "AA-only rows stay in Intel/Cost/Ratio; tier filled only by provisional still flags gap F(verified)). " +
              "Per-model OpenCode compat not verified._\n")
     with open(os.path.join(REP, f"{stamp}_summary.md"), "w", encoding="utf-8") as f:
         f.write("".join(L))
 
-    slim = lambda m: [m["id"], "".join(m["groups"]), m["score"], m["cost_blended"],
-                      m["ratio"], opencode_ids(m["or_id"]), ",".join(m["providers"])]
+    slim = lambda m: [m["id"], groups_display(m), m["score"], m["cost_blended"],
+                      m["ratio"], opencode_ids(m["or_id"]), ",".join(m["providers"]),
+                      free_status_of(m)]
     scored = sorted(m["score"] for m in a.get("models", []) if m.get("score") is not None)
     dist = {"scored": len(scored)}
     if scored:
@@ -334,12 +397,17 @@ def main():
             "cost_method": a.get("cost_method", ""), "quartiles": s["quartiles"],
             "score_dist": dist, "routers_excluded": s["routers"],
             "collisions": a.get("collisions", []),
+            "free_status_counts": a.get("free_status_counts", {}),
             "all_intel": s["all_intel"], "all_cost": s["costed"], "all_cost_unknown": s["uncosted"],
             "all_ratio_paid": s["paid_ratio"], "all_ratio_free_by_score": s["free_block"],
-            "all_ratio_unratable": s["unratable"] + s["free_unscored"],
+            "all_ratio_verified_free_by_score": s["free_block"],
+            "all_ratio_provisional_free_by_score": s["provisional_block"],
+            "all_ratio_unratable": s["unratable"] + s["free_unscored"] + s["provisional_unscored"],
             "ocf_intel": s["ocf_intel"], "ocf_cost": s["ocf_costed"],
             "ocf_cost_unknown": s["ocf_uncosted"], "ocf_ratio_paid": s["ocf_ratio"],
             "ocf_ratio_free_by_score": s["ocf_free"],
+            "ocf_ratio_verified_free_by_score": s["ocf_free"],
+            "ocf_ratio_provisional_free_by_score": s["ocf_provisional"],
             "ocf_stack": {t: {"rows": s["stack"][t]["rows"], "gaps": s["stack"][t]["gaps"]} for t in TIERS},
             "ocf_practical": s["practical"], "ocf_outliers": s["outliers"]}
     with open(os.path.join(REP, f"{stamp}_models.json"), "w", encoding="utf-8") as f:
@@ -351,14 +419,18 @@ def main():
         ws.append(["stamp", stamp])
         ws.append(["models", s["model_count"]])
         ws.append(["ocf", s["ocf_count"]])
+        fsc = a.get("free_status_counts", {})
+        ws.append(["free_verified", fsc.get("verified", "")])
+        ws.append(["provisional_l1", fsc.get("provisional-l1", "")])
+        ws.append(["provisional_l0", fsc.get("provisional-l0", "")])
         for t in TIERS:
             ws.append([f"stack_{t}", len(s["stack"][t]["rows"])])
             ws.append([f"gaps_{t}", ",".join(s["stack"][t]["gaps"])])
-        H = ["id", "groups", "score", "cost_per_1M", "ratio", "opencode_id", "providers"]
+        H = ["id", "groups", "score", "cost_per_1M", "ratio", "opencode_id", "providers", "free_status"]
         tabs = {"All_Intel": s["all_intel"], "All_Cost": s["costed"] + s["uncosted"],
-                "All_Ratio": s["paid_ratio"] + s["free_block"] + s["unratable"] + s["free_unscored"],
+                "All_Ratio": s["paid_ratio"] + s["free_block"] + s["provisional_block"] + s["unratable"] + s["free_unscored"] + s["provisional_unscored"],
                 "OCF_Intel": s["ocf_intel"], "OCF_Cost": s["ocf_costed"] + s["ocf_uncosted"],
-                "OCF_Ratio": s["ocf_ratio"] + s["ocf_free"] + s["ocf_unratable"] + s["ocf_free_unscored"],
+                "OCF_Ratio": s["ocf_ratio"] + s["ocf_free"] + s["ocf_provisional"] + s["ocf_unratable"] + s["ocf_free_unscored"] + s["ocf_provisional_unscored"],
                 "OCF_Outliers": s["outliers"]["bargains"] + s["outliers"]["overpriced"] + s["outliers"]["free_gems"]}
         for name, rows in tabs.items():
             w = wb.create_sheet(name); w.append(H)
@@ -369,7 +441,7 @@ def main():
             for m in s["stack"][t]["rows"]:
                 w.append([t] + slim(m) + [""])
             for g in s["stack"][t]["gaps"]:
-                w.append([t, f"GAP:{g}", "", "", "", "", "", "", "gap"])
+                w.append([t, f"GAP:{g}", "", "", "", "", "", "", "", "gap"])
         w = wb.create_sheet("OCF_Practical")
         w.append(["tier", "variant", "winner", "winner_score", "winner_ratio", "runner_up"])
         for p in s["practical"]:

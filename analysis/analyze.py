@@ -165,10 +165,25 @@ def main():
                 next((ant_name.get(i, "") for i in u["ant"] if ant_name.get(i)), "") or
                 ((aa_match or {}).get("name", "")))
         router = disp_or.lower().lstrip("~").startswith("openrouter/")
+        aa_zero = bool(aa_match and aa_match.get("zero_price"))
+        has_or = bool(u["or"])
+        if free:
+            free_status = "verified"
+            free_evidence = ["or:strict-free"] + (["aa:zero-price"] if aa_zero else [])
+        elif aa_zero and has_or:
+            free_status = "provisional-l1"
+            free_evidence = ["aa:zero-price", "or:listed"]
+        elif aa_zero:
+            free_status = "provisional-l0"
+            free_evidence = ["aa:zero-price"]
+        else:
+            free_status = "none"
+            free_evidence = []
         models.append({"id": disp, "or_id": disp_or, "name": name, "groups": groups,
                        "providers": providers, "score": score, "cost_blended": cost,
                        "ratio": ratio, "context": or_ctx.get(disp_or),
-                       "free": free, "router": router, "tier": tier_of(score)})
+                       "free": free, "router": router, "tier": tier_of(score),
+                       "free_status": free_status, "free_evidence": free_evidence})
 
     con = sqlite3.connect(DB)
     cols = [r[1] for r in con.execute("PRAGMA table_info(models)")]
@@ -189,6 +204,8 @@ def main():
     new_or = sorted(cur_or - prev_or) if prev_or else []
     removed_or = sorted(prev_or - cur_or) if prev_or else []
     hist_days = [r[0] for r in con.execute("SELECT DISTINCT day FROM models ORDER BY day")]
+    from collections import Counter as _Counter
+    _fsc = _Counter(m.get("free_status", "none") for m in models)
 
     out = {"stamp": stamp, "day": day, "total_openrouter": len(or_rows), "free_count": len(free_ids),
            "new_ids_vs_history": new_or[:50], "new_total": len(new_or),
@@ -197,6 +214,10 @@ def main():
            "openai_retired": sorted([r["id"] for r in oai_rows if r["shutdown"]])[:50],
            "total_anthropic": len(ant_rows), "anthropic_ids": sorted([r["id"] for r in ant_rows]),
            "total_aa": len(aa_rows),
+           "free_status_counts": {"verified": _fsc.get("verified", 0),
+                                  "provisional-l1": _fsc.get("provisional-l1", 0),
+                                  "provisional-l0": _fsc.get("provisional-l0", 0),
+                                  "none": _fsc.get("none", 0)},
            "models": models, "collisions": collisions,
            "thresholds": {"max": TIER_MAX, "high": TIER_HIGH, "medium": TIER_MED},
            "cost_method": "aa_blended_primary_or_derived_fallback_per_1M"}

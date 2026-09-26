@@ -33,6 +33,8 @@ Free classification (`or_rows[].free`), all must hold:
 
 AA rows: `{id: slug|id, name, creator, score: evaluations.artificial_analysis_intelligence_index, cost_blended: pricing.price_1m_blended_3_to_1, zero_price: input==0 and output==0}`. Top 15 by score; `aa_free_unverified` = zero-price IDs (billing/account NOT checked).
 
+Provisional-free (Phase 1, fully automatic, no human registry): per canonical row `free_status` ∈ `verified` (OR strict-free) / `provisional-l1` (AA $0 + OR listing exists) / `provisional-l0` (AA $0 only) / `none`, plus `free_evidence[]` (`or:strict-free`, `aa:zero-price`, `or:listed`). `free` bool and `F` group stay verified-only. Output adds `free_status_counts{verified, provisional-l1, provisional-l0, none}`.
+
 Combined rank: strict-free OpenRouter rows joined to AA by exact normalized-slug match — `norm(id) = re.sub(r"[^a-z0-9]", "", lower(id))` applied to `or_id.split(":")[0].split("/")[-1]`. No match → `aa_score 0`, `aa_match ""`. Top 30 by score.
 
 SQLite (`analysis/store.sqlite`, table `models`):
@@ -45,24 +47,24 @@ Legacy tables lacking `source` are renamed to `models_old_<stamp>` and rebuilt. 
 
 Analysis JSON keys: legacy counts, native ID lists, retired/diff/history keys (unchanged) plus `models[]` canonical rows
 `{id, or_id, name, groups[O/C/F], providers[], score|null, cost_blended|null, ratio|null,
-context, free, router, tier}`, `collisions[]` (same tail slug merged from distinct listings),
-`thresholds{max:50, high:40, medium:30}`, `cost_method: aa_blended_primary_or_derived_fallback_per_1M`.
+context, free, router, tier, free_status[verified/provisional-l1/provisional-l0/none], free_evidence[]}`, `collisions[]` (same tail slug merged from distinct listings),
+`thresholds{max:50, high:40, medium:30}`, `free_status_counts`, `cost_method: aa_blended_primary_or_derived_fallback_per_1M`.
 Dead keys (`free_ids`, `aa_top15`, `aa_free_unverified`, `combined_free_rank`) were removed; the report no longer consumes them.
 
 ## Stage 3 — report (`reports/build_report.py`)
 
 Input: newest `analysis/*_analysis.json` (`models[]` canonical rows). Outputs share one `<stamp>`; older stamps pruned. 9 sections:
 
-1–3. All Intel / Cost / Ratio (ratio = paid only + free-by-score block + unratable tail).
-4–6. OCF-gated versions of the same (rows with any O/C/F tag).
-7. Stack: tiers by `thresholds`, hierarchy = score desc + ratio tiebreak, `gaps[]` per tier.
+1–3. All Intel / Cost / Ratio (ratio = paid only + verified-free-by-score + provisional-free-by-score `[F?]` + unratable tail).
+4–6. OCF-gated versions of the same (rows with any O/C/F tag OR provisional `free_status`; `[F?]` marker in MD/HTML, exact level in JSON/XLSX `free_status`).
+7. Stack: tiers by `thresholds`, hierarchy = score desc + ratio tiebreak, `gaps[]` per tier. Callable ID required (`or_id` or native provider); AA-only rows stay in Intel/Cost/Ratio only. Tier filled only by provisional still flags `gap: F(verified)` (provisional carries no `F` group).
 8. Practical: 3 tiers × 4 variants (OCF/OF/CF/F) = 12 `{tier, variant, winner, runner_up}` — winner is first hierarchy row after removing toggled-off groups.
-9. Outliers: bargains / overpriced via quartiles over OCF paid scored+costed set; free gems = free + score ≥ 40.
+9. Outliers: bargains / overpriced via quartiles over OCF paid scored+costed set (provisional excluded from quartiles); free gems = verified/provisional free + score ≥ 40, callable only.
 
-- `.md`: header counts + 9 sections, top 20 per list, gap flags inline.
-- `.json`: 9 section keys uncapped + `quartiles` + `score_dist` (p10/p50/p90/max for threshold calibration) + `thresholds` + `routers_excluded` + `collisions`.
+- `.md`: header counts + 9 sections, top 20 per list, gap flags inline. Provisional rows show `[F?]` in the groups bracket.
+- `.json`: 9 section keys uncapped + `quartiles` + `score_dist` (p10/p50/p90/max for threshold calibration) + `thresholds` + `routers_excluded` + `collisions` + `free_status_counts` + `*_verified_free_by_score` / `*_provisional_free_by_score` ratio splits.
 - `.html`: tabbed dashboard (Overview + 9 sections), per-tab search, click-to-copy OpenCode IDs, no dependencies.
-- `.xlsx` (requires `openpyxl`, else `xlsx skipped`): `summary | All_Intel | All_Cost | All_Ratio | OCF_Intel | OCF_Cost | OCF_Ratio | OCF_Stack | OCF_Practical | OCF_Outliers`.
+- `.xlsx` (requires `openpyxl`, else `xlsx skipped`): `summary | All_Intel | All_Cost | All_Ratio | OCF_Intel | OCF_Cost | OCF_Ratio | OCF_Stack | OCF_Practical | OCF_Outliers`. Data sheets carry a `free_status` column (`verified` / `provisional-l1` / `provisional-l0` / `none`); `summary` carries `free_verified` / `provisional_l1` / `provisional_l0` counts.
 
 ## Extension points
 
