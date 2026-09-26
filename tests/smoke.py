@@ -28,7 +28,7 @@ check(len(a.get("models", [])) > 0, f"canonical models non-empty ({len(a.get('mo
 
 for key in ["all_intel", "all_cost", "all_ratio_paid", "all_ratio_free_by_score",
             "ocf_intel", "ocf_cost", "ocf_ratio_paid",
-            "ocf_stack", "ocf_practical", "ocf_outliers"]:
+            "ocf_stack", "ocf_practical", "ocf_outliers", "family_variants"]:
     check(key in r, f"report key {key}")
 
 # Phase-1 provisional-free keys (third ratio block).
@@ -99,6 +99,8 @@ check(isinstance(a.get("cerebras_ids"), list), "cerebras_ids list present")
 check(isinstance(a.get("total_nvidia"), int), f"total_nvidia present ({a.get('total_nvidia')})")
 check(isinstance(a.get("total_zenmux"), int), f"total_zenmux present ({a.get('total_zenmux')})")
 check(isinstance(a.get("total_zen"), int), f"total_zen present ({a.get('total_zen')})")
+# Tier 1: models.dev capabilities catalog (public, keyless, never aborts).
+check(isinstance(a.get("total_modelsdev"), int), f"total_modelsdev present ({a.get('total_modelsdev')})")
 check(all(set(m.get("providers", [])) <= CALLABLE_PROVIDERS | {"openrouter"}
           for m in models),
       "providers tags valid")
@@ -110,6 +112,13 @@ if w_files:
         v = snap.get(src, "MISSING")
         check(isinstance(v, list) or (isinstance(v, dict) and ("skipped" in v or "error" in v)),
               f"snapshot {src} list-or-skipped")
+    # Tier 1: models.dev is new — old snapshots pre-date it (warn, not fail); new ones must carry it.
+    if "modelsdev" not in snap:
+        print("warn snapshot modelsdev missing (pre-Tier1 snapshot; refresh to populate)")
+    else:
+        v = snap.get("modelsdev")
+        check(isinstance(v, list) or (isinstance(v, dict) and ("skipped" in v or "error" in v)),
+              "snapshot modelsdev list-or-error")
 
 # Phase-3: free-status churn tracking.
 ch = a.get("free_churn") or {}
@@ -137,6 +146,12 @@ if m_files:
 if h_files:
     htm = open(h_files[-1], encoding="utf-8").read()
     check("F?" in htm, "html has F? marker")
+    for tab in ("Start here", "Best value", "Stack", "Variants", "Free", "Explore"):
+        check(tab in htm, f"html has {tab} page")
+    for old in ("All · Intelligence", "All · Cost", "OCF · Intelligence", "OCF · Cost"):
+        check(old not in htm, f"html drops duplicated {old} table")
+    check("filterExplore" in htm, "html explore has filters")
+    check("Score" in htm and "saves" in htm, "html value bands show savings")
 
 # Variants: separate ranked rows (max/xhigh/high/medium/…), efforts from OR reasoning.
 allowed_variants = {"", "max", "xhigh", "high", "medium", "low", "minimal", "none"}
@@ -198,16 +213,74 @@ if m_files:
 if h_files:
     check("Variant" in htm and "Efforts" in htm, "html has Variant/Efforts columns")
 
+# Tier 1 + backlog: cost provenance, effort disambiguation, capability badges.
+check(all(m.get("cost_source") in ("aa", "or-derived", "inherited", "none") for m in models),
+      "cost_source values valid")
+check(all((m.get("cost_blended") is None) == (m.get("cost_source") == "none") for m in models),
+      "cost null iff cost_source none")
+check(all(isinstance(m.get("variant_ambiguous", False), bool) for m in models),
+      "variant_ambiguous flags present")
+check(all(isinstance(m.get("efforts_hint", []), list) for m in models),
+      "efforts_hint lists present")
+check(all(m.get("efforts_hint_source", "") in ("", "sibling") for m in models),
+      "efforts_hint_source valid")
+check(all(m.get("or_reasoning_status", "") in ("listed", "non-reasoning", "metadata-missing", "no-or-listing", "") for m in models),
+      "or_reasoning_status valid")
+check(all(m.get("modality_status", "") in ("", "confirmed-text", "modality-unverified") for m in models),
+      "modality_status valid")
+check(all(isinstance(m.get("deprecated_upstream", False), bool) for m in models),
+      "deprecated_upstream flags present")
+# nearest_callable is display-only: report copy IDs must never use it.
+for key in ("ocf_intel", "all_intel"):
+    rows = r.get(key, [])
+    if rows:
+        break
+else:
+    rows = []
+def _copy_id(m):
+    if m.get("selector"):
+        return m["selector"]
+    oc = m.get("or_id", "")
+    oc = oc if oc.startswith("openrouter/") else (f"openrouter/{oc}" if oc else "")
+    if oc:
+        return oc
+    fb = m.get("fallback_id", "")
+    return str(fb) if fb and m.get("fallback_provider") not in ("", "aa") else ""
+if rows:
+    for m in rows:
+        cid = _copy_id(m)
+        nc = m.get("nearest_callable", "")
+        if nc and not m.get("or_id") and not m.get("fallback_id"):
+            check(cid != nc or cid == "", "nearest_callable never copyable")
+            break
+# research expiry warn (not a failure): day past expires_at needs manual refresh.
+try:
+    reg = json.load(open(os.path.join(ROOT, "analysis", "research.json"), encoding="utf-8"))
+    _day = a.get("day", "")
+    _expired = []
+    for rec in (reg.get("scores", []) + reg.get("inheritance", [])):
+        if rec.get("expires_at", "") and _day and _day > rec.get("expires_at", ""):
+            _expired.append(rec.get("target_slug", "?"))
+    if _expired:
+        print(f"warn research expired for day {_day}: {sorted(set(_expired))[:10]} (manual refresh needed)")
+    else:
+        print(f"ok   research registry current for day {_day}")
+except Exception as e:
+    print(f"warn research expiry check skipped: {e}")
+
 try:
     from openpyxl import load_workbook
     wb = load_workbook(r_files[-1].replace("_models.json", "_models.xlsx"))
     want = {"summary", "All_Intel", "All_Cost", "All_Ratio", "OCF_Intel",
-            "OCF_Cost", "OCF_Ratio", "OCF_Outliers", "OCF_Stack", "OCF_Practical"}
-    check(set(wb.sheetnames) == want, f"xlsx has 10 tabs ({len(wb.sheetnames)})")
+            "OCF_Cost", "OCF_Ratio", "OCF_Outliers", "OCF_Stack", "OCF_Practical", "Family_Variants"}
+    check(set(wb.sheetnames) == want, f"xlsx has 11 tabs ({len(wb.sheetnames)})")
     hdr = [c.value for c in wb["All_Ratio"][1]]
     check("free_status" in hdr, "xlsx All_Ratio has free_status column")
-    for col in ("variant", "efforts", "fallback_id"):
+    for col in ("variant", "efforts", "fallback_id", "cost_source", "variant_ambiguous",
+                "efforts_hint", "nearest_callable", "deprecated_upstream", "modality_status"):
         check(col in hdr, f"xlsx All_Ratio has {col} column")
+    fh = [c.value for c in wb["Family_Variants"][1]]
+    check("family" in fh and "peak" in fh, "xlsx Family_Variants has family/peak")
 except ImportError:
     print("skip xlsx check (openpyxl missing)")
 

@@ -1,4 +1,4 @@
-"""3. Report — 9-section OCF views: MD + XLSX + JSON + HTML per run. On-use. Keeps latest only."""
+"""3. Report — 9-section OCF views for MD/XLSX/JSON + 6-page HTML dashboard. On-use. Keeps latest only."""
 import json, os, glob, html as _html
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -10,6 +10,8 @@ TIERS = ["max", "high", "medium"]
 TIER_LABEL = {"max": "Max (50+)", "high": "High (40+)", "medium": "Medium/General (30+)"}
 VARIANTS = {"OCF": set(), "OF": {"C"}, "CF": {"O"}, "F": {"O", "C"}}
 OCF = {"O", "C", "F"}
+VALUE_BAND = 1.5
+EFFORT_TOKENS = ["max", "xhigh", "high", "medium", "low", "minimal", "none"]
 
 
 def opencode_ids(or_id):
@@ -66,16 +68,39 @@ def copy_hint(m):
 
 def variant_display(m):
     v = m.get("variant", "")
-    return f" ({v})" if v else ""
+    if v:
+        base = f" ({v})"
+    elif m.get("variant_ambiguous"):
+        base = " (ambiguous-effort)"
+    elif m.get("variant_label") == "base (unspecified effort)":
+        base = " (base, unspecified effort)"
+    else:
+        base = ""
+    if m.get("deprecated_upstream"):
+        base += " [deprecated-upstream]"
+    if m.get("modality_status") == "modality-unverified":
+        base += " [modality-unverified]"
+    return base
 
 
 def efforts_display(m):
     eff = m.get("efforts") or []
-    if not eff:
-        return ""
-    d = m.get("default_effort", "")
-    star = f" *{d}" if d and d in eff else (f" *{d}" if d else "")
-    return "/".join(eff) + star
+    if eff:
+        d = m.get("default_effort", "")
+        if d and d in eff:
+            star = f" *{d}"
+        elif d:
+            star = f" *{d}"
+        else:
+            star = " (default unspecified)"
+        return "/".join(eff) + star
+    hint = m.get("efforts_hint") or []
+    if hint:
+        return "/".join(hint) + " (hint, sibling)"
+    ors = m.get("or_reasoning_status", "")
+    if ors in ("non-reasoning", "metadata-missing") and m.get("or_id"):
+        return f"[{ors}]"
+    return ""
 
 
 def hier_key(r):
@@ -117,6 +142,72 @@ def pct(vals, p):
     k = (len(s) - 1) * p
     f, c = int(k), min(int(k) + 1, len(s) - 1)
     return s[f] + (s[c] - s[f]) * (k - f)
+
+
+def family_key_of(slug, variant):
+    s = str(slug or "")
+    if "__" in s:
+        s = s.split("__")[0]
+    v = str(variant or "")
+    if v and s.endswith(v):
+        base = s[: -len(v)]
+        return base or s
+    for eff in EFFORT_TOKENS:
+        if eff and s.endswith(eff) and len(s) > len(eff):
+            return s[: -len(eff)]
+    return s or str(slug or "")
+
+
+def build_value_bands(paid_rows, width=VALUE_BAND, floor=30.0, max_bands=20):
+    """Group paid scored+costed rows into score bands; cheapest-first within band. Skips single-row bands."""
+    scored = [m for m in paid_rows
+              if m.get("score") is not None and m.get("cost_blended") not in (None, 0)]
+    scored = sorted(scored, key=lambda r: (-r["score"], r["cost_blended"]))
+    bands = []
+    i = 0
+    while i < len(scored) and len(bands) < max_bands:
+        top = scored[i]["score"]
+        if top < floor:
+            break
+        members = []
+        j = i
+        while j < len(scored) and scored[j]["score"] >= top - width:
+            members.append(scored[j])
+            j += 1
+        if len(members) < 2:
+            i = j
+            continue
+        by_cost = sorted(members, key=lambda r: (r["cost_blended"], -r["score"]))
+        costs = [m["cost_blended"] for m in members if m.get("cost_blended")]
+        top_cost = max(costs) if costs else None
+        winner = by_cost[0] if by_cost else None
+        saving = None
+        if winner and top_cost and top_cost > 0 and winner["cost_blended"] is not None:
+            saving = round((top_cost - winner["cost_blended"]) / top_cost * 100, 1)
+        bands.append({"top": top, "bottom": min(m["score"] for m in members),
+                      "rows": by_cost, "winner": winner,
+                      "top_cost": top_cost, "saving_pct": saving})
+        i = j
+    return bands
+
+
+def build_family_full(all_rows):
+    """Full per-family table: every multi-variant family, all rows, no floor/cap."""
+    fams = {}
+    for m in all_rows:
+        if m.get("router"):
+            continue
+        fams.setdefault(family_key_of(m.get("slug", ""), m.get("variant", "")), []).append(m)
+    out = []
+    for fam, members in fams.items():
+        variants = {x.get("variant", "") for x in members if x.get("variant")}
+        if len(members) < 2 or len(variants) < 1:
+            continue
+        scored = [x["score"] for x in members if x.get("score") is not None]
+        peak = max(scored) if scored else None
+        out.append({"family": fam, "peak": peak,
+                    "rows": sorted(members, key=lambda r: (-(r.get("score") if r.get("score") is not None else -1)))})
+    return sorted(out, key=lambda f: (-(f["peak"] if f["peak"] is not None else -1)))
 
 
 def prune_reports(keep_stamps):
@@ -212,6 +303,7 @@ def build_sections(a):
             "ocf_provisional_unscored": ocf_provisional_unscored,
             "ocf_unratable": ocf_unratable,
             "stack": stack, "practical": practical, "outliers": outliers,
+            "family_variants": build_family_full(all_intel),
             "quartiles": q, "ocf_count": len(ocf), "model_count": len(models),
             "routers": routers}
 
@@ -220,6 +312,8 @@ def row_md(m):
     g = groups_display(m) if groups_display(m) != "–" else "-"
     s = m["score"] if m.get("score") is not None else "unscored"
     c = m["cost_blended"] if m.get("cost_blended") is not None else "cost-unknown"
+    cs = m.get("cost_source", "")
+    cs_tag = f" [{cs}]" if cs in ("aa", "or-derived", "inherited") else ""
     r = m["ratio"] if m.get("ratio") is not None else "-"
     v = variant_display(m)
     eff = efforts_display(m)
@@ -230,10 +324,11 @@ def row_md(m):
     elif cp:
         oc = f" → `{cp}`{copy_hint(m)} (native, no OR)"
     else:
-        oc = " (AA-only, no callable ID)"
+        nc = m.get("nearest_callable", "")
+        oc = " (AA-only, no callable ID" + (f"; nearest {nc} display-only" if nc else "") + ")"
     evidence, urls = score_evidence(m)
     refs = ' '.join(f'[source]({u})' for u in urls)
-    return f"- `{m['id']}`{v} [{g}] — score {s} — ${c}/1M — ratio {r}{eff_s}{oc} — {evidence} {refs}\n"
+    return f"- `{m['id']}`{v} [{g}] — score {s} — ${c}/1M{cs_tag} — ratio {r}{eff_s}{oc} — {evidence} {refs}\n"
 
 
 def esc(v):
@@ -260,14 +355,67 @@ def html_table(rows, note=""):
     for m in rows:
         oc = copy_id(m)
         hint = copy_hint(m)
+        var_cell = esc(m.get("variant", "") or "–")
+        if m.get("variant_ambiguous"):
+            var_cell += "<br><span class='gap'>ambiguous-effort</span>"
+        elif not m.get("variant") and m.get("variant_label") == "base (unspecified effort)":
+            var_cell += "<br><span class='hint'>base, unspecified</span>"
+        if m.get("deprecated_upstream"):
+            var_cell += "<br><span class='gap'>deprecated-upstream</span>"
+        if m.get("modality_status") == "modality-unverified":
+            var_cell += "<br><span class='gap'>modality-unverified</span>"
+        eff_cell = esc(efforts_display(m) or "–")
+        cost_cell = esc(fmt_cost(m))
+        if m.get("cost_source") in ("aa", "or-derived", "inherited"):
+            cost_cell += f"<br><span class='hint'>{esc(m['cost_source'])}</span>"
+        route_cell = (f"<code class='copy' onclick=\"copyId(this)\" title='click to copy'>{esc(oc)}</code><span class='hint'>{esc(hint)}</span>" if oc
+                      else "AA-only / no callable ID" + (f"<br><span class='hint'>nearest {esc(m.get('nearest_callable',''))} display-only</span>" if m.get("nearest_callable") else ""))
         h.append("<tr><td><code>" + esc(m["id"]) + "</code>" +
                  (f"<br><span class='nm'>{esc(m.get('name', ''))}</span>" if m.get("name") else "") +
                  "</td><td>" + esc(groups_display(m)) + "</td><td>" + esc(fmt_score(m)) +
-                 "</td><td>" + esc(fmt_cost(m)) + "</td><td>" +
+                 "</td><td>" + cost_cell + "</td><td>" +
                  esc(m["ratio"] if m.get("ratio") is not None else "–") + "</td><td>" +
-                 esc(m.get("variant", "") or "–") + "</td><td>" +
-                 esc(efforts_display(m) or "–") + "</td><td>" +
-                 (f"<code class='copy' onclick=\"copyId(this)\" title='click to copy'>{esc(oc)}</code><span class='hint'>{esc(hint)}</span>" if oc else "AA-only / no callable ID") +
+                 var_cell + "</td><td>" +
+                 eff_cell + "</td><td>" +
+                 route_cell +
+                 "</td><td>" + esc(",".join(m.get("providers", []))) + "</td><td>" + evidence_html(m) + "</td></tr>")
+    h.append("</tbody></table></div>")
+    return "".join(h)
+
+
+def explore_table(rows):
+    h = ['<div class="filters">'
+         '<input class="search" id="xq" placeholder="Filter text…" oninput="filterExplore()">'
+         '<select id="xgrp" onchange="filterExplore()"><option value="">Groups: all</option>'
+         '<option value="O">O only</option><option value="C">C only</option>'
+         '<option value="F">F verified</option><option value="F?">F? provisional</option></select>'
+         '<select id="xcost" onchange="filterExplore()"><option value="">Cost source: all</option>'
+         '<option>aa</option><option>or-derived</option><option>inherited</option><option>none</option></select>'
+         '<select id="xfree" onchange="filterExplore()"><option value="">Free: all</option>'
+         '<option>verified</option><option>provisional-l1</option><option>provisional-l0</option><option>none</option></select>'
+         '</div><div class="twrap"><table id="xtab"><thead><tr><th>Model</th><th>Groups</th>'
+         '<th>Score</th><th>Cost</th><th>Ratio</th><th>Variant</th><th>Efforts</th>'
+         '<th>Route ID / selector <span class="hint">(click to copy)</span></th>'
+         '<th>Sources</th><th>Score evidence</th></tr></thead><tbody>']
+    for m in rows:
+        oc = copy_id(m)
+        hint = copy_hint(m)
+        var_cell = esc(m.get("variant", "") or "–")
+        if m.get("variant_ambiguous"):
+            var_cell += "<br><span class='gap'>ambiguous-effort</span>"
+        if m.get("deprecated_upstream"):
+            var_cell += "<br><span class='gap'>deprecated-upstream</span>"
+        if m.get("modality_status") == "modality-unverified":
+            var_cell += "<br><span class='gap'>modality-unverified</span>"
+        cost_cell = esc(fmt_cost(m))
+        if m.get("cost_source") in ("aa", "or-derived", "inherited"):
+            cost_cell += f"<br><span class='hint'>{esc(m['cost_source'])}</span>"
+        route_cell = (f"<code class='copy' onclick=\"copyId(this)\" title='click to copy'>{esc(oc)}</code><span class='hint'>{esc(hint)}</span>" if oc
+                      else "AA-only / no callable ID" + (f"<br><span class='hint'>nearest {esc(m.get('nearest_callable',''))} display-only</span>" if m.get("nearest_callable") else ""))
+        h.append(f"<tr data-groups=\"{esc(groups_display(m))}\" data-cost=\"{esc(m.get('cost_source',''))}\" data-free=\"{esc(free_status_of(m))}\">"
+                 "<td><code>" + esc(m["id"]) + "</code></td><td>" + esc(groups_display(m)) + "</td><td>" + esc(fmt_score(m)) +
+                 "</td><td>" + cost_cell + "</td><td>" + esc(m["ratio"] if m.get("ratio") is not None else "–") + "</td><td>" +
+                 var_cell + "</td><td>" + esc(efforts_display(m) or "–") + "</td><td>" + route_cell +
                  "</td><td>" + esc(",".join(m.get("providers", []))) + "</td><td>" + evidence_html(m) + "</td></tr>")
     h.append("</tbody></table></div>")
     return "".join(h)
@@ -289,15 +437,13 @@ def build_html(a, s, stamp):
     def sec(tid, title, body):
         return f"<section id='t-{tid}' class='tab'><h2>{esc(title)}</h2>{body}</section>"
 
-    tabs = [("overview", "Overview"), ("all-intel", "All · Intelligence"),
-            ("all-cost", "All · Cost"), ("all-ratio", "All · Ratio"),
-            ("ocf-intel", "OCF · Intelligence"), ("ocf-cost", "OCF · Cost"),
-            ("ocf-ratio", "OCF · Ratio"), ("stack", "Stack"),
-            ("practical", "Practical picks"), ("outliers", "Outliers")]
+    tabs = [("start", "Start here"), ("value", "Best value"),
+            ("stack", "Stack"), ("compare", "Variants"),
+            ("free", "Free"), ("explore", "Explore")]
     nav = "".join(f"<button data-t='t-{tid}' onclick='showTab(this)'>{t}</button>" for tid, t in tabs)
 
     ov = f"<p>Snapshot <b>{esc(stamp)}</b> · thresholds {th['max']}/{th['high']}/{th['medium']} " \
-         "(below 30 in All views only) · free models never enter ratios, ranked by score instead. " \
+         "· free models never enter ratios, ranked by score instead. " \
          "[F?] = provisional free (AA $0, billing unverified; exact level in JSON/XLSX). " \
          "Variants (max/xhigh/high/medium/…) are separate ranked rows from AA; " \
          "Select an available <code>provider/model#variant</code> in OpenCode V2 (OR efforts shown per row, *=default). " \
@@ -309,6 +455,31 @@ def build_html(a, s, stamp):
                f"→paid {ch.get('flipped_to_paid_total', 0)} · →free {ch.get('flipped_to_free_total', 0)} · "
                f"level-changed {ch.get('level_changed_total', 0)} · disappeared {ch.get('disappeared_total', 0)} · "
                f"new {ch.get('new_total', 0)}.</p>")
+    # Start-here top picks: quality / value / free, all copy-ready.
+    value_bands = build_value_bands(s["ocf_ratio"])
+    top_quality = s["stack"]["max"]["rows"][0] if s["stack"]["max"]["rows"] else None
+    top_value = value_bands[0]["winner"] if value_bands else None
+    top_free = (s["ocf_free"] + s["ocf_provisional"][:1])[:1]
+    top_free = top_free[0] if top_free else None
+
+    def _pick_card(title, m, extra=""):
+        if not m:
+            return f"<div class='card'><h3>{esc(title)}</h3><p>— (gap)</p></div>"
+        cp = esc(copy_id(m) or "AA-only / no callable ID")
+        return (f"<div class='card'><h3>{esc(title)}</h3>"
+                f"<p><code>{esc(m['id'])}</code> ({esc(fmt_score(m))}, {esc(fmt_cost(m))})</p>"
+                f"<p>Copy: <code class='copy' onclick=\"copyId(this)\" title='click to copy'>{cp}</code></p>"
+                + (f"<p class='note'>{extra}</p>" if extra else "") + "</div>")
+
+    v_extra = ""
+    if value_bands:
+        b0 = value_bands[0]
+        v_extra = (f"Band {b0['top']:.1f}–{b0['bottom']:.1f}: saves {b0['saving_pct']}% vs priciest in band.")
+    ov += "<div class='cards'>"
+    ov += _pick_card("Top quality", top_quality)
+    ov += _pick_card("Best value", top_value, v_extra)
+    ov += _pick_card("Top free", top_free, "Verified/provisional free, score-ranked.")
+    ov += "</div>"
     ov += "<div class='cards'>"
     for t in TIERS:
         rows = s["stack"][t]["rows"]
@@ -330,6 +501,8 @@ def build_html(a, s, stamp):
                 cells.append("<span class='gap'>gap</span>")
         ov += f"<tr><td>{TIER_LABEL[t]}</td><td>{cells[0]}</td><td>{cells[1]}</td><td>{cells[2]}</td><td>{cells[3]}</td></tr>"
     ov += "</tbody></table>"
+    ov += ("<p class='note'>Full 9-section data (All/OCF Intel/Cost/Ratio, stack, practical, outliers) "
+           "stays in MD/JSON/XLSX. HTML is the 6-page user view: Start here · Best value · Stack · Variants · Free · Explore.</p>")
 
     def prac_winner_cell(p):
         w = p["winner"]
@@ -349,39 +522,83 @@ def build_html(a, s, stamp):
             return "–"
         return "<code>" + esc(u["id"]) + "</code>"
 
-    stack_html = ""
+    # Best value bands: close score (±band), cheapest-first.
+    value_html = ("<p>Paid OCF models grouped by score bands "
+                  f"(width ±{VALUE_BAND}). Within each band cheapest-first; winner saves vs priciest in band. "
+                  "Free never enters ratios — see Free page. "
+                  "Note: AA $/1M is variant-blind within a family (same price across efforts); "
+                  "true task cost falls with lower effort via fewer reasoning tokens.</p>")
+    if not value_bands:
+        value_html += "<p class='note'>No scored+costed paid OCF rows for banding.</p>"
+    for b in value_bands:
+        w = b["winner"]
+        note = (f"Winner <code>{esc(w['id'])}</code> saves {b['saving_pct']}% vs priciest "
+                f"(${esc(str(b['top_cost']))}/1M) in band." if w and b["saving_pct"] is not None else "")
+        value_html += f"<h3>Score {b['top']:.1f}–{b['bottom']:.1f}</h3><p class='note'>{note}</p>" + html_table(b["rows"])
+
+    stack_html = ("<p class='note'>AA $/1M is variant-blind within a family — same price across max/xhigh/high/medium/low; "
+                  "Stack ranks max first on score, but lower effort is cheaper per-task via fewer reasoning tokens. "
+                  "Check Variants family table before locking max.</p>")
     for t in TIERS:
+        rows = s["stack"][t]["rows"]
         gaps = f" <span class='gap'>gaps: {','.join(s['stack'][t]['gaps'])}</span>" if s["stack"][t]["gaps"] else ""
-        stack_html += f"<h3>{TIER_LABEL[t]}{gaps}</h3>" + html_table(s["stack"][t]["rows"])
+        # Per-tier value note: cheapest within 1.5pts of tier top.
+        vnote = ""
+        if rows:
+            top_score = rows[0].get("score")
+            near = [m for m in rows if m.get("score") is not None and top_score - m["score"] <= VALUE_BAND
+                    and m.get("cost_blended") not in (None, 0)]
+            if near:
+                cheap = min(near, key=lambda m: m["cost_blended"])
+                pricey = max(near, key=lambda m: m["cost_blended"])
+                if pricey["cost_blended"] and cheap["cost_blended"] is not None and pricey["cost_blended"] > cheap["cost_blended"]:
+                    save = round((pricey["cost_blended"] - cheap["cost_blended"]) / pricey["cost_blended"] * 100, 1)
+                    vnote = (f"<p class='note'>Value in tier: <code>{esc(cheap['id'])}</code> "
+                             f"({cheap['score']}, ${cheap['cost_blended']}/1M) saves {save}% vs "
+                             f"<code>{esc(pricey['id'])}</code> within {VALUE_BAND}pts of top.</p>")
+        stack_html += f"<h3>{TIER_LABEL[t]}{gaps}</h3>" + vnote + html_table(rows)
     prac_rows = ""
     for p in s["practical"]:
         prac_rows += ("<tr><td>" + TIER_LABEL[p["tier"]] + "</td><td>" + p["variant"] + "</td>"
                       "<td>" + prac_winner_cell(p) + "</td>"
                       "<td>" + prac_runner_cell(p) + "</td></tr>")
-    prac = ("<table><thead><tr><th>Tier</th><th>Variant</th><th>Winner</th><th>Runner-up</th></tr></thead><tbody>" +
+    prac = ("<p>Winner + runner-up per tier × access variant. Copy the winner ID; AA-only rows never copy.</p>"
+            "<table><thead><tr><th>Tier</th><th>Variant</th><th>Winner</th><th>Runner-up</th></tr></thead><tbody>" +
             prac_rows + "</tbody></table>")
-    out = "".join(f"<h3>{t}</h3>" + html_table(s["outliers"][k]) for k, t in
-                  [("bargains", "Bargains — top-quartile score, bottom-quartile cost"),
-                   ("overpriced", "Overpriced — bottom-quartile score, top-quartile cost"),
-                   ("free_gems", "Free gems — verified/provisional free, score 40+")])
+    stack_html += "<h3>Practical picks</h3>" + prac
 
-    body = (sec("overview", "Overview", ov) +
-            sec("all-intel", "1 · All Data — Intelligence", html_table(s["all_intel"])) +
-            sec("all-cost", "2 · All Data — Cost", html_table(s["costed"]) +
-                (f"<p class='note'>Cost unknown: {len(s['uncosted'])} — " + esc(", ".join(m["id"] for m in s["uncosted"][:50])) + "</p>" if s["uncosted"] else "")) +
-            sec("all-ratio", "3 · All Data — Ratio (paid) + free by score",
-                "<h3>Paid by ratio</h3>" + html_table(s["paid_ratio"]) +
-                "<h3>Verified free by score</h3>" + html_table(s["free_block"]) +
-                "<h3>Provisional free [F?] by score</h3>" + html_table(s["provisional_block"])) +
-            sec("ocf-intel", "4 · OCF — Intelligence", html_table(s["ocf_intel"])) +
-            sec("ocf-cost", "5 · OCF — Cost", html_table(s["ocf_costed"])) +
-            sec("ocf-ratio", "6 · OCF — Ratio + free by score",
-                "<h3>Paid by ratio</h3>" + html_table(s["ocf_ratio"]) +
-                "<h3>Verified free by score</h3>" + html_table(s["ocf_free"]) +
-                "<h3>Provisional free [F?] by score</h3>" + html_table(s["ocf_provisional"])) +
-            sec("stack", "7 · OCF — Optimized stack", stack_html) +
-            sec("practical", "8 · OCF — Practical picks", prac) +
-            sec("outliers", "9 · OCF — Outliers", out))
+    # Variant compare: top-30 at 30+ in HTML for readability; full 42-family export in JSON/XLSX.
+    fams = [f for f in s.get("family_variants", []) if (f.get("peak") or 0) >= 30.0][:30]
+    compare_html = ("<p>Top multi-variant families at 30+ in HTML for readability; full per-family table uncapped in "
+                    "JSON <code>family_variants</code> + XLSX <code>Family_Variants</code>. "
+                    "AA-only rows (no callable ID) are intel-only — "
+                    "use the callable sibling base with <code>provider/model#variant</code>. "
+                    "Same data uncapped in JSON <code>family_variants</code> + XLSX <code>Family_Variants</code>.</p>")
+    if not fams:
+        compare_html += "<p class='note'>No multi-variant families at 30+.</p>"
+    for f in fams:
+        callable_ids = [m["id"] for m in f["rows"] if copy_id(m)]
+        hint = ("Callable via: " + esc(", ".join(callable_ids[:3]))) if callable_ids else "No callable route in family."
+        compare_html += f"<h3>{esc(f['family'])} (peak {f['peak']})</h3><p class='note'>{hint}</p>" + html_table(f["rows"])
+
+    free_html = ("<p>Verified free ranked by score, then provisional [F?] (AA $0, billing unverified). "
+                 "Check <span class='gap'>deprecated-upstream</span> / <span class='gap'>modality-unverified</span> before trusting.</p>"
+                 "<h3>Verified free by score [F? no — verified only]</h3>" + html_table(s["ocf_free"]) +
+                 "<h3>Provisional free [F?] by score</h3>" + html_table(s["ocf_provisional"]))
+    if s["ocf_free_unscored"] or s["ocf_provisional_unscored"]:
+        free_html += ("<p class='note'>Unscored free: verified "
+                      + esc(", ".join(m["id"] for m in s["ocf_free_unscored"][:20])) +
+                      " | provisional " + esc(", ".join(m["id"] for m in s["ocf_provisional_unscored"][:20])) + "</p>")
+
+    explore_html = ("<p>All non-router models in one filterable table. Replaces the old All/OCF Intel/Cost/Ratio duplicates. "
+                    "Full uncapped lists stay in JSON/XLSX.</p>" + explore_table(s["all_intel"]))
+
+    body = (sec("start", "Start here", ov) +
+            sec("value", "Best value — close score, big cost gap", value_html) +
+            sec("stack", "Stack — tiered callable picks", stack_html) +
+            sec("compare", "Variants — family compare", compare_html) +
+            sec("free", "Free — verified + provisional [F?]", free_html) +
+            sec("explore", "Explore — all models", explore_html))
 
     return f"""<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -398,6 +615,7 @@ th{{background:#0f172a}}tr:nth-child(even){{background:#0b1220}}code{{color:#7dd
 .copy{{cursor:pointer;border-bottom:1px dotted #38bdf8}}.nm{{color:#94a3b8;font-size:12px}}
 .gap{{color:#fbbf24;font-weight:700}}.note{{color:#94a3b8}}.hint{{font-weight:400;font-size:11px;color:#94a3b8}}
 .search{{width:280px;padding:6px 10px;margin:8px 0;background:#0f172a;color:#e2e8f0;border:1px solid #38bdf8;border-radius:8px}}
+.filters select{{padding:6px 10px;margin:8px 4px;background:#0f172a;color:#e2e8f0;border:1px solid #38bdf8;border-radius:8px}}
 .twrap{{overflow-x:auto}}.cards{{display:flex;gap:12px;flex-wrap:wrap}}.card{{background:#0f172a;border:1px solid #38bdf8;border-radius:10px;padding:12px 16px;min-width:200px}}
 .bign{{font-size:15px}}
 </style></head><body>
@@ -410,6 +628,14 @@ b.classList.add('on');document.getElementById(b.dataset.t).classList.add('on');}
 function filterRows(inp){{const q=inp.value.toLowerCase();
 inp.parentElement.querySelectorAll('tbody tr').forEach(tr=>{{
 tr.style.display=tr.textContent.toLowerCase().includes(q)?'':'none';}});}}
+function filterExplore(){{const q=(document.getElementById('xq').value||'').toLowerCase();
+const g=document.getElementById('xgrp').value;const c=document.getElementById('xcost').value;const f=document.getElementById('xfree').value;
+document.querySelectorAll('#xtab tbody tr').forEach(tr=>{{
+let ok=tr.textContent.toLowerCase().includes(q);
+if(g){{const gg=tr.getAttribute('data-groups')||'';if(g==='F?'){{ok=ok&&gg.includes('F?');}}else if(g==='F'){{ok=ok&&gg.includes('F')&&!gg.includes('F?');}}else{{ok=ok&&gg.includes(g);}}}}
+if(c){{ok=ok&&(tr.getAttribute('data-cost')||'')===c;}}
+if(f){{ok=ok&&(tr.getAttribute('data-free')||'')===f;}}
+tr.style.display=ok?'':'none';}});}}
 function copyId(el){{navigator.clipboard.writeText(el.textContent).then(()=>{{
 el.style.color='#4ade80';setTimeout(()=>el.style.color='',800);}});}}
 document.querySelector('nav button').classList.add('on');
@@ -510,10 +736,17 @@ def main():
         f.write("".join(L))
 
     slim = lambda m: [m["id"], groups_display(m), m["score"], m["cost_blended"],
-                      m["ratio"], copy_id(m), ",".join(m["providers"]),
-                      free_status_of(m), m.get("variant", ""),
+                      m.get("cost_source", ""), m["ratio"], copy_id(m), ",".join(m["providers"]),
+                      free_status_of(m), m.get("variant", ""), bool(m.get("variant_ambiguous", False)),
+                      m.get("variant_label", ""),
                       "/".join(m.get("efforts") or []), m.get("default_effort", ""),
+                      m.get("default_effort_source", ""), m.get("efforts_source", ""),
+                      "/".join(m.get("efforts_hint") or []), m.get("efforts_hint_source", ""),
+                      m.get("or_reasoning_status", ""),
                       m.get("fallback_id", ""), m.get("fallback_provider", ""),
+                      m.get("nearest_callable", ""),
+                      bool(m.get("deprecated_upstream", False)), ",".join(m.get("deprecated_sources", []) or []),
+                      m.get("modality_status", ""),
                       score_evidence(m)[0], ' '.join(score_evidence(m)[1]),
                       json.dumps(m.get('external_scores', []), ensure_ascii=False)]
     scored = sorted(m["score"] for m in a.get("models", []) if m.get("score") is not None)
@@ -538,7 +771,8 @@ def main():
             "ocf_ratio_verified_free_by_score": s["ocf_free"],
             "ocf_ratio_provisional_free_by_score": s["ocf_provisional"],
             "ocf_stack": {t: {"rows": s["stack"][t]["rows"], "gaps": s["stack"][t]["gaps"]} for t in TIERS},
-            "ocf_practical": s["practical"], "ocf_outliers": s["outliers"]}
+            "ocf_practical": s["practical"], "ocf_outliers": s["outliers"],
+            "family_variants": s.get("family_variants", [])}
     with open(os.path.join(REP, f"{stamp}_models.json"), "w", encoding="utf-8") as f:
         json.dump(full, f, indent=1)
 
@@ -554,6 +788,7 @@ def main():
         ws.append(["provisional_l0", fsc.get("provisional-l0", "")])
         ws.append(["total_groq", a.get("total_groq", "")])
         ws.append(["total_cerebras", a.get("total_cerebras", "")])
+        ws.append(["total_modelsdev", a.get("total_modelsdev", "")])
         ch = a.get("free_churn", {})
         if ch and ch.get("prev_day"):
             ws.append(["churn_vs", ch.get("prev_day", "")])
@@ -564,8 +799,11 @@ def main():
         for t in TIERS:
             ws.append([f"stack_{t}", len(s["stack"][t]["rows"])])
             ws.append([f"gaps_{t}", ",".join(s["stack"][t]["gaps"])])
-        H = ["id", "groups", "score", "cost_per_1M", "ratio", "opencode_id", "providers", "free_status",
-             "variant", "efforts", "default_effort", "fallback_id", "fallback_provider",
+        H = ["id", "groups", "score", "cost_per_1M", "cost_source", "ratio", "opencode_id", "providers", "free_status",
+             "variant", "variant_ambiguous", "variant_label", "efforts", "default_effort", "default_effort_source",
+             "efforts_source", "efforts_hint", "efforts_hint_source", "or_reasoning_status",
+             "fallback_id", "fallback_provider", "nearest_callable",
+             "deprecated_upstream", "deprecated_sources", "modality_status",
              "score_source", "score_urls", "external_scores"]
         tabs = {"All_Intel": s["all_intel"], "All_Cost": s["costed"] + s["uncosted"],
                 "All_Ratio": s["paid_ratio"] + s["free_block"] + s["provisional_block"] + s["unratable"] + s["free_unscored"] + s["provisional_unscored"],
@@ -592,6 +830,10 @@ def main():
                       p["winner"]["ratio"] if p["winner"] else None,
                       (copy_id(p["winner"]) if p["winner"] else ""),
                       p["runner_up"]["id"] if p["runner_up"] else None])
+        w = wb.create_sheet("Family_Variants"); w.append(["family", "peak"] + H)
+        for f in s.get("family_variants", []):
+            for m in f["rows"]:
+                w.append([f["family"], f["peak"]] + slim(m))
         wb.save(os.path.join(REP, f"{stamp}_models.xlsx"))
         x = "xlsx ok"
     except Exception as e:

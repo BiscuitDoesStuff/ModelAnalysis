@@ -79,6 +79,47 @@ def fetch_zenmux():
 def fetch_zen():
     return get("https://opencode.ai/zen/v1/models").get("data", [])
 
+def fetch_modelsdev():
+    """Tier 1: models.dev capabilities catalog (public, keyless). Minimal projection only."""
+    data = get("https://models.dev/api.json", timeout=90)
+    routes = []
+    if not isinstance(data, dict):
+        return routes
+    for provider_id, pdata in data.items():
+        if not isinstance(pdata, dict):
+            continue
+        models = pdata.get("models", {})
+        if not isinstance(models, dict):
+            continue
+        for model_key, m in models.items():
+            if not isinstance(m, dict):
+                continue
+            cost = m.get("cost", {}) or {}
+            modalities = m.get("modalities", {}) or {}
+            reasoning_options = m.get("reasoning_options", []) or []
+            efforts = []
+            for opt in reasoning_options:
+                if isinstance(opt, dict) and opt.get("type") == "effort":
+                    vals = opt.get("values", [])
+                    if isinstance(vals, list):
+                        efforts = [str(v) for v in vals]
+                    break
+            limit = m.get("limit", {}) or {}
+            routes.append({
+                "provider": str(provider_id),
+                "id": str(m.get("id", model_key)),
+                "cost": {"input": cost.get("input"), "output": cost.get("output"),
+                         "cache_read": cost.get("cache_read")},
+                "modalities": {"input": list(modalities.get("input", []) or []),
+                               "output": list(modalities.get("output", []) or [])},
+                "reasoning": bool(m.get("reasoning", False)),
+                "reasoning_efforts": efforts,
+                "deprecated": str(m.get("status", "")).lower() == "deprecated",
+                "limit": {"context": limit.get("context"), "output": limit.get("output")},
+                "last_updated": m.get("last_updated", ""),
+            })
+    return routes
+
 def prune(keep=1):
     import glob as g
     files = sorted(g.glob(os.path.join(RAW, "*_models.json")), key=os.path.getmtime)
@@ -109,6 +150,7 @@ def main():
             "nvidia": safe(fetch_nvidia),
             "zenmux": safe(fetch_zenmux),
             "zen": safe(fetch_zen),
+            "modelsdev": safe(fetch_modelsdev),
             "aa": safe(fetch_aa)}
     out = os.path.join(RAW, f"{stamp}_models.json")
     with open(out, "w", encoding="utf-8") as f:
@@ -121,7 +163,8 @@ def main():
           f"| cerebras={len(snap['cerebras']) if isinstance(snap['cerebras'], list) else snap['cerebras']} "
           f"| nvidia={len(snap['nvidia']) if isinstance(snap['nvidia'], list) else snap['nvidia']} "
           f"| zenmux={len(snap['zenmux']) if isinstance(snap['zenmux'], list) else snap['zenmux']} "
-          f"| zen={len(snap['zen']) if isinstance(snap['zen'], list) else snap['zen']}")
+          f"| zen={len(snap['zen']) if isinstance(snap['zen'], list) else snap['zen']} "
+          f"| modelsdev={len(snap['modelsdev']) if isinstance(snap['modelsdev'], list) else snap['modelsdev']}")
 
 if __name__ == "__main__":
     main()

@@ -71,6 +71,8 @@ def main():
     nvidia = snap.get("nvidia", []) if isinstance(snap.get("nvidia"), list) else []
     zenmux = snap.get("zenmux", []) if isinstance(snap.get("zenmux"), list) else []
     zen = snap.get("zen", []) if isinstance(snap.get("zen"), list) else []
+    modelsdev_raw = snap.get("modelsdev", [])
+    modelsdev = modelsdev_raw if isinstance(modelsdev_raw, list) else []
     aa_raw = snap.get("aa", {})
     aa = aa_raw.get("data", []) if isinstance(aa_raw, dict) else []
 
@@ -135,6 +137,19 @@ def main():
     def base_slug(mid):
         return norm(str(mid).split(":")[0].split("/")[-1])
 
+    def family_of(slug, variant):
+        s = str(slug or "")
+        if "__" in s:
+            s = s.split("__")[0]
+        v = str(variant or "")
+        if v and s.endswith(v):
+            base = s[: -len(v)]
+            return base or s
+        for eff in EFFORTS_ORDERED:
+            if eff and s.endswith(eff) and len(s) > len(eff):
+                return s[: -len(eff)]
+        return s or str(slug or "")
+
     or_free = {r["id"] for r in or_rows if r["free"]}
     or_ctx = {r["id"]: r["context"] for r in or_rows}
     or_name = {m.get("id", ""): m.get("name", "") for m in ors}
@@ -150,6 +165,40 @@ def main():
             }
     ant_name = {m.get("id", ""): m.get("display_name", "") for m in ant}
     zenmux_name = {m.get("id", ""): m.get("display_name", "") for m in zenmux}
+    # Tier 1: promote ZenMux capabilities/pricings (previously id-only).
+    zenmux_by_slug = {}
+    for m in zenmux:
+        if not isinstance(m, dict):
+            continue
+        mid = m.get("id", "")
+        if not mid:
+            continue
+        caps = m.get("capabilities", {}) or {}
+        pricings = m.get("pricings", {}) or {}
+        def _first_val(lst):
+            try:
+                if isinstance(lst, list) and lst:
+                    return float(lst[0].get("value", "nan"))
+            except Exception:
+                return None
+            return None
+        zenmux_by_slug.setdefault(base_slug(mid), []).append({
+            "id": mid,
+            "reasoning": caps.get("reasoning"),
+            "output_modalities": list(m.get("output_modalities", []) or []),
+            "prompt_per_mtok": _first_val(pricings.get("prompt")),
+            "completion_per_mtok": _first_val(pricings.get("completion")),
+            "context_length": m.get("context_length"),
+        })
+    # Tier 1: models.dev minimal projection indexed by tail slug.
+    md_by_slug = {}
+    for r in modelsdev:
+        if not isinstance(r, dict):
+            continue
+        rid = r.get("id", "")
+        if not rid:
+            continue
+        md_by_slug.setdefault(base_slug(rid), []).append(r)
     aa_by_base = {base_slug(k): v for k, v in aa_by_slug.items()}
 
     def _entry():
@@ -245,11 +294,15 @@ def main():
         aa_match = aa_by_base.get(key)
         score = aa_match["score"] if aa_match else None
         cost = aa_cost(aa_match["cost_blended"]) if aa_match else None
+        cost_source = "aa" if cost is not None else ""
         if cost is None:
             for i in u["or"]:
                 cost = or_cost_per_1m(or_price.get(i))
                 if cost is not None:
+                    cost_source = "or-derived"
                     break
+        if cost is None:
+            cost_source = "none"
         ratio = round(score / cost, 4) if score is not None and cost and cost > 0 else None
         or_ids = sorted(u["or"])
         disp_or = next((i for i in or_ids if i in or_free), or_ids[0] if or_ids else "")
@@ -293,6 +346,37 @@ def main():
                 efforts = list(r.get("efforts") or [])
                 default_effort = str(r.get("default_effort") or "")
                 break
+        efforts_source = "or" if efforts else ""
+        default_effort_source = "or" if default_effort else ("unspecified-upstream" if efforts else "")
+        # Tier 1: models.dev + ZenMux promotion per canonical slug.
+        md_matches = md_by_slug.get(key, [])
+        zm_matches = zenmux_by_slug.get(key, [])
+        md_efforts_union = sorted({e for r in md_matches for e in (r.get("reasoning_efforts") or [])})
+        md_reasoning_any = any(bool(r.get("reasoning")) for r in md_matches)
+        md_has = bool(md_matches)
+        md_all_no_reasoning = md_has and all(not r.get("reasoning") for r in md_matches)
+        zm_reason_vals = [z.get("reasoning") for z in zm_matches if z.get("reasoning") is not None]
+        zm_reason_any = any(v is True for v in zm_reason_vals)
+        zm_all_false = bool(zm_reason_vals) and all(v is False for v in zm_reason_vals)
+        deprecated_sources = sorted({f"{r.get('provider')}/{r.get('id')}" for r in md_matches if r.get("deprecated")})
+        deprecated_upstream = bool(deprecated_sources)
+        if u["zen"]:
+            md_text = any((r.get("modalities") or {}).get("output") == ["text"] for r in md_matches)
+            modality_status = "confirmed-text" if md_text else "modality-unverified"
+        else:
+            modality_status = ""
+        if efforts:
+            or_reasoning_status = "listed"
+        elif not or_ids:
+            or_reasoning_status = "no-or-listing"
+        elif md_reasoning_any or zm_reason_any:
+            or_reasoning_status = "metadata-missing"
+        elif (md_all_no_reasoning and md_has) or zm_all_false:
+            or_reasoning_status = "non-reasoning"
+        else:
+            or_reasoning_status = "metadata-missing"
+        zm_reason_flag = True if zm_reason_any else (False if zm_all_false else None)
+        zm_out = next((z.get("output_modalities", []) for z in zm_matches if z.get("output_modalities")), [])
         fallback_id, fallback_provider = "", ""
         if not disp_or:
             for prov_key in ("oai", "ant", "groq", "cerebras", "nvidia", "zenmux", "zen"):
@@ -302,12 +386,19 @@ def main():
                     break
         models.append({"id": disp, "slug": key, "or_id": disp_or, "name": name, "groups": groups,
                        "providers": providers, "score": score, "cost_blended": cost,
+                       "cost_source": cost_source,
                        "ratio": ratio, "context": or_ctx.get(disp_or),
                        "free": free, "router": router, "tier": tier_of(score),
                        "free_status": free_status, "free_evidence": free_evidence,
                        "variant": variant, "aa_variant_name": aa_name_raw,
                        "aa_id": aa_slug_raw,
                        "efforts": efforts, "default_effort": default_effort,
+                       "efforts_source": efforts_source, "default_effort_source": default_effort_source,
+                       "or_reasoning_status": or_reasoning_status,
+                       "deprecated_upstream": deprecated_upstream, "deprecated_sources": deprecated_sources,
+                       "modality_status": modality_status,
+                       "modelsdev_count": len(md_matches), "modelsdev_efforts": md_efforts_union,
+                       "zenmux_reasoning": zm_reason_flag, "zenmux_output": zm_out,
                        "fallback_id": fallback_id, "fallback_provider": fallback_provider})
 
     try:
@@ -315,7 +406,72 @@ def main():
     except ImportError:
         from enrichment import enrich
     with open(os.path.join(ROOT, 'analysis', 'research.json'), encoding='utf-8') as f:
-        enrich(models, json.load(f), day)
+        enrich(models, json.load(f), day, md_by_slug)
+
+    # Backlog: effort-disambiguation + callable hints (pure local, post-enrich so derived rows group).
+    CALLABLE_SET = {"openai", "anthropic", "openrouter", "groq", "cerebras", "nvidia", "zenmux", "zen"}
+    families = {}
+    for m in models:
+        fam = family_of(m.get("slug", ""), m.get("variant", ""))
+        families.setdefault(fam, []).append(m)
+    for fam, members in families.items():
+        scored_variants = sorted({x.get("variant", "") for x in members if x.get("score") is not None and x.get("variant")})
+        scored_nonempty = len(scored_variants)
+        # Sibling efforts source: highest-scored member with OR-listed efforts.
+        donors = sorted([x for x in members if x.get("efforts") and x.get("efforts_source") == "or"],
+                        key=lambda r: (-(r.get("score") if r.get("score") is not None else -1)))
+        donor = donors[0] if donors else None
+        callables = [x for x in members if x.get("or_id") or (set(x.get("providers", [])) & CALLABLE_SET)]
+        callables_sorted = sorted(callables, key=lambda r: (-(r.get("score") if r.get("score") is not None else -1)))
+        best_callable = callables_sorted[0] if callables_sorted else None
+        for m in members:
+            # variant ambiguity: scored base in a family that already has effort-specific scored rows.
+            if m.get("score") is not None and not m.get("variant"):
+                if len(members) == 1 and scored_nonempty == 0:
+                    m["variant_ambiguous"] = False
+                    m["variant_label"] = "base (unspecified effort)"
+                elif scored_nonempty >= 1:
+                    m["variant_ambiguous"] = True
+                    m["variant_label"] = "ambiguous-effort"
+                else:
+                    m["variant_ambiguous"] = False
+                    m["variant_label"] = "base (unspecified effort)"
+            else:
+                m["variant_ambiguous"] = False
+                m["variant_label"] = m.get("variant", "") or ""
+            # efforts hint from sibling OR.
+            if not m.get("efforts") and donor is not None and donor is not m:
+                m["efforts_hint"] = list(donor.get("efforts") or [])
+                m["efforts_hint_source"] = "sibling"
+                m["efforts_hint_from"] = donor.get("slug", "")
+            else:
+                m.setdefault("efforts_hint", [])
+                m.setdefault("efforts_hint_source", "")
+                m.setdefault("efforts_hint_from", "")
+            # nearest callable for AA-only (display only, never copyable).
+            if not m.get("or_id") and not (set(m.get("providers", [])) & CALLABLE_SET):
+                if best_callable is not None:
+                    m["nearest_callable"] = best_callable.get("id", "")
+                    m["nearest_callable_slug"] = best_callable.get("slug", "")
+                else:
+                    m.setdefault("nearest_callable", "")
+                    m.setdefault("nearest_callable_slug", "")
+            else:
+                m.setdefault("nearest_callable", "")
+                m.setdefault("nearest_callable_slug", "")
+            # Backfill Tier 1 / provenance for derived rows (slug has __variant suffix).
+            if not m.get("cost_source"):
+                m["cost_source"] = "inherited" if m.get("history_excluded") else "none"
+            m.setdefault("efforts_source", "inherited" if m.get("history_excluded") else ("or" if m.get("efforts") else ""))
+            m.setdefault("default_effort_source", "or" if m.get("default_effort") else ("unspecified-upstream" if m.get("efforts") else ""))
+            m.setdefault("or_reasoning_status", "no-or-listing" if not m.get("or_id") and not m.get("efforts") else m.get("or_reasoning_status", ""))
+            m.setdefault("deprecated_upstream", False)
+            m.setdefault("deprecated_sources", [])
+            m.setdefault("modality_status", "")
+            m.setdefault("modelsdev_count", 0)
+            m.setdefault("modelsdev_efforts", [])
+            m.setdefault("zenmux_reasoning", None)
+            m.setdefault("zenmux_output", [])
 
     con = sqlite3.connect(DB)
     cols = [r[1] for r in con.execute("PRAGMA table_info(models)")]
@@ -405,6 +561,7 @@ def main():
            "total_nvidia": len(nvidia_rows), "nvidia_ids": sorted([r["id"] for r in nvidia_rows]),
            "total_zenmux": len(zenmux_rows), "zenmux_ids": sorted([r["id"] for r in zenmux_rows]),
            "total_zen": len(zen_rows), "zen_ids": sorted([r["id"] for r in zen_rows]),
+           "total_modelsdev": len(modelsdev),
            "total_aa": len(aa_rows),
            "free_churn": free_churn,
            "free_status_counts": {"verified": _fsc.get("verified", 0),
@@ -423,7 +580,7 @@ def main():
         print(f"pruned analysis {os.path.basename(old)}")
     print(f"{stamp}: OR={len(or_rows)} free={len(free_ids)} OAI={len(oai_rows)} ANT={len(ant_rows)} "
           f"GROQ={len(groq_rows)} CER={len(cerebras_rows)} NV={len(nvidia_rows)} ZM={len(zenmux_rows)} ZEN={len(zen_rows)} "
-          f"AA={len(aa_rows)} new={len(new_or)} removed={len(removed_or)} "
+          f"MD={len(modelsdev)} AA={len(aa_rows)} new={len(new_or)} removed={len(removed_or)} "
           f"churn_vs={prev_fh_day} to_paid={len(to_paid)} to_free={len(to_free)} gone={len(disappeared)} days={len(hist_days)} -> {ap}")
     con.close()
 

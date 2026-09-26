@@ -26,7 +26,7 @@
   <!-- providers -->
   <rect class="file" x="30" y="145" width="200" height="102"/>
   <text class="file-t" x="44" y="168">Providers</text>
-  <text class="file-s" x="44" y="187">OR · NVIDIA · ZenMux · Zen</text>
+  <text class="file-s" x="44" y="187">OR · NVIDIA · ZenMux · Zen · models.dev</text>
   <text class="file-s" x="44" y="203">(public: OR required, rest keyless)</text>
   <text class="file-s" x="44" y="219">OAI · ANT · Groq · Cerebras · AA</text>
   <text class="file-s" x="44" y="235">(keyed, optional → skipped)</text>
@@ -40,7 +40,7 @@
   <text class="title" x="286" y="172">1 · retrieval/fetch_models.py</text>
   <text class="sub" x="286" y="192">GET catalogs · retry 3x + backoff</text>
   <text class="sub" x="286" y="210">missing key → {"skipped"} · 4xx fast-fail</text>
-  <text class="sub" x="286" y="228">OR fail → exit 1, no snapshot</text>
+  <text class="sub" x="286" y="228">OR fail → exit 1, no snapshot · models.dev minimal</text>
   <text class="sub" x="286" y="246">writes raw/&lt;stamp&gt;_models.json</text>
   <text class="sub" x="286" y="264">_errors.log · prune keep 1</text>
 
@@ -49,18 +49,18 @@
   <text class="title" x="606" y="172">2 · analysis/analyze.py</text>
   <text class="sub" x="606" y="192">normalize · strict-$0 + provisional [F?]</text>
   <text class="sub" x="606" y="210">variants/efforts/fallback · evidence (AA only)</text>
-  <text class="sub" x="606" y="228">free_history table · flips/disappeared</text>
+  <text class="sub" x="606" y="228">Tier1: models.dev + ZenMux · cost/ambiguity</text>
   <text class="sub" x="606" y="246">writes analysis/&lt;stamp&gt;_analysis.json</text>
   <text class="sub" x="606" y="264">prune keep 1 · history in SQLite</text>
 
   <!-- stage 3 -->
   <rect class="box" x="270" y="350" width="600" height="150"/>
   <text class="title" x="286" y="377">3 · reports/build_report.py</text>
-  <text class="sub" x="286" y="397">reads newest analysis (models[] canonical rows + score evidence) → writes one &lt;stamp&gt; set:</text>
-  <text class="sub" x="286" y="417">summary.md + report.html (9 sections: All/OCF intel·cost·ratio, stack, practical, outliers)</text>
+  <text class="sub" x="286" y="397">reads newest analysis (models[] canonical rows + score evidence + Tier1 badges) → writes one &lt;stamp&gt; set:</text>
+  <text class="sub" x="286" y="417">summary.md (9 sections) + report.html (6 pages: Start · Value · Stack · Variants · Free · Explore)</text>
   <text class="sub" x="286" y="437">models.json (9 keys uncapped + free_churn) · models.xlsx (10 tabs incl. OCF_Stack/Practical/Outliers)</text>
   <text class="sub" x="286" y="457">needs openpyxl or xlsx skipped · prune older stamps</text>
-  <text class="sub" x="286" y="477">Route IDs: selector else openrouter/&lt;or_id&gt; else fallback · evidence links · verify limits</text>
+  <text class="sub" x="286" y="477">Route IDs: selector else openrouter/&lt;or_id&gt; else fallback · cost/ambiguity/deprecated badges · verify limits</text>
 
   <!-- outputs -->
   <rect class="file" x="30" y="350" width="200" height="150"/>

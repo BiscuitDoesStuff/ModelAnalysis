@@ -12,11 +12,12 @@ def finite(value):
     return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
 
 
-def enrich(models, registry, day):
+def enrich(models, registry, day, modelsdev_by_slug=None):
     """Mutate base rows and append explicitly evidenced route/effort estimates."""
     datetime.date.fromisoformat(day)
     cohort = registry.get('snapshot_benchmarks', {}).get(day)
     by_slug = {m['slug']: m for m in models}
+    modelsdev_by_slug = modelsdev_by_slug or {}
     for m in models:
         m['score_source'] = ({'kind': 'aa-api', 'benchmark': 'aa-intelligence-index',
                               'version': cohort, 'checked_at': day,
@@ -51,13 +52,23 @@ def enrich(models, registry, day):
                 record['provider'] not in target.get('providers', []) or
                 target.get('score') is not None):
             continue
+        # Tier 1: validate supported efforts against models.dev capabilities when available.
+        md_list = modelsdev_by_slug.get(record['target_slug'], [])
+        if md_list:
+            md_efforts = set()
+            for r in md_list:
+                md_efforts.update(r.get('reasoning_efforts') or [])
+            if md_efforts and not set(record.get('supported_efforts', [])).issubset(md_efforts):
+                continue
         derived = copy.deepcopy(target)
         derived.update(slug=target['slug'] + '__' + record['variant'],
                        id=target['id'] + ' (' + record['variant'] + ')',
                        variant=record['variant'], efforts=record['supported_efforts'],
+                       efforts_source='inherited',
                        score=source['score'], history_excluded=True,
                        fallback_id=record['route_id'], fallback_provider=record['provider'],
-                       selector=record['selector'], or_id='')
+                       selector=record['selector'], or_id='',
+                       cost_source='inherited')
         # Price belongs to the destination route, not the benchmark's paid endpoint.
         derived['cost_blended'] = record['cost_blended']
         derived['score_source'] = dict(record, kind='inherited-estimate',
