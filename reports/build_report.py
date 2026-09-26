@@ -43,6 +43,8 @@ def prune_reports(keep_stamps):
 
 def build_sections(a):
     models = a.get("models", [])
+    routers = [m["id"] for m in models if m.get("router")]
+    models = [m for m in models if not m.get("router")]
     ocf = [m for m in models if set(m.get("groups", [])) & OCF]
 
     all_intel = sorted(models, key=lambda r: (-(r["score"] if r["score"] is not None else -1)))
@@ -100,7 +102,8 @@ def build_sections(a):
             "ocf_ratio": ocf_ratio, "ocf_free": ocf_free,
             "ocf_free_unscored": ocf_free_unscored, "ocf_unratable": ocf_unratable,
             "stack": stack, "practical": practical, "outliers": outliers,
-            "quartiles": q, "ocf_count": len(ocf), "model_count": len(models)}
+            "quartiles": q, "ocf_count": len(ocf), "model_count": len(models),
+            "routers": routers}
 
 
 def row_md(m):
@@ -129,7 +132,8 @@ def main():
          f"Costed {sum(1 for m in a.get('models', []) if m.get('cost_blended') is not None)} | "
          f"Tiers Max {len(s['stack']['max']['rows'])} / High {len(s['stack']['high']['rows'])} / "
          f"Medium {len(s['stack']['medium']['rows'])} | "
-         f"Thresholds {th['max']}/{th['high']}/{th['medium']} | <30 excluded from stack only\n",
+         f"Thresholds {th['max']}/{th['high']}/{th['medium']} | <30 excluded from stack only | "
+         f"Routers {len(s['routers'])} excluded\n",
          "\n## 1. All Data — Intelligence\n"]
     L += [row_md(m) for m in s["all_intel"][:MD_CAP]]
     if len(s["all_intel"]) > MD_CAP:
@@ -181,8 +185,15 @@ def main():
 
     slim = lambda m: [m["id"], "".join(m["groups"]), m["score"], m["cost_blended"],
                       m["ratio"], opencode_ids(m["or_id"]), ",".join(m["providers"])]
+    scored = sorted(m["score"] for m in a.get("models", []) if m.get("score") is not None)
+    dist = {"scored": len(scored)}
+    if scored:
+        dist.update({"p10": round(pct(scored, 0.10), 2), "p50": round(pct(scored, 0.50), 2),
+                     "p90": round(pct(scored, 0.90), 2), "max": max(scored)})
     full = {"stamp": stamp, "day": a.get("day", stamp[:10]), "thresholds": th,
             "cost_method": a.get("cost_method", ""), "quartiles": s["quartiles"],
+            "score_dist": dist, "routers_excluded": s["routers"],
+            "collisions": a.get("collisions", []),
             "all_intel": s["all_intel"], "all_cost": s["costed"], "all_cost_unknown": s["uncosted"],
             "all_ratio_paid": s["paid_ratio"], "all_ratio_free_by_score": s["free_block"],
             "all_ratio_unratable": s["unratable"] + s["free_unscored"],

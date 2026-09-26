@@ -63,19 +63,7 @@ def main():
         aa_rows.append({"id": m.get("slug", "") or m.get("id", ""), "name": m.get("name", ""),
                         "creator": aa_creator(m), "score": aa_score(m.get("evaluations")),
                         "cost_blended": p.get("price_1m_blended_3_to_1"), "zero_price": zero})
-    aa_top = sorted(aa_rows, key=lambda r: r["score"], reverse=True)[:15]
-    aa_free_unverified = sorted([r["id"] for r in aa_rows if r["zero_price"]])
-
-    # Combined free+score rank: OR free matched to AA by exact normalized slug (no match = unscored)
     aa_by_slug = {norm(r["id"]): r for r in aa_rows}
-    combined = []
-    for r in or_rows:
-        if not r["free"]:
-            continue
-        best = aa_by_slug.get(norm(r["id"].split(":")[0].split("/")[-1]))
-        combined.append({"id": r["id"], "aa_score": best["score"] if best else 0,
-                         "aa_match": best["id"] if best else "", "context": r["context"]})
-    combined = sorted(combined, key=lambda r: r["aa_score"], reverse=True)[:30]
 
     # Canonical deduped models (reports-layer union; raw snapshots untouched).
     TIER_MAX, TIER_HIGH, TIER_MED = 50, 40, 30
@@ -110,9 +98,11 @@ def main():
     def base_slug(mid):
         return norm(str(mid).split(":")[0].split("/")[-1])
 
-    or_by_id = {m.get("id", ""): m for m in ors}
-    oai_slugs = {base_slug(m.get("id", "")) for m in oai}
-    ant_slugs = {base_slug(m.get("id", "")) for m in ant}
+    or_free = {r["id"] for r in or_rows if r["free"]}
+    or_ctx = {r["id"]: r["context"] for r in or_rows}
+    or_name = {m.get("id", ""): m.get("name", "") for m in ors}
+    or_price = {m.get("id", ""): m.get("pricing", {}) for m in ors}
+    ant_name = {m.get("id", ""): m.get("display_name", "") for m in ant}
     aa_by_base = {base_slug(k): v for k, v in aa_by_slug.items()}
 
     union = {}
@@ -131,10 +121,14 @@ def main():
         union.setdefault(key, {"or": [], "oai": [], "ant": [], "aa": None})
         union[key]["aa"] = m
 
-    or_free = {r["id"] for r in or_rows if r["free"]}
-    or_ctx = {r["id"]: r["context"] for r in or_rows}
-    or_name = {m.get("id", ""): m.get("name", "") for m in ors}
-    or_price = {m.get("id", ""): m.get("pricing", {}) for m in ors}
+    collisions = []
+    for key, entry in union.items():
+        bases = {i.split(":")[0] for i in entry["or"]}
+        if len(bases) > 1:
+            collisions.append({"slug": key, "ids": sorted(entry["or"])})
+    if collisions:
+        print(f"note: {len(collisions)} slug-collision merges (same tail slug, kept merged): " +
+              ", ".join(c["slug"] for c in collisions[:10]))
 
     models = []
     for key in sorted(union):
@@ -155,8 +149,8 @@ def main():
         if u["ant"]:
             providers.append("anthropic")
         aa_match = aa_by_base.get(key)
-        score = aa_score((aa_match or {}).get("evaluations")) if aa_match else None
-        cost = aa_cost((aa_match or {}).get("pricing", {}).get("price_1m_blended_3_to_1")) if aa_match else None
+        score = aa_match["score"] if aa_match else None
+        cost = aa_cost(aa_match["cost_blended"]) if aa_match else None
         if cost is None:
             for i in u["or"]:
                 cost = or_cost_per_1m(or_price.get(i))
@@ -168,11 +162,13 @@ def main():
         disp = (u["oai"] or u["ant"] or ([disp_or] if disp_or else []) or
                 ([aa_match.get("slug", "") or aa_match.get("id", "")] if aa_match else [""]))[0]
         name = (next((or_name.get(i, "") for i in or_ids if or_name.get(i)), "") or
-                (u["ant"] and "") or ((aa_match or {}).get("name", "")))
+                next((ant_name.get(i, "") for i in u["ant"] if ant_name.get(i)), "") or
+                ((aa_match or {}).get("name", "")))
+        router = disp_or.lower().lstrip("~").startswith("openrouter/")
         models.append({"id": disp, "or_id": disp_or, "name": name, "groups": groups,
                        "providers": providers, "score": score, "cost_blended": cost,
                        "ratio": ratio, "context": or_ctx.get(disp_or),
-                       "free": free, "tier": tier_of(score)})
+                       "free": free, "router": router, "tier": tier_of(score)})
 
     con = sqlite3.connect(DB)
     cols = [r[1] for r in con.execute("PRAGMA table_info(models)")]
@@ -194,16 +190,14 @@ def main():
     removed_or = sorted(prev_or - cur_or) if prev_or else []
     hist_days = [r[0] for r in con.execute("SELECT DISTINCT day FROM models ORDER BY day")]
 
-    out = {"stamp": stamp, "day": day, "total_openrouter": len(or_rows), "free_count": len(free_ids), "free_ids": free_ids[:300],
+    out = {"stamp": stamp, "day": day, "total_openrouter": len(or_rows), "free_count": len(free_ids),
            "new_ids_vs_history": new_or[:50], "new_total": len(new_or),
            "removed_ids_vs_history": removed_or[:50], "removed_total": len(removed_or), "history_days": hist_days,
            "total_openai": len(oai_rows), "openai_ids": sorted([r["id"] for r in oai_rows]),
            "openai_retired": sorted([r["id"] for r in oai_rows if r["shutdown"]])[:50],
            "total_anthropic": len(ant_rows), "anthropic_ids": sorted([r["id"] for r in ant_rows]),
-           "total_aa": len(aa_rows), "aa_top15": aa_top,
-           "aa_free_unverified": aa_free_unverified[:100], "aa_free_count": len(aa_free_unverified),
-           "combined_free_rank": combined,
-           "models": models,
+           "total_aa": len(aa_rows),
+           "models": models, "collisions": collisions,
            "thresholds": {"max": TIER_MAX, "high": TIER_HIGH, "medium": TIER_MED},
            "cost_method": "aa_blended_primary_or_derived_fallback_per_1M"}
     ap = os.path.join(ROOT, "analysis", f"{stamp}_analysis.json")

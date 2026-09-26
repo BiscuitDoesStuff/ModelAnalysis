@@ -43,12 +43,11 @@ SQLite (`analysis/store.sqlite`, table `models`):
 
 Legacy tables lacking `source` are renamed to `models_old_<stamp>` and rebuilt. Diffs compare current OpenRouter IDs against the max stored `day < today`: `new_ids_vs_history`, `removed_ids_vs_history` (capped at 50 in JSON, full counts in `new_total`/`removed_total`).
 
-Analysis JSON keys: legacy counts and ID lists (unchanged) plus `models[]` canonical rows
+Analysis JSON keys: legacy counts, native ID lists, retired/diff/history keys (unchanged) plus `models[]` canonical rows
 `{id, or_id, name, groups[O/C/F], providers[], score|null, cost_blended|null, ratio|null,
-context, free, tier}`, `thresholds{max:50, high:40, medium:30}`,
-`cost_method: aa_blended_primary_or_derived_fallback_per_1M`.
-
-Analysis JSON keys: `stamp, day, total_openrouter, free_count, free_ids[:300], new_ids_vs_history[:50], new_total, removed_ids_vs_history[:50], removed_total, history_days, total_openai, openai_ids, openai_retired[:50], total_anthropic, anthropic_ids, total_aa, aa_top15, aa_free_unverified[:100], aa_free_count, combined_free_rank[:30]`.
+context, free, router, tier}`, `collisions[]` (same tail slug merged from distinct listings),
+`thresholds{max:50, high:40, medium:30}`, `cost_method: aa_blended_primary_or_derived_fallback_per_1M`.
+Dead keys (`free_ids`, `aa_top15`, `aa_free_unverified`, `combined_free_rank`) were removed; the report no longer consumes them.
 
 ## Stage 3 — report (`reports/build_report.py`)
 
@@ -61,7 +60,7 @@ Input: newest `analysis/*_analysis.json` (`models[]` canonical rows). Outputs sh
 9. Outliers: bargains / overpriced via quartiles over OCF paid scored+costed set; free gems = free + score ≥ 40.
 
 - `.md`: header counts + 9 sections, top 20 per list, gap flags inline.
-- `.json`: 9 section keys uncapped + `quartiles` + `thresholds` + `cost_method`.
+- `.json`: 9 section keys uncapped + `quartiles` + `score_dist` (p10/p50/p90/max for threshold calibration) + `thresholds` + `routers_excluded` + `collisions`.
 - `.xlsx` (requires `openpyxl`, else `xlsx skipped`): `summary | All_Intel | All_Cost | All_Ratio | OCF_Intel | OCF_Cost | OCF_Ratio | OCF_Stack | OCF_Practical | OCF_Outliers`.
 
 ## Extension points

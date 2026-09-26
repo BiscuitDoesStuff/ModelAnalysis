@@ -56,7 +56,7 @@ Open `reports/<stamp>_summary.md` — 9 sections, top 20 rows each (full lists i
 8. **OCF — Practical picks**: winner + runner-up per tier for each access variant (OCF, OF, CF, F-only). `— (gap)` where a tier/variant has nothing.
 9. **OCF — Outliers**: bargains, overpriced, free gems (free + score 40+).
 
-Row format: `` `id` [groups] — score — $/1M — ratio → `openrouter/id` ``. Groups: O = OpenAI, C = Claude, F = strict-free.
+Row format: `` `id` [groups] — score — $/1M — ratio → `openrouter/id` ``. Groups: O = OpenAI, C = Claude, F = strict-free. Router listings (`openrouter/*`) are excluded from ranked views; the header shows the excluded count.
 
 Excel (`reports/<stamp>_models.xlsx`) sheets:
 
@@ -87,14 +87,16 @@ None of the above are committed (see `.gitignore`).
 | `run analysis first` | No `analysis/*_analysis.json`; run stage 2 first. |
 | `xlsx skipped: ...` | `openpyxl` missing — `pip install -r requirements.txt` and re-run stage 3. |
 | Mostly `unscored` / `cost-unknown` / empty stack | No AA / OpenAI / Anthropic keys — expected for public runs. Add keys and re-run. |
-| `aa_free_unverified` non-empty but no free gems | AA $0 pricing is unverified (billing not checked); free-gem status needs the strict rule + score. |
+| AA shows $0 prices but no free gems | AA $0 pricing alone is unverified (billing not checked); gem status needs the strict-free rule + score 40+. |
 | Diff always empty on first run | No previous day in `store.sqlite` yet; diffs populate from the second distinct day onward. |
 
 ## 7. FAQ
 
 **Do I need billing anywhere?** No. The free rule is strict $0 at retrieval time.
 
-**Which free list do I trust?** `free_ids` (strict). `aa_free_unverified` is AA $0 pricing only — account/billing not verified.
+**Which free list do I trust?** The F-tagged rows and free-gems block (strict $0 + text-only + no routers). AA $0 pricing alone is unverified — account/billing not checked.
+
+**Why are stack tiers empty / flagged with gaps?** No scored model from that group qualified (often: no keys yet, or no free model scores 50+). Gaps are explicit, not errors.
 
 **How do I use a model in OpenCode?** Take the `openrouter/<id>` form from the free list or `free_rank` sheet.
 

@@ -82,7 +82,10 @@ docs/                      — user guide and pipeline internals
 - `docs/PIPELINE.md` — pipeline internals, schemas, and extension points (maintainer reference)
 
 ## Notes and limits
-
-- Provider rate limits and data-use policies change; the limits table in reports is hand-maintained (last checked 2026-09-25) — verify in provider docs before heavy use.
+- Provider rate limits and data-use policies change — verify in provider docs before heavy use.
 - Per-model OpenCode compatibility is not verified by this tool.
 - Snapshots are point-in-time; re-run on use to refresh.
+
+## License
+
+MIT — see `LICENSE`.
