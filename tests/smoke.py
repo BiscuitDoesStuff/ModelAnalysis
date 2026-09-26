@@ -143,15 +143,50 @@ check("alerts/check_churn.py" in run_ps1, "run.ps1 includes alerts stage")
 if m_files:
     md = open(m_files[-1], encoding="utf-8").read()
     check("[F?]" in md, "md has [F?] marker")
+
+def _copy_id(m):
+    if m.get("selector"):
+        return m["selector"]
+    oc = m.get("or_id", "")
+    oc = oc if oc.startswith("openrouter/") else (f"openrouter/{oc}" if oc else "")
+    if oc:
+        return oc
+    fb = m.get("fallback_id", "")
+    return str(fb) if fb and m.get("fallback_provider") not in ("", "aa") else ""
+
 if h_files:
     htm = open(h_files[-1], encoding="utf-8").read()
     check("F?" in htm, "html has F? marker")
-    for tab in ("Start here", "Best value", "Stack", "Variants", "Free", "Explore"):
+    for tab in ("Start here", "Best value", "Stack", "Variants", "Free", "Graph", "Explore"):
         check(tab in htm, f"html has {tab} page")
     for old in ("All · Intelligence", "All · Cost", "OCF · Intelligence", "OCF · Cost"):
         check(old not in htm, f"html drops duplicated {old} table")
     check("filterExplore" in htm, "html explore has filters")
     check("Score" in htm and "saves" in htm, "html value bands show savings")
+    check("id='t-graph'" in htm and "id='g-plot'" in htm and "id='g-search'" in htm,
+          "html graph has tab, search and plot")
+    check("not measured cost per task" in htm and "[F?]" in htm,
+          "html graph explains price and provisional free")
+    try:
+        payload = json.JSONDecoder().raw_decode(htm.split("const graphModels = ", 1)[1])[0]
+        source_rows = r.get("all_intel", [])
+        check(len(payload) == len(source_rows) and len({m["slug"] for m in payload}) == len(payload),
+              "graph payload includes each non-router model once")
+        indexed = {m["slug"]: m for m in payload}
+        check(all(m["slug"] in indexed and indexed[m["slug"]]["variant"] == (m.get("variant") or "")
+                  and indexed[m["slug"]]["score"] == m.get("score")
+                  and indexed[m["slug"]]["cost"] == m.get("cost_blended") for m in source_rows),
+              "graph retains variant, score and price from report rows")
+        check(all(m["route"] == _copy_id(source) for source in source_rows
+                  for m in [indexed[source["slug"]]]),
+              "graph copies only real route IDs")
+        check(all(any(p[field] == value for p in payload) for field, value in
+                  (("cost", 0), ("cost", None), ("score", None))
+                  if any(m.get("cost_blended" if field == "cost" else "score") == value
+                         for m in source_rows)),
+              "graph dataset keeps free zero and unknown values distinct when present")
+    except (IndexError, ValueError, KeyError, TypeError) as e:
+        check(False, f"graph payload parses ({e})")
 
 # Variants: separate ranked rows (max/xhigh/high/medium/…), efforts from OR reasoning.
 allowed_variants = {"", "max", "xhigh", "high", "medium", "low", "minimal", "none"}
@@ -237,15 +272,6 @@ for key in ("ocf_intel", "all_intel"):
         break
 else:
     rows = []
-def _copy_id(m):
-    if m.get("selector"):
-        return m["selector"]
-    oc = m.get("or_id", "")
-    oc = oc if oc.startswith("openrouter/") else (f"openrouter/{oc}" if oc else "")
-    if oc:
-        return oc
-    fb = m.get("fallback_id", "")
-    return str(fb) if fb and m.get("fallback_provider") not in ("", "aa") else ""
 if rows:
     for m in rows:
         cid = _copy_id(m)

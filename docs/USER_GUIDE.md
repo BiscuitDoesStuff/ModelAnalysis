@@ -49,14 +49,17 @@ Re-run any time to refresh. Each run prunes older outputs so only the latest sta
 
 ## 4. Read the report
 
-Open `reports/<stamp>_report.html` in a browser — 6-page dashboard (Start here · Best value · Stack · Variants · Free · Explore) with search, Explore filters, and click-to-copy OpenCode IDs. `reports/<stamp>_summary.md` holds the 9 sections as text (top 20 rows each; full lists in XLSX, uncapped in JSON):
+Open `reports/<stamp>_report.html` in a browser — 7-page dashboard (Start here · Best value · Stack · Variants · Free · Graph · Explore) with search, Explore filters, and click-to-copy OpenCode IDs. `reports/<stamp>_summary.md` holds the 9 sections as text (top 20 rows each; full lists in XLSX, uncapped in JSON):
 
 1. **Start here**: copy-ready Top quality / Best value / Free cards + tier cards + practical winners + churn/freshness notes.
 2. **Best value**: paid OCF rows in score bands (±1.5, 30+ floor), cheapest-first in band with saving vs priciest. Answers close-score/big-cost choices.
 3. **Stack**: Max (50+) / High (40+) / Medium (30+) tiers, score desc with ratio tiebreak + per-tier value note. Callable ID required (`or_id`/native); AA-only rows intel-only. Gaps flagged per O/C/F. Below 30 excluded.
 4. **Variants**: per-family side-by-side (e.g. 5.5 max/xhigh/high/medium/low). AA-only rows show `nearest display-only` + `provider/model#variant` guidance.
 5. **Free**: verified free by score + provisional `[F?]` + unscored note, with `deprecated-upstream` / `modality-unverified` flags.
-6. **Explore**: one filterable All-models table (groups / cost-source / free-status + text) replacing the old All/OCF Intel/Cost/Ratio duplicates.
+6. **Graph**: search all non-router models, select up to 12 (effort variants individually), and compare AA Intelligence Index against blended $/1M price in a scatter plot plus score/price bars. Choose linear or compressed price scale; selected rows show actual route IDs, evidence flags and verified/provisional free status. Unscored or cost-unknown choices remain in the selected table and bars where possible, but cannot appear in the scatter plot. No network/chart library required.
+7. **Explore**: one filterable All-models table (groups / cost-source / free-status + text) replacing the old All/OCF Intel/Cost/Ratio duplicates.
+
+Graph prices are token rates, **not measured per-task costs**. AA pricing can be identical across effort variants despite different token usage. Free $0 is plotted at zero; `[F?]` means billing is unverified, not verified free. Score estimates are marked; AA-only rows have no copyable route. Selection is local to the open page and resets on reload.
 
 MD/JSON/XLSX keep the 9-section contract (All Intel/Cost/Ratio, OCF Intel/Cost/Ratio, Stack, Practical, Outliers) for scripting; HTML is the user view.
 
@@ -86,7 +89,7 @@ Excel (`reports/<stamp>_models.xlsx`) sheets (data sheets carry `free_status`: `
 
 JSON (`reports/<stamp>_models.json`) holds the 9 sections uncapped (`all_intel`, `all_cost`, `all_ratio_*`, `ocf_*`, `ocf_stack{max,high,medium}`, `ocf_practical[]`, `ocf_outliers`, `family_variants`, `quartiles`, `thresholds`) plus `free_churn` (free→paid flips, newly free, disappeared and new slugs vs the previous day; empty until two distinct days exist) for scripting. Each model row carries `variant`, `variant_ambiguous`, `aa_variant_name`, `efforts[]`, `default_effort`, `efforts_hint`, `or_reasoning_status`, `fallback_id`, `fallback_provider`, `nearest_callable` (display-only), `cost_source`, `deprecated_upstream`, `modality_status`.
 
-Verify with `python tests/smoke.py` (MD/JSON 9-section + HTML 6-page contract + provisional-free + variants + Zen-free + churn + Tier 1 models.dev + cost/ambiguity/capability badges; warns when research registry is past `expires_at`).
+Verify with `python tests/smoke.py` (MD/JSON 9-section + HTML 7-page/Graph contract + provisional-free + variants + Zen-free + churn + Tier 1 models.dev + cost/ambiguity/capability badges; warns when research registry is past `expires_at`).
 
 ## 5. Retention and storage
 

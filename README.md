@@ -39,7 +39,7 @@ After a run, all dated with `YYYY-MM-DD_HHMM`:
 
 | Output | Path |
 |---|---|
-| User-friendly dashboard: Start here · Best value · Stack · Variants · Free · Explore | `reports/<stamp>_report.html` |
+| User-friendly dashboard: Start here · Best value · Stack · Variants · Free · Graph · Explore | `reports/<stamp>_report.html` |
 | Human-readable ranking (9 sections, top 20) | `reports/<stamp>_summary.md` |
 | Churn alert (only on free→paid/disappearances) | `reports/<stamp>_churn_alert.md` |
 | Spreadsheet (11 tabs: summary, All_* / OCF_* views, stack, practical, outliers, Family_Variants) | `reports/<stamp>_models.xlsx` |
@@ -51,7 +51,7 @@ After a run, all dated with `YYYY-MM-DD_HHMM`:
 
 Only the latest run is kept on disk (auto-pruned each run). Generated outputs are gitignored; source is what gets committed.
 
-The summary lists all 9 sections (top 20 each): All-Data Intelligence / Cost / Ratio, OCF Intelligence / Cost / Ratio, Optimized Stack (Max/High/Medium with gap flags), Practical picks table (12 tier × variant cells), and Outliers. The HTML dashboard reorganizes the same data into 6 user pages: Start here (Top quality / Best value / Free copy cards), Best value (score bands ±1.5, cheapest-first with saving), Stack (tiered callable picks + per-tier value note + practical), Variants (per-family side-by-side, e.g. 5.5 max→low with #variant guidance), Free (verified + provisional [F?]), Explore (one filterable table replacing All/OCF duplicates). Variants (`max`/`xhigh`/`high`/`medium`/…) are separate ranked rows with `efforts` shown; set `reasoning_effort` locally to select. Costs show `[aa|or-derived|inherited]` provenance; ambiguous efforts, sibling hints, deprecated/modality badges, and display-only nearest-callable hints are inline. Excel holds the 9 sections as full-list tabs; JSON holds them uncapped.
+The summary lists all 9 sections (top 20 each): All-Data Intelligence / Cost / Ratio, OCF Intelligence / Cost / Ratio, Optimized Stack (Max/High/Medium with gap flags), Practical picks table (12 tier × variant cells), and Outliers. The HTML dashboard reorganizes the same data into 7 user pages: Start here (Top quality / Best value / Free copy cards), Best value (score bands ±1.5, cheapest-first with saving), Stack (tiered callable picks + per-tier value note + practical), Variants (per-family side-by-side, e.g. 5.5 max→low with #variant guidance), Free (verified + provisional [F?]), Graph (choose up to 12 models/efforts for score-vs-price scatter and bar comparisons), Explore (one filterable table replacing All/OCF duplicates). Variants (`max`/`xhigh`/`high`/`medium`/…) are separate ranked rows with `efforts` shown; set `reasoning_effort` locally to select. Graph prices are blended $/1M, not measured per-task costs. Costs show `[aa|or-derived|inherited]` provenance; ambiguous efforts, sibling hints, deprecated/modality badges, and display-only nearest-callable hints are inline. Excel holds the 9 sections as full-list tabs; JSON holds them uncapped.
 
 ## Configuration
 
@@ -80,6 +80,7 @@ analysis/analyze.py        — stage 2: normalize, free-filter, variants/efforts
 analysis/enrichment.py     — stage 2b: evidence-backed scores (AA-canonical, external reference-only, inherited estimates w/ models.dev validation)
 analysis/research.json     — committed evidence registry (benchmark versions, equivalence URLs, expiry)
 reports/build_report.py    — stage 3: write MD + XLSX + JSON + HTML report with score evidence + provenance badges
+reports/graph.js           — offline, inlined Graph page interactions and SVG rendering
 alerts/check_churn.py      — stage 4: churn summary + alert file on free→paid/disappearances
 tests/smoke.py             — verify 9-section + provisional + variants + evidence + churn + Tier 1 + backlog contract
 raw/                       — timestamped snapshots (gitignored)

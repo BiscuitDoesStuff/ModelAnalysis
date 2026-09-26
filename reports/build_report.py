@@ -1,4 +1,4 @@
-"""3. Report — 9-section OCF views for MD/XLSX/JSON + 6-page HTML dashboard. On-use. Keeps latest only."""
+"""3. Report — 9-section OCF views for MD/XLSX/JSON + 7-page HTML dashboard. On-use. Keeps latest only."""
 import json, os, glob, html as _html
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -421,6 +421,18 @@ def explore_table(rows):
     return "".join(h)
 
 
+def graph_data(rows):
+    """Minimal, non-router comparison data for the offline Graph page."""
+    return [{"slug": m["slug"], "id": m["id"], "name": m.get("name") or "",
+             "variant": m.get("variant") or "", "ambiguous": bool(m.get("variant_ambiguous")),
+             "score": m.get("score"), "estimate": (m.get("score_source") or {}).get("kind") == "inherited-estimate",
+             "cost": m.get("cost_blended"), "cost_source": m.get("cost_source") or "none",
+             "free_status": free_status_of(m), "route": copy_id(m),
+             "deprecated": bool(m.get("deprecated_upstream")),
+             "modality_unverified": m.get("modality_status") == "modality-unverified"}
+            for m in rows]
+
+
 def build_html(a, s, stamp):
     th = a.get("thresholds", {"max": 50, "high": 40, "medium": 30})
     fsc = a.get("free_status_counts", {})
@@ -439,7 +451,7 @@ def build_html(a, s, stamp):
 
     tabs = [("start", "Start here"), ("value", "Best value"),
             ("stack", "Stack"), ("compare", "Variants"),
-            ("free", "Free"), ("explore", "Explore")]
+            ("free", "Free"), ("graph", "Graph"), ("explore", "Explore")]
     nav = "".join(f"<button data-t='t-{tid}' onclick='showTab(this)'>{t}</button>" for tid, t in tabs)
 
     ov = f"<p>Snapshot <b>{esc(stamp)}</b> · thresholds {th['max']}/{th['high']}/{th['medium']} " \
@@ -502,7 +514,7 @@ def build_html(a, s, stamp):
         ov += f"<tr><td>{TIER_LABEL[t]}</td><td>{cells[0]}</td><td>{cells[1]}</td><td>{cells[2]}</td><td>{cells[3]}</td></tr>"
     ov += "</tbody></table>"
     ov += ("<p class='note'>Full 9-section data (All/OCF Intel/Cost/Ratio, stack, practical, outliers) "
-           "stays in MD/JSON/XLSX. HTML is the 6-page user view: Start here · Best value · Stack · Variants · Free · Explore.</p>")
+           "stays in MD/JSON/XLSX. HTML is the 7-page user view: Start here · Best value · Stack · Variants · Free · Graph · Explore.</p>")
 
     def prac_winner_cell(p):
         w = p["winner"]
@@ -591,14 +603,42 @@ def build_html(a, s, stamp):
                       " | provisional " + esc(", ".join(m["id"] for m in s["ocf_provisional_unscored"][:20])) + "</p>")
 
     explore_html = ("<p>All non-router models in one filterable table. Replaces the old All/OCF Intel/Cost/Ratio duplicates. "
-                    "Full uncapped lists stay in JSON/XLSX.</p>" + explore_table(s["all_intel"]))
+                     "Full uncapped lists stay in JSON/XLSX.</p>" + explore_table(s["all_intel"]))
+
+    graph_html = ("<p>Select up to 12 models or effort variants from this snapshot. The scatter plot shows "
+                  "AA Intelligence Index score (right = higher) versus blended token price (down = cheaper). "
+                  "$/1M is a price proxy, <b>not measured cost per task</b>; AA prices can be identical across "
+                  "effort variants despite different reasoning-token use. Estimated scores are labelled; "
+                  "[F?] is not verified free. Missing scores/prices stay in the selection list but cannot be plotted.</p>"
+                  "<div class='g-controls'><label for='g-search'>Find models</label> "
+                  "<input id='g-search' class='search' type='search' placeholder='Search ID, name or effort…' autocomplete='off'> "
+                  "<label for='g-scale'>Price scale</label> <select id='g-scale'><option value='linear'>Linear</option>"
+                  "<option value='compressed'>Compressed (log1p)</option></select> "
+                  "<button id='g-clear' type='button'>Clear selection</button> "
+                  "<span id='g-count' aria-live='polite'></span></div>"
+                  "<p class='note'>Search all non-router models; results show the first 60 matches. "
+                  "Each variant is selectable separately.</p>"
+                  "<div id='g-results' class='g-results' aria-label='Model search results'></div>"
+                  "<p id='g-message' class='note' role='status' aria-live='polite'></p>"
+                  "<div class='g-chart'><svg id='g-plot' viewBox='0 0 840 460' role='img' "
+                  "aria-label='Selected model score versus blended price, higher quality to the right, cheaper toward the bottom'></svg></div>"
+                  "<div id='g-legend' class='g-legend'></div>"
+                  "<div id='g-bars' class='g-bars'></div>"
+                  "<h3>Selected models</h3><div id='g-details' class='twrap'></div>")
 
     body = (sec("start", "Start here", ov) +
             sec("value", "Best value — close score, big cost gap", value_html) +
             sec("stack", "Stack — tiered callable picks", stack_html) +
             sec("compare", "Variants — family compare", compare_html) +
             sec("free", "Free — verified + provisional [F?]", free_html) +
+            sec("graph", "Graph — compare selected models", graph_html) +
             sec("explore", "Explore — all models", explore_html))
+
+    # Inline the script so the dated HTML works offline (including file:// URLs).
+    with open(os.path.join(REP, "graph.js"), encoding="utf-8") as f:
+        graph_script = f.read()
+    graph_rows = json.dumps(graph_data(s["all_intel"]), ensure_ascii=True, separators=(",", ":"))
+    graph_rows = graph_rows.replace("<", "\\u003c").replace(">", "\\u003e").replace("&", "\\u0026")
 
     return f"""<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -618,6 +658,16 @@ th{{background:#0f172a}}tr:nth-child(even){{background:#0b1220}}code{{color:#7dd
 .filters select{{padding:6px 10px;margin:8px 4px;background:#0f172a;color:#e2e8f0;border:1px solid #38bdf8;border-radius:8px}}
 .twrap{{overflow-x:auto}}.cards{{display:flex;gap:12px;flex-wrap:wrap}}.card{{background:#0f172a;border:1px solid #38bdf8;border-radius:10px;padding:12px 16px;min-width:200px}}
 .bign{{font-size:15px}}
+.g-controls button,.g-controls select,.g-results button,.g-details button{{background:#1e293b;color:#e2e8f0;border:1px solid #38bdf8;border-radius:7px;padding:6px 10px;cursor:pointer}}
+.g-controls label{{font-weight:600}}.g-results{{display:flex;gap:6px;flex-wrap:wrap;max-height:210px;overflow-y:auto;padding:8px;background:#0f172a;border:1px solid #334155;border-radius:8px}}
+.g-results button{{text-align:left;max-width:100%}}.g-results button[aria-pressed='true']{{background:#0369a1}}.g-results button:disabled{{opacity:.5;cursor:not-allowed}}
+.g-chart{{max-width:100%;overflow-x:auto}}#g-plot{{display:block;width:100%;min-width:480px;background:#0f172a;border:1px solid #334155;border-radius:8px}}
+.g-legend{{display:flex;flex-wrap:wrap;gap:6px;margin:12px 0}}.g-legend span{{padding:3px 8px;border:1px solid #334155;border-radius:6px}}
+.g-bars{{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,350px),1fr));gap:12px}}.g-bars>div{{background:#0f172a;border:1px solid #334155;border-radius:8px;padding:10px}}
+.g-bar-row{{display:grid;grid-template-columns: minmax(100px,1fr) 2fr auto;align-items:center;gap:6px;margin:6px 0;font-size:12px}}
+.g-bar-track{{height:12px;background:#1e293b;border-radius:6px}}.g-bar-fill{{height:12px;border-radius:6px}}
+.g-details button{{margin-right:5px}}#g-message{{min-height:1.5em}}
+@media(max-width:600px){{body{{padding:12px}}.g-bar-row{{grid-template-columns:1fr 2fr auto}}}}
 </style></head><body>
 <h1>ModelAnalysis — {esc(stamp)}</h1>
 <div>{chips}</div><nav>{nav}</nav>{body}
@@ -640,6 +690,8 @@ function copyId(el){{navigator.clipboard.writeText(el.textContent).then(()=>{{
 el.style.color='#4ade80';setTimeout(()=>el.style.color='',800);}});}}
 document.querySelector('nav button').classList.add('on');
 document.querySelector('.tab').classList.add('on');
+</script><script>const graphModels = {graph_rows};
+{graph_script}
 </script></body></html>"""
 
 
