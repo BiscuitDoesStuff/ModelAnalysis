@@ -14,9 +14,12 @@ def is_free_or(pricing):
 
 def aa_score(ev):
     try:
-        return float((ev or {}).get("artificial_analysis_intelligence_index", 0) or 0)
+        value = (ev or {}).get("artificial_analysis_intelligence_index")
+        import math
+        score = float(value) if value is not None else None
+        return score if score is not None and math.isfinite(score) else None
     except Exception:
-        return 0
+        return None
 
 def aa_creator(m):
     c = m.get("model_creator", "")
@@ -24,6 +27,30 @@ def aa_creator(m):
 
 def norm(s):
     return re.sub(r"[^a-z0-9]", "", str(s).lower())
+
+
+EFFORTS_ORDERED = ["max", "xhigh", "high", "medium", "low", "minimal", "none"]
+
+
+def parse_variant(aa_name="", aa_slug=""):
+    """Extract reasoning-effort variant from AA name or slug. Returns '' when none."""
+    n = str(aa_name or "").lower()
+    s = str(aa_slug or "").lower()
+    # Parenthesized form: "Muse Spark 1.3 (max)" / "(xhigh)".
+    import re as _re
+    m = _re.search(r"\((max|xhigh|high|medium|low|minimal|none)\)", n)
+    if m:
+        return m.group(1)
+    # Long form: "Max Effort", "Xhigh Effort", "Adaptive Reasoning, High Effort".
+    for v in EFFORTS_ORDERED:
+        if f"{v} effort" in n:
+            return v
+    # Slug suffix: "muse-spark-1-3-xhigh", "claude-opus-5-medium".
+    for v in EFFORTS_ORDERED:
+        if s.endswith("-" + v) or f"-{v}-" in f"-{s}-":
+            # Avoid false positives like "minimal" inside other words: slug tokens are hyphen-separated so this is safe.
+            return v
+    return ""
 
 def main():
     raw_files = glob.glob(os.path.join(RAW, "*_models.json"))
@@ -112,6 +139,15 @@ def main():
     or_ctx = {r["id"]: r["context"] for r in or_rows}
     or_name = {m.get("id", ""): m.get("name", "") for m in ors}
     or_price = {m.get("id", ""): m.get("pricing", {}) for m in ors}
+    or_reasoning = {}
+    for m in ors:
+        r = m.get("reasoning") or {}
+        eff = r.get("supported_efforts") or []
+        if eff or r.get("default_effort"):
+            or_reasoning[m.get("id", "")] = {
+                "efforts": list(eff),
+                "default_effort": r.get("default_effort", ""),
+            }
     ant_name = {m.get("id", ""): m.get("display_name", "") for m in ant}
     zenmux_name = {m.get("id", ""): m.get("display_name", "") for m in zenmux}
     aa_by_base = {base_slug(k): v for k, v in aa_by_slug.items()}
@@ -163,12 +199,30 @@ def main():
     models = []
     for key in sorted(union):
         u = union[key]
-        free = any(i in or_free for i in u["or"])
+        zen_free_ids = [i for i in u["zen"] if str(i).endswith("-free")]
+        free = any(i in or_free for i in u["or"]) or bool(zen_free_ids)
+        zen_free = bool(zen_free_ids)
+        aa_match = aa_by_base.get(key)
+        aa_creator_name = ""
+        try:
+            if aa_match:
+                c = aa_match.get("creator", "")
+                aa_creator_name = str(c or "").lower()
+        except Exception:
+            aa_creator_name = ""
         groups = []
         if u["oai"] or any(i.lstrip("~").split("/")[0].lower() == "openai" for i in u["or"] if "/" in i.lstrip("~")):
             groups.append("O")
         if u["ant"] or any(i.lstrip("~").split("/")[0].lower() == "anthropic" for i in u["or"] if "/" in i.lstrip("~")):
             groups.append("C")
+        # AA-only variant rows carry no provider, but creator tells us O/C.
+        # This keeps e.g. Claude Opus 5 (medium) and GPT variants visible in OCF views
+        # as separate ranked rows instead of being filtered out.
+        if not u["oai"] and not u["ant"] and not u["or"] and aa_match:
+            if aa_creator_name == "anthropic" and "C" not in groups:
+                groups.append("C")
+            elif aa_creator_name == "openai" and "O" not in groups:
+                groups.append("O")
         if free:
             groups.append("F")
         providers = []
@@ -213,7 +267,13 @@ def main():
         has_or = bool(u["or"])
         if free:
             free_status = "verified"
-            free_evidence = ["or:strict-free"] + (["aa:zero-price"] if aa_zero else [])
+            free_evidence = []
+            if any(i in or_free for i in u["or"]):
+                free_evidence.append("or:strict-free")
+            if zen_free:
+                free_evidence.append("zen:free-route")
+            if aa_zero:
+                free_evidence.append("aa:zero-price")
         elif aa_zero and has_or:
             free_status = "provisional-l1"
             free_evidence = ["aa:zero-price", "or:listed"]
@@ -223,11 +283,39 @@ def main():
         else:
             free_status = "none"
             free_evidence = []
+        aa_slug_raw = (aa_match or {}).get("slug", "") or (aa_match or {}).get("id", "")
+        aa_name_raw = (aa_match or {}).get("name", "")
+        variant = parse_variant(aa_name_raw, aa_slug_raw)
+        efforts, default_effort = [], ""
+        for i in or_ids:
+            r = or_reasoning.get(i)
+            if r and (r.get("efforts") or r.get("default_effort")):
+                efforts = list(r.get("efforts") or [])
+                default_effort = str(r.get("default_effort") or "")
+                break
+        fallback_id, fallback_provider = "", ""
+        if not disp_or:
+            for prov_key in ("oai", "ant", "groq", "cerebras", "nvidia", "zenmux", "zen"):
+                if u[prov_key]:
+                    fallback_id = sorted(u[prov_key])[0]
+                    fallback_provider = {"oai": "openai", "ant": "anthropic"}.get(prov_key, prov_key)
+                    break
         models.append({"id": disp, "slug": key, "or_id": disp_or, "name": name, "groups": groups,
                        "providers": providers, "score": score, "cost_blended": cost,
                        "ratio": ratio, "context": or_ctx.get(disp_or),
                        "free": free, "router": router, "tier": tier_of(score),
-                       "free_status": free_status, "free_evidence": free_evidence})
+                       "free_status": free_status, "free_evidence": free_evidence,
+                       "variant": variant, "aa_variant_name": aa_name_raw,
+                       "aa_id": aa_slug_raw,
+                       "efforts": efforts, "default_effort": default_effort,
+                       "fallback_id": fallback_id, "fallback_provider": fallback_provider})
+
+    try:
+        from .enrichment import enrich
+    except ImportError:
+        from enrichment import enrich
+    with open(os.path.join(ROOT, 'analysis', 'research.json'), encoding='utf-8') as f:
+        enrich(models, json.load(f), day)
 
     con = sqlite3.connect(DB)
     cols = [r[1] for r in con.execute("PRAGMA table_info(models)")]
@@ -258,7 +346,7 @@ def main():
         con.execute("INSERT OR REPLACE INTO models VALUES(?,?,?,?)", (r["id"], "zen", day, 0))
     # Canonical free-status history (non-router rows only; reports filter routers).
     canon = [(m.get("slug") or base_slug(m.get("id", "")), m.get("free_status", "none"), m.get("id", ""))
-             for m in models if not m.get("router") and (m.get("slug") or m.get("id"))]
+             for m in models if not m.get("router") and not m.get("history_excluded") and (m.get("slug") or m.get("id"))]
     cur_free = {s: f for s, f, _ in canon}
     cur_disp = {s: d for s, f, d in canon}
     for s, f, d in canon:

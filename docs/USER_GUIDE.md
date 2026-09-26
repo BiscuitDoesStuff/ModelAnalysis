@@ -54,23 +54,27 @@ Open `reports/<stamp>_report.html` in a browser — tabbed dashboard of all 9 se
 1. **All Data — Intelligence**: every model by score desc, `unscored` tail.
 2. **All Data — Cost**: cheapest first in blended $/1M, `cost-unknown` tail.
 3. **All Data — Ratio**: paid models by score/cost; then verified-free ranked by score; then provisional-free `[F?]` by score; then `unratable` tail. Free never enters the ratio (infinite).
-4–6. **OCF — Intelligence / Cost / Ratio**: same views filtered to OpenAI + Claude + strict-free rows plus provisional-free `[F?]` (AA $0, billing unverified; exact level in JSON/XLSX).
+4–6. **OCF — Intelligence / Cost / Ratio**: same views filtered to OpenAI + Claude + strict-free rows plus provisional-free `[F?]` (AA $0, billing unverified; exact level in JSON/XLSX). AA-only OpenAI/Anthropic variant rows (creator-mapped O/C) are included here as separate ranked rows even with no callable ID.
 7. **OCF — Optimized stack**: Max (50+) / High (40+) / Medium (30+) tiers, score desc with ratio tiebreak. Callable ID required (`or_id`/native); AA-only rows stay in Intel/Cost/Ratio. Each tier flags `gaps:` for any of O/C/F with no verified qualifier (tier filled only by provisional still flags `F`). Below 30 excluded from stack only.
 8. **OCF — Practical picks**: winner + runner-up per tier for each access variant (OCF, OF, CF, F-only). `— (gap)` where a tier/variant has nothing.
 9. **OCF — Outliers**: bargains, overpriced, free gems (verified/provisional free + score 40+, callable only).
 
-Row format: `` `id` [groups] — score — $/1M — ratio → `openrouter/id` ``. Groups: O = OpenAI, C = Claude, F = strict-free, `F?` = provisional-free (AA $0, unverified). Router listings (`openrouter/*`) are excluded from ranked views; the header shows the excluded count.
+Variants: reasoning-effort rows (`max`/`xhigh`/`high`/`medium`/`low`/`minimal`) are separate ranked rows from AA (e.g. `Claude Opus 5 (medium)` 44.8 vs `(max)` 50.8; `Muse Spark 1.3 (max)` 48.1 vs `(xhigh)` 45.1). Meta variants live in All views (no O/C group); O/C variants live in both All and OCF. To use a variant, set `reasoning_effort` locally — OR `supported_efforts` per row shown as `efforts a/b/c *default`.
 
-Excel (`reports/<stamp>_models.xlsx`) sheets (data sheets carry a `free_status` column: `verified` / `provisional-l1` / `provisional-l0` / `none`):
+Row format: `` `id` (variant) [groups] — score — $/1M — ratio — efforts a/b/c *default → `selector|openrouter/id` — evidence [source] ``. `→ opencode/<route>#<variant>` for inherited estimates, `→ openrouter/...` when OR ID exists; `→ <native> (zen/...) (native, no OR)` for L0/zen-only fallback; `AA-only, no callable ID` otherwise. Scores show `(estimate)` when inherited. Evidence is `aa-api / <version>`, `inherited-estimate from <slug>`, or `unscored`, with links to equivalence/capability/upstream sources. External metrics (e.g. llm-stats) appear as reference-only and never replace AA ranking scores. Groups: O = OpenAI, C = Claude, F = strict-free (OR $0 or Zen `*-free`), `F?` = provisional-free (AA $0, unverified). Router listings (`openrouter/*`) are excluded from ranked views; the header shows the excluded count.
+
+Excel (`reports/<stamp>_models.xlsx`) sheets (data sheets carry `free_status`: `verified` / `provisional-l1` / `provisional-l0` / `none`, plus `variant`, `efforts`, `default_effort`, `fallback_id`, `fallback_provider`):
 
 | `summary` | Header counts + tier sizes + gaps |
 | `All_Intel`, `All_Cost`, `All_Ratio` | Full-list versions of MD sections 1–3 |
 | `OCF_Intel`, `OCF_Cost`, `OCF_Ratio` | Full-list versions of MD sections 4–6 |
 | `OCF_Stack` | Tier + full row; `GAP:` rows for missing groups |
-| `OCF_Practical` | `tier, variant, winner, winner_score, winner_ratio, runner_up` (12 rows) |
+| `OCF_Practical` | `tier, variant, winner, winner_variant, winner_score, winner_ratio, winner_copy_id, runner_up` (12 rows) |
 | `OCF_Outliers` | Bargains + overpriced + free gems |
 
-JSON (`reports/<stamp>_models.json`) holds the 9 sections uncapped (`all_intel`, `all_cost`, `all_ratio_*`, `ocf_*`, `ocf_stack{max,high,medium}`, `ocf_practical[]`, `ocf_outliers`, `quartiles`, `thresholds`) plus `free_churn` (free→paid flips, newly free, disappeared and new slugs vs the previous day; empty until two distinct days exist) for scripting.
+JSON (`reports/<stamp>_models.json`) holds the 9 sections uncapped (`all_intel`, `all_cost`, `all_ratio_*`, `ocf_*`, `ocf_stack{max,high,medium}`, `ocf_practical[]`, `ocf_outliers`, `quartiles`, `thresholds`) plus `free_churn` (free→paid flips, newly free, disappeared and new slugs vs the previous day; empty until two distinct days exist) for scripting. Each model row carries `variant`, `aa_variant_name`, `efforts[]`, `default_effort`, `fallback_id`, `fallback_provider`.
+
+Verify with `python tests/smoke.py` (9-section contract + provisional-free + variants + Zen-free + churn).
 
 ## 5. Retention and storage
 
@@ -98,10 +102,12 @@ None of the above are committed (see `.gitignore`).
 
 **Do I need billing anywhere?** No. The free rule is strict $0 at retrieval time.
 
-**Which free list do I trust?** The F-tagged rows and free-gems block (strict $0 + text-only + no routers). `[F?]` rows are provisional (AA $0, account/billing not checked): L1 has a second OR listing and a callable ID, L0 has no OR listing (it may still carry NVIDIA/ZenMux/Zen native tags).
+**Which free list do I trust?** The F-tagged rows and free-gems block (OR strict-$0 or Zen `*-free` + text-only + no routers). `[F?]` rows are provisional (AA $0, account/billing not checked): L1 has a second OR listing and a callable ID, L0 has no OR listing (it may carry a native `fallback_id` from NVIDIA/ZenMux/Zen or AA-only with no callable ID — intel-only until verified).
 
 **Why are stack tiers empty / flagged with gaps?** No scored model from that group qualified (often: no keys yet, or no free model scores 50+). Gaps are explicit, not errors.
 
-**How do I use a model in OpenCode?** Take the `openrouter/<id>` form from the free lists (`All_Ratio` / `OCF_Ratio` sheets) and check its limits in the provider docs.
+**How do I use a model in OpenCode?** Copy the ID shown: `opencode/<route>#<variant>` for estimates, `openrouter/<or_id>` when present, else the native `fallback_id` (e.g. Zen `muse-spark-1.3-contributor-free`) with provider noted. AA-only rows show `AA-only, no callable ID` — use for comparison only. Check limits in provider docs. Inherited scores are estimates from a matched effort on another route, not measurements of the destination — see the evidence links.
+
+**How do I use variants (high/xhigh/max)?** Variants are separate rows with own scores. The base OR row lists `supported_efforts` (e.g. `max/xhigh/high/medium/low/minimal *medium`, `*` = default). In OpenCode V2 select an available `provider/model#variant` (e.g. `opencode/muse-spark-1.3-contributor-free#xhigh`); variant names come from catalog metadata and unknown variants error. Example: `meta/muse-spark-1.3 (max)` 48.1 vs `(xhigh)` 45.1; `Claude Opus 5 (medium)` 44.8 vs `(max)` 50.8 — compare in All Intel, O/C variants also in OCF Intel. The free Contributor estimate uses `xhigh` because models.dev lists only up to `xhigh` for that route — `max` is not advertised there.
 
 **How fresh is the data?** Point-in-time per run. Re-run on use.

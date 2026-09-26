@@ -48,7 +48,7 @@
   <rect class="box" x="590" y="145" width="280" height="160"/>
   <text class="title" x="606" y="172">2 · analysis/analyze.py</text>
   <text class="sub" x="606" y="192">normalize · strict-$0 + provisional [F?]</text>
-  <text class="sub" x="606" y="210">upsert store.sqlite · diffs + free churn</text>
+  <text class="sub" x="606" y="210">variants/efforts/fallback · evidence (AA only)</text>
   <text class="sub" x="606" y="228">free_history table · flips/disappeared</text>
   <text class="sub" x="606" y="246">writes analysis/&lt;stamp&gt;_analysis.json</text>
   <text class="sub" x="606" y="264">prune keep 1 · history in SQLite</text>
@@ -56,18 +56,18 @@
   <!-- stage 3 -->
   <rect class="box" x="270" y="350" width="600" height="150"/>
   <text class="title" x="286" y="377">3 · reports/build_report.py</text>
-  <text class="sub" x="286" y="397">reads newest analysis (models[] canonical rows) → writes one &lt;stamp&gt; triple:</text>
-  <text class="sub" x="286" y="417">summary.md (9 sections: All/OCF intel·cost·ratio, stack, practical, outliers)</text>
-  <text class="sub" x="286" y="437">models.json (9 keys uncapped + free_churn) · models.xlsx (10 tabs incl. OCF_Stack/Practical)</text>
+  <text class="sub" x="286" y="397">reads newest analysis (models[] canonical rows + score evidence) → writes one &lt;stamp&gt; set:</text>
+  <text class="sub" x="286" y="417">summary.md + report.html (9 sections: All/OCF intel·cost·ratio, stack, practical, outliers)</text>
+  <text class="sub" x="286" y="437">models.json (9 keys uncapped + free_churn) · models.xlsx (10 tabs incl. OCF_Stack/Practical/Outliers)</text>
   <text class="sub" x="286" y="457">needs openpyxl or xlsx skipped · prune older stamps</text>
-  <text class="sub" x="286" y="477">OpenCode IDs: openrouter/&lt;or_id&gt; · verify limits in provider docs</text>
+  <text class="sub" x="286" y="477">Route IDs: selector else openrouter/&lt;or_id&gt; else fallback · evidence links · verify limits</text>
 
   <!-- outputs -->
   <rect class="file" x="30" y="350" width="200" height="150"/>
   <text class="file-t" x="44" y="373">Outputs (gitignored)</text>
   <text class="file-s" x="44" y="393">raw/ snapshot + _errors.log</text>
-  <text class="file-s" x="44" y="411">analysis/ JSON + store.sqlite</text>
-  <text class="file-s" x="44" y="429">reports/ MD + XLSX + JSON + alert</text>
+  <text class="file-s" x="44" y="411">analysis/ JSON + store.sqlite + research.json</text>
+  <text class="file-s" x="44" y="429">reports/ MD + HTML + XLSX + JSON + alert</text>
   <text class="file-s" x="44" y="447">latest run only (auto-pruned)</text>
   <text class="file-s" x="44" y="465">source is what gets committed</text>
 

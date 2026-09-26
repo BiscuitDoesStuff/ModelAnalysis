@@ -138,6 +138,66 @@ if h_files:
     htm = open(h_files[-1], encoding="utf-8").read()
     check("F?" in htm, "html has F? marker")
 
+# Variants: separate ranked rows (max/xhigh/high/medium/…), efforts from OR reasoning.
+allowed_variants = {"", "max", "xhigh", "high", "medium", "low", "minimal", "none"}
+check(all(m.get("variant", "") in allowed_variants for m in models),
+      "variant values valid")
+check(all(isinstance(m.get("efforts", []), list) for m in models),
+      "efforts lists present")
+check(all(isinstance(m.get("fallback_id", ""), str) for m in models),
+      "fallback_id present")
+# Benchmark identifiers are not callable provider IDs.
+aa_only_scored = [m for m in models if not m.get("or_id") and not m.get("providers") and m.get("score") is not None]
+check(all(not m.get("fallback_id") for m in aa_only_scored),
+      f"AA-only scored rows have no callable fallback ({len(aa_only_scored)})")
+# O/C creator mapping: AA-only Anthropic/OpenAI rows enter OCF.
+for m in models:
+    if not m.get("or_id") and not m.get("providers") and m.get("score") is not None:
+        if "anthropic" in str(m.get("name", "")).lower() or "claude" in str(m.get("id", "")).lower():
+            pass  # spot-checked below via ocf_ids
+            break
+op_med = [m for m in models if m.get("slug") == "claudeopus5medium"]
+if op_med:
+    check(op_med[0].get("variant") == "medium", "opus-5-medium variant parsed")
+    check("C" in op_med[0].get("groups", []), "opus-5-medium mapped to C")
+    check(op_med[0]["id"] in ocf_ids, "opus-5-medium in OCF intel")
+# Zen -free routes count as verified free with fallback.
+zen_free = [m for m in models if m.get("fallback_provider") == "zen" and "free" in str(m.get("fallback_id", ""))]
+if zen_free:
+    check(all(m.get("free_status") == "verified" for m in zen_free),
+          f"zen -free verified ({len(zen_free)})")
+    check(all("F" in m.get("groups", []) for m in zen_free),
+          "zen -free has F group")
+# Report carries variant/efforts/fallback through.
+for key in ["ocf_intel", "all_intel"]:
+    rows = r.get(key, [])
+    if rows:
+        check(all("variant" in m for m in rows), f"report {key} has variant")
+        break
+# Score integrity: AA-canonical only; external reference-only; estimates flagged + excluded from history.
+check(all(m.get("score_source") is None or m.get("score_source", {}).get("kind") in ("aa-api", "external", "inherited-estimate") for m in models),
+      "score_source kinds valid")
+check(all((m.get("score") is None) == (m.get("score_source") is None) for m in models),
+      "score null iff score_source null")
+inherited = [m for m in models if (m.get("score_source") or {}).get("kind") == "inherited-estimate"]
+check(all(m.get("history_excluded") for m in inherited),
+      f"inherited estimates excluded from history ({len(inherited)})")
+check(all(m.get("selector") and m.get("fallback_provider") not in ("", "aa") for m in inherited),
+      "inherited estimates have callable selector")
+if inherited:
+    s0 = inherited[0].get("score_source", {})
+    check(bool(s0.get("equivalence_urls")) and bool(s0.get("capability_url")) and bool(s0.get("rationale")),
+          "inherited evidence has urls + rationale")
+    check(bool((s0.get("upstream") or {}).get("url")) and (s0.get("upstream") or {}).get("benchmark") == "aa-intelligence-index",
+          "inherited upstream is AA")
+check(all(isinstance(m.get("external_scores", []), list) for m in models),
+      "external_scores lists present")
+if m_files:
+    check("(max)" in md or "(medium)" in md or "(xhigh)" in md,
+          "md shows variant labels")
+if h_files:
+    check("Variant" in htm and "Efforts" in htm, "html has Variant/Efforts columns")
+
 try:
     from openpyxl import load_workbook
     wb = load_workbook(r_files[-1].replace("_models.json", "_models.xlsx"))
@@ -146,6 +206,8 @@ try:
     check(set(wb.sheetnames) == want, f"xlsx has 10 tabs ({len(wb.sheetnames)})")
     hdr = [c.value for c in wb["All_Ratio"][1]]
     check("free_status" in hdr, "xlsx All_Ratio has free_status column")
+    for col in ("variant", "efforts", "fallback_id"):
+        check(col in hdr, f"xlsx All_Ratio has {col} column")
 except ImportError:
     print("skip xlsx check (openpyxl missing)")
 

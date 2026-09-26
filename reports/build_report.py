@@ -18,6 +18,66 @@ def opencode_ids(or_id):
     return or_id if or_id.startswith("openrouter/") else f"openrouter/{or_id}"
 
 
+def copy_id(m):
+    """Preferred copy ID: openrouter/<or_id>, else native fallback ID."""
+    if m.get('selector'):
+        return m['selector']
+    oc = opencode_ids(m.get("or_id", ""))
+    if oc:
+        return oc
+    fb = m.get("fallback_id", "")
+    return str(fb) if fb and m.get('fallback_provider') not in ('', 'aa') else ""
+
+
+def score_evidence(m):
+    source = m.get('score_source') or {}
+    text = source.get('kind', 'unscored')
+    if source.get('source_slug'):
+        text += ' from ' + source['source_slug']
+    if source.get('version'):
+        text += ' / ' + source['version']
+    urls = ([source['url']] if source.get('url') else []) + source.get('equivalence_urls', [])
+    if source.get('capability_url'):
+        urls.append(source['capability_url'])
+    upstream = source.get('upstream') or {}
+    if upstream.get('url'):
+        urls.append(upstream['url'])
+    return text + ('; checked ' + source['checked_at'] if source.get('checked_at') else ''), urls
+
+
+def evidence_html(m):
+    text, urls = score_evidence(m)
+    result = esc(text)
+    for url in urls:
+        if url.startswith(('https://', 'http://')):
+            result += ' <a href="' + esc(url) + '">source</a>'
+    for row in m.get('external_scores', []):
+        result += '<br>' + esc(f"{row['benchmark']}: {row['value']} ({row['version']}; {row['variant']})")
+        result += ' <a href="' + esc(row['url']) + '">reference</a>'
+    return result
+
+
+def copy_hint(m):
+    fb = m.get("fallback_provider", "")
+    if m.get("or_id"):
+        return ""
+    return f" ({fb})" if fb else ""
+
+
+def variant_display(m):
+    v = m.get("variant", "")
+    return f" ({v})" if v else ""
+
+
+def efforts_display(m):
+    eff = m.get("efforts") or []
+    if not eff:
+        return ""
+    d = m.get("default_effort", "")
+    star = f" *{d}" if d and d in eff else (f" *{d}" if d else "")
+    return "/".join(eff) + star
+
+
 def hier_key(r):
     s = r.get("score")
     x = r.get("ratio")
@@ -161,8 +221,19 @@ def row_md(m):
     s = m["score"] if m.get("score") is not None else "unscored"
     c = m["cost_blended"] if m.get("cost_blended") is not None else "cost-unknown"
     r = m["ratio"] if m.get("ratio") is not None else "-"
-    oc = f" → `{opencode_ids(m['or_id'])}`" if m.get("or_id") else ""
-    return f"- `{m['id']}` [{g}] — score {s} — ${c}/1M — ratio {r}{oc}\n"
+    v = variant_display(m)
+    eff = efforts_display(m)
+    eff_s = f" — efforts {eff}" if eff else ""
+    cp = copy_id(m)
+    if m.get("or_id"):
+        oc = f" → `{cp}`"
+    elif cp:
+        oc = f" → `{cp}`{copy_hint(m)} (native, no OR)"
+    else:
+        oc = " (AA-only, no callable ID)"
+    evidence, urls = score_evidence(m)
+    refs = ' '.join(f'[source]({u})' for u in urls)
+    return f"- `{m['id']}`{v} [{g}] — score {s} — ${c}/1M — ratio {r}{eff_s}{oc} — {evidence} {refs}\n"
 
 
 def esc(v):
@@ -174,7 +245,8 @@ def fmt_cost(m):
 
 
 def fmt_score(m):
-    return "unscored" if m.get("score") is None else str(m["score"])
+    suffix = ' (estimate)' if (m.get('score_source') or {}).get('kind') == 'inherited-estimate' else ''
+    return "unscored" if m.get("score") is None else str(m["score"]) + suffix
 
 
 def html_table(rows, note=""):
@@ -182,17 +254,21 @@ def html_table(rows, note=""):
     if note:
         h.append(f'<p class="note">{esc(note)}</p>')
     h.append('<div class="twrap"><table><thead><tr><th>Model</th><th>Groups</th>'
-             '<th>Score</th><th>Cost</th><th>Ratio</th><th>OpenCode ID <span class="hint">(click to copy)</span></th>'
-             '<th>Sources</th></tr></thead><tbody>')
+             '<th>Score</th><th>Cost</th><th>Ratio</th><th>Variant</th><th>Efforts</th>'
+             '<th>Route ID / selector <span class="hint">(click to copy)</span></th>'
+             '<th>Sources</th><th>Score evidence / external metrics</th></tr></thead><tbody>')
     for m in rows:
-        oc = opencode_ids(m.get("or_id", ""))
+        oc = copy_id(m)
+        hint = copy_hint(m)
         h.append("<tr><td><code>" + esc(m["id"]) + "</code>" +
                  (f"<br><span class='nm'>{esc(m.get('name', ''))}</span>" if m.get("name") else "") +
                  "</td><td>" + esc(groups_display(m)) + "</td><td>" + esc(fmt_score(m)) +
                  "</td><td>" + esc(fmt_cost(m)) + "</td><td>" +
                  esc(m["ratio"] if m.get("ratio") is not None else "–") + "</td><td>" +
-                 (f"<code class='copy' onclick=\"copyId(this)\" title='click to copy'>{esc(oc)}</code>" if oc else "–") +
-                 "</td><td>" + esc(",".join(m.get("providers", []))) + "</td></tr>")
+                 esc(m.get("variant", "") or "–") + "</td><td>" +
+                 esc(efforts_display(m) or "–") + "</td><td>" +
+                 (f"<code class='copy' onclick=\"copyId(this)\" title='click to copy'>{esc(oc)}</code><span class='hint'>{esc(hint)}</span>" if oc else "AA-only / no callable ID") +
+                 "</td><td>" + esc(",".join(m.get("providers", []))) + "</td><td>" + evidence_html(m) + "</td></tr>")
     h.append("</tbody></table></div>")
     return "".join(h)
 
@@ -222,7 +298,11 @@ def build_html(a, s, stamp):
 
     ov = f"<p>Snapshot <b>{esc(stamp)}</b> · thresholds {th['max']}/{th['high']}/{th['medium']} " \
          "(below 30 in All views only) · free models never enter ratios, ranked by score instead. " \
-         "[F?] = provisional free (AA $0, billing unverified; exact level in JSON/XLSX).</p>"
+         "[F?] = provisional free (AA $0, billing unverified; exact level in JSON/XLSX). " \
+         "Variants (max/xhigh/high/medium/…) are separate ranked rows from AA; " \
+         "Select an available <code>provider/model#variant</code> in OpenCode V2 (OR efforts shown per row, *=default). " \
+         "Inherited scores are estimates from a matched effort, not measurements of the destination route. External metrics retain their own scale. " \
+         "L0 = AA $0 only, intel-only unless a native fallback ID is shown.</p>"
     ch = a.get("free_churn")
     if ch and ch.get("prev_day"):
         ov += (f"<p class='note'>Free-status churn vs {esc(ch['prev_day'])}: "
@@ -243,19 +323,43 @@ def build_html(a, s, stamp):
         cells = []
         for v in ("OCF", "OF", "CF", "F"):
             p = next(x for x in s["practical"] if x["tier"] == t and x["variant"] == v)
-            cells.append(f"<code>{esc(p['winner']['id'])}</code>" if p["winner"] else "<span class='gap'>gap</span>")
+            if p["winner"]:
+                wv = f" ({esc(p['winner'].get('variant', ''))})" if p["winner"].get("variant") else ""
+                cells.append(f"<code>{esc(p['winner']['id'])}</code>{wv}")
+            else:
+                cells.append("<span class='gap'>gap</span>")
         ov += f"<tr><td>{TIER_LABEL[t]}</td><td>{cells[0]}</td><td>{cells[1]}</td><td>{cells[2]}</td><td>{cells[3]}</td></tr>"
     ov += "</tbody></table>"
+
+    def prac_winner_cell(p):
+        w = p["winner"]
+        if not w:
+            return "<span class=gap>gap</span>"
+        vid = esc(w["id"])
+        vv = w.get("variant", "") or ""
+        vtag = " (" + esc(vv) + ")" if vv else ""
+        sc = esc(fmt_score(w))
+        rt = esc(w["ratio"] if w.get("ratio") is not None else "–")
+        cp = esc(copy_id(w))
+        return f"<code>{vid}</code>{vtag} {sc} / {rt} {cp}"
+
+    def prac_runner_cell(p):
+        u = p["runner_up"]
+        if not u:
+            return "–"
+        return "<code>" + esc(u["id"]) + "</code>"
 
     stack_html = ""
     for t in TIERS:
         gaps = f" <span class='gap'>gaps: {','.join(s['stack'][t]['gaps'])}</span>" if s["stack"][t]["gaps"] else ""
         stack_html += f"<h3>{TIER_LABEL[t]}{gaps}</h3>" + html_table(s["stack"][t]["rows"])
+    prac_rows = ""
+    for p in s["practical"]:
+        prac_rows += ("<tr><td>" + TIER_LABEL[p["tier"]] + "</td><td>" + p["variant"] + "</td>"
+                      "<td>" + prac_winner_cell(p) + "</td>"
+                      "<td>" + prac_runner_cell(p) + "</td></tr>")
     prac = ("<table><thead><tr><th>Tier</th><th>Variant</th><th>Winner</th><th>Runner-up</th></tr></thead><tbody>" +
-            "".join(f"<tr><td>{TIER_LABEL[p['tier']]}</td><td>{p['variant']}</td>"
-                     f"<td>{('<code>' + esc(p['winner']['id']) + '</code> ' + esc(fmt_score(p['winner'])) + ' / ' + esc(p['winner']['ratio'] if p['winner']['ratio'] is not None else '–')) if p['winner'] else '<span class=gap>gap</span>'}</td>"
-                     f"<td>{('<code>' + esc(p['runner_up']['id']) + '</code>') if p['runner_up'] else '–'}</td></tr>"
-                     for p in s["practical"]) + "</tbody>")
+            prac_rows + "</tbody></table>")
     out = "".join(f"<h3>{t}</h3>" + html_table(s["outliers"][k]) for k, t in
                   [("bargains", "Bargains — top-quartile score, bottom-quartile cost"),
                    ("overpriced", "Overpriced — bottom-quartile score, top-quartile cost"),
@@ -375,7 +479,11 @@ def main():
     L += ["\n## 8. OCF — Practical picks (winner + runner-up per tier × variant)\n",
           "| Tier | Variant | Winner | Runner-up |\n|---|---|---|---|\n"]
     for p in s["practical"]:
-        w = f"`{p['winner']['id']}` ({p['winner']['score']}/{p['winner']['ratio']})" if p["winner"] else "— (gap)"
+        if p["winner"]:
+            wv = f" ({p['winner'].get('variant', '')})" if p["winner"].get("variant") else ""
+            w = f"`{p['winner']['id']}`{wv} ({fmt_score(p['winner'])}/{p['winner']['ratio']}) → `{copy_id(p['winner'])}`"
+        else:
+            w = "— (gap)"
         u = f"`{p['runner_up']['id']}`" if p["runner_up"] else "—"
         L.append(f"| {TIER_LABEL[p['tier']]} | {p['variant']} | {w} | {u} |\n")
     L += ["\n## 9. OCF — Outliers\n"]
@@ -386,8 +494,10 @@ def main():
         L += [row_md(m) for m in s["outliers"][cls][:MD_CAP]] or ["_(none)_\n"]
     L.append("\n_Free excluded from ratio (infinite); ratios use " +
              f"{a.get('cost_method', 'blended $/1M')}. OCF = OpenAI + Claude + strict-free + provisional [F?] " +
-             "(AA $0, billing unverified; stack/practical need a callable or_id/native ID, " +
-             "AA-only rows stay in Intel/Cost/Ratio; tier filled only by provisional still flags gap F(verified)). " +
+             "(AA $0, billing unverified; AA-only variant rows included in Intel/Cost/Ratio via creator mapping, " +
+             "stack/practical need a callable or_id/native ID; tier filled only by provisional still flags gap F(verified)). " +
+             "Variants are separate AA rows; OpenCode V2 uses available provider/model#variant selectors. Inherited scores are estimates, not destination measurements. " +
+             "L0 = AA $0 only, intel-only unless a native fallback ID is shown (e.g. zen). Zen *-free routes count as verified free. " +
              "Per-model OpenCode compat not verified._\n")
     ch = a.get("free_churn")
     if ch and ch.get("prev_day"):
@@ -400,8 +510,12 @@ def main():
         f.write("".join(L))
 
     slim = lambda m: [m["id"], groups_display(m), m["score"], m["cost_blended"],
-                      m["ratio"], opencode_ids(m["or_id"]), ",".join(m["providers"]),
-                      free_status_of(m)]
+                      m["ratio"], copy_id(m), ",".join(m["providers"]),
+                      free_status_of(m), m.get("variant", ""),
+                      "/".join(m.get("efforts") or []), m.get("default_effort", ""),
+                      m.get("fallback_id", ""), m.get("fallback_provider", ""),
+                      score_evidence(m)[0], ' '.join(score_evidence(m)[1]),
+                      json.dumps(m.get('external_scores', []), ensure_ascii=False)]
     scored = sorted(m["score"] for m in a.get("models", []) if m.get("score") is not None)
     dist = {"scored": len(scored)}
     if scored:
@@ -450,7 +564,9 @@ def main():
         for t in TIERS:
             ws.append([f"stack_{t}", len(s["stack"][t]["rows"])])
             ws.append([f"gaps_{t}", ",".join(s["stack"][t]["gaps"])])
-        H = ["id", "groups", "score", "cost_per_1M", "ratio", "opencode_id", "providers", "free_status"]
+        H = ["id", "groups", "score", "cost_per_1M", "ratio", "opencode_id", "providers", "free_status",
+             "variant", "efforts", "default_effort", "fallback_id", "fallback_provider",
+             "score_source", "score_urls", "external_scores"]
         tabs = {"All_Intel": s["all_intel"], "All_Cost": s["costed"] + s["uncosted"],
                 "All_Ratio": s["paid_ratio"] + s["free_block"] + s["provisional_block"] + s["unratable"] + s["free_unscored"] + s["provisional_unscored"],
                 "OCF_Intel": s["ocf_intel"], "OCF_Cost": s["ocf_costed"] + s["ocf_uncosted"],
@@ -465,14 +581,16 @@ def main():
             for m in s["stack"][t]["rows"]:
                 w.append([t] + slim(m) + [""])
             for g in s["stack"][t]["gaps"]:
-                w.append([t, f"GAP:{g}", "", "", "", "", "", "", "", "gap"])
+                w.append([t, f"GAP:{g}"] + [''] * (len(H) - 1) + ['gap'])
         w = wb.create_sheet("OCF_Practical")
-        w.append(["tier", "variant", "winner", "winner_score", "winner_ratio", "runner_up"])
+        w.append(["tier", "variant", "winner", "winner_variant", "winner_score", "winner_ratio", "winner_copy_id", "runner_up"])
         for p in s["practical"]:
             w.append([p["tier"], p["variant"],
                       p["winner"]["id"] if p["winner"] else "GAP",
+                      (p["winner"].get("variant", "") if p["winner"] else ""),
                       p["winner"]["score"] if p["winner"] else None,
                       p["winner"]["ratio"] if p["winner"] else None,
+                      (copy_id(p["winner"]) if p["winner"] else ""),
                       p["runner_up"]["id"] if p["runner_up"] else None])
         wb.save(os.path.join(REP, f"{stamp}_models.xlsx"))
         x = "xlsx ok"
