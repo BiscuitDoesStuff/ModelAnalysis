@@ -29,6 +29,14 @@ Step by step:
 python retrieval/fetch_models.py
 python analysis/analyze.py
 python reports/build_report.py
+python alerts/check_churn.py
+```
+
+For daily runs with churn alerts (free→paid flips, disappearing listings), register a scheduled task (runs `run.ps1` every day; keys still come from env/`.env`):
+
+```powershell
+powershell -File schedule.ps1          # daily 08:00 local
+powershell -File schedule.ps1 -Remove  # unregister
 ```
 
 ## What you get
@@ -73,6 +81,8 @@ A model counts as free only if it costs $0 at retrieval time: zero prompt + comp
 retrieval/fetch_models.py  — stage 1: fetch snapshots from all providers
 analysis/analyze.py        — stage 2: normalize, free-filter, rank, diff vs SQLite
 reports/build_report.py    — stage 3: write MD + XLSX + JSON report
+alerts/check_churn.py      — stage 4: churn summary + alert file on free→paid/disappearances
+schedule.ps1               — optional daily Task Scheduler registration
 raw/                       — timestamped snapshots (gitignored)
 analysis/store.sqlite      — local history (gitignored)
 reports/                   — dated reports (gitignored)

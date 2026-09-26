@@ -41,6 +41,9 @@ def main():
     ant = snap.get("anthropic", []) if isinstance(snap.get("anthropic"), list) else []
     groq = snap.get("groq", []) if isinstance(snap.get("groq"), list) else []
     cerebras = snap.get("cerebras", []) if isinstance(snap.get("cerebras"), list) else []
+    nvidia = snap.get("nvidia", []) if isinstance(snap.get("nvidia"), list) else []
+    zenmux = snap.get("zenmux", []) if isinstance(snap.get("zenmux"), list) else []
+    zen = snap.get("zen", []) if isinstance(snap.get("zen"), list) else []
     aa_raw = snap.get("aa", {})
     aa = aa_raw.get("data", []) if isinstance(aa_raw, dict) else []
 
@@ -56,6 +59,9 @@ def main():
                  "ctx_in": m.get("max_input_tokens"), "ctx_out": m.get("max_tokens")} for m in ant]
     groq_rows = [{"id": m.get("id", ""), "owned_by": m.get("owned_by", "")} for m in groq]
     cerebras_rows = [{"id": m.get("id", ""), "owned_by": m.get("owned_by", "")} for m in cerebras]
+    nvidia_rows = [{"id": m.get("id", ""), "owned_by": m.get("owned_by", "")} for m in nvidia]
+    zenmux_rows = [{"id": m.get("id", ""), "owned_by": m.get("owned_by", "")} for m in zenmux]
+    zen_rows = [{"id": m.get("id", ""), "owned_by": m.get("owned_by", "")} for m in zen]
 
     aa_rows = []
     for m in aa:
@@ -107,10 +113,12 @@ def main():
     or_name = {m.get("id", ""): m.get("name", "") for m in ors}
     or_price = {m.get("id", ""): m.get("pricing", {}) for m in ors}
     ant_name = {m.get("id", ""): m.get("display_name", "") for m in ant}
+    zenmux_name = {m.get("id", ""): m.get("display_name", "") for m in zenmux}
     aa_by_base = {base_slug(k): v for k, v in aa_by_slug.items()}
 
     def _entry():
-        return {"or": [], "oai": [], "ant": [], "groq": [], "cerebras": [], "aa": None}
+        return {"or": [], "oai": [], "ant": [], "groq": [], "cerebras": [],
+                "nvidia": [], "zenmux": [], "zen": [], "aa": None}
 
     union = {}
     for m in ors:
@@ -129,6 +137,15 @@ def main():
     for m in cerebras:
         union.setdefault(base_slug(m.get("id", "")), _entry())
         union[base_slug(m.get("id", ""))]["cerebras"].append(m.get("id", ""))
+    for m in nvidia:
+        union.setdefault(base_slug(m.get("id", "")), _entry())
+        union[base_slug(m.get("id", ""))]["nvidia"].append(m.get("id", ""))
+    for m in zenmux:
+        union.setdefault(base_slug(m.get("id", "")), _entry())
+        union[base_slug(m.get("id", ""))]["zenmux"].append(m.get("id", ""))
+    for m in zen:
+        union.setdefault(base_slug(m.get("id", "")), _entry())
+        union[base_slug(m.get("id", ""))]["zen"].append(m.get("id", ""))
     for m in aa:
         key = base_slug(m.get("slug", "") or m.get("id", ""))
         union.setdefault(key, _entry())
@@ -165,6 +182,12 @@ def main():
             providers.append("groq")
         if u["cerebras"]:
             providers.append("cerebras")
+        if u["nvidia"]:
+            providers.append("nvidia")
+        if u["zenmux"]:
+            providers.append("zenmux")
+        if u["zen"]:
+            providers.append("zen")
         aa_match = aa_by_base.get(key)
         score = aa_match["score"] if aa_match else None
         cost = aa_cost(aa_match["cost_blended"]) if aa_match else None
@@ -177,12 +200,14 @@ def main():
         or_ids = sorted(u["or"])
         disp_or = next((i for i in or_ids if i in or_free), or_ids[0] if or_ids else "")
         disp = (u["oai"] or u["ant"] or ([disp_or] if disp_or else []) or
-                u["groq"] or u["cerebras"] or
+                u["groq"] or u["cerebras"] or u["nvidia"] or u["zenmux"] or u["zen"] or
                 ([aa_match.get("slug", "") or aa_match.get("id", "")] if aa_match else [""]))[0]
         name = (next((or_name.get(i, "") for i in or_ids if or_name.get(i)), "") or
                 next((ant_name.get(i, "") for i in u["ant"] if ant_name.get(i)), "") or
+                next((zenmux_name.get(i, "") for i in u["zenmux"] if zenmux_name.get(i)), "") or
                 ((aa_match or {}).get("name", "")) or
-                ((u["groq"][:1] + [""])[0]) or ((u["cerebras"][:1] + [""])[0]))
+                ((u["groq"][:1] + [""])[0]) or ((u["cerebras"][:1] + [""])[0]) or
+                ((u["nvidia"][:1] + [""])[0]) or ((u["zen"][:1] + [""])[0]))
         router = disp_or.lower().lstrip("~").startswith("openrouter/")
         aa_zero = bool(aa_match and aa_match.get("zero_price"))
         has_or = bool(u["or"])
@@ -225,6 +250,12 @@ def main():
         con.execute("INSERT OR REPLACE INTO models VALUES(?,?,?,?)", (r["id"], "groq", day, 0))
     for r in cerebras_rows:
         con.execute("INSERT OR REPLACE INTO models VALUES(?,?,?,?)", (r["id"], "cerebras", day, 0))
+    for r in nvidia_rows:
+        con.execute("INSERT OR REPLACE INTO models VALUES(?,?,?,?)", (r["id"], "nvidia", day, 0))
+    for r in zenmux_rows:
+        con.execute("INSERT OR REPLACE INTO models VALUES(?,?,?,?)", (r["id"], "zenmux", day, 0))
+    for r in zen_rows:
+        con.execute("INSERT OR REPLACE INTO models VALUES(?,?,?,?)", (r["id"], "zen", day, 0))
     # Canonical free-status history (non-router rows only; reports filter routers).
     canon = [(m.get("slug") or base_slug(m.get("id", "")), m.get("free_status", "none"), m.get("id", ""))
              for m in models if not m.get("router") and (m.get("slug") or m.get("id"))]
@@ -283,6 +314,9 @@ def main():
            "total_anthropic": len(ant_rows), "anthropic_ids": sorted([r["id"] for r in ant_rows]),
            "total_groq": len(groq_rows), "groq_ids": sorted([r["id"] for r in groq_rows]),
            "total_cerebras": len(cerebras_rows), "cerebras_ids": sorted([r["id"] for r in cerebras_rows]),
+           "total_nvidia": len(nvidia_rows), "nvidia_ids": sorted([r["id"] for r in nvidia_rows]),
+           "total_zenmux": len(zenmux_rows), "zenmux_ids": sorted([r["id"] for r in zenmux_rows]),
+           "total_zen": len(zen_rows), "zen_ids": sorted([r["id"] for r in zen_rows]),
            "total_aa": len(aa_rows),
            "free_churn": free_churn,
            "free_status_counts": {"verified": _fsc.get("verified", 0),
@@ -300,7 +334,8 @@ def main():
         os.remove(old)
         print(f"pruned analysis {os.path.basename(old)}")
     print(f"{stamp}: OR={len(or_rows)} free={len(free_ids)} OAI={len(oai_rows)} ANT={len(ant_rows)} "
-          f"GROQ={len(groq_rows)} CER={len(cerebras_rows)} AA={len(aa_rows)} new={len(new_or)} removed={len(removed_or)} "
+          f"GROQ={len(groq_rows)} CER={len(cerebras_rows)} NV={len(nvidia_rows)} ZM={len(zenmux_rows)} ZEN={len(zen_rows)} "
+          f"AA={len(aa_rows)} new={len(new_or)} removed={len(removed_or)} "
           f"churn_vs={prev_fh_day} to_paid={len(to_paid)} to_free={len(to_free)} gone={len(disappeared)} days={len(hist_days)} -> {ap}")
     con.close()
 

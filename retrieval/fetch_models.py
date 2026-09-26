@@ -70,6 +70,15 @@ def fetch_cerebras():
         return {"skipped": "no CEREBRAS_API_KEY"}
     return get("https://api.cerebras.ai/v1/models", {"Authorization": f"Bearer {key}"}).get("data", [])
 
+def fetch_nvidia():
+    return get("https://integrate.api.nvidia.com/v1/models").get("data", [])
+
+def fetch_zenmux():
+    return get("https://zenmux.ai/api/v1/models").get("data", [])
+
+def fetch_zen():
+    return get("https://opencode.ai/zen/v1/models").get("data", [])
+
 def prune(keep=1):
     import glob as g
     files = sorted(g.glob(os.path.join(RAW, "*_models.json")), key=os.path.getmtime)
@@ -97,6 +106,9 @@ def main():
             "anthropic": safe(fetch_anthropic),
             "groq": safe(fetch_groq),
             "cerebras": safe(fetch_cerebras),
+            "nvidia": safe(fetch_nvidia),
+            "zenmux": safe(fetch_zenmux),
+            "zen": safe(fetch_zen),
             "aa": safe(fetch_aa)}
     out = os.path.join(RAW, f"{stamp}_models.json")
     with open(out, "w", encoding="utf-8") as f:
@@ -106,7 +118,10 @@ def main():
           f"| openai={len(snap['openai']) if isinstance(snap['openai'], list) else snap['openai']} "
           f"| anthropic={len(snap['anthropic']) if isinstance(snap['anthropic'], list) else snap['anthropic']} "
           f"| groq={len(snap['groq']) if isinstance(snap['groq'], list) else snap['groq']} "
-          f"| cerebras={len(snap['cerebras']) if isinstance(snap['cerebras'], list) else snap['cerebras']}")
+          f"| cerebras={len(snap['cerebras']) if isinstance(snap['cerebras'], list) else snap['cerebras']} "
+          f"| nvidia={len(snap['nvidia']) if isinstance(snap['nvidia'], list) else snap['nvidia']} "
+          f"| zenmux={len(snap['zenmux']) if isinstance(snap['zenmux'], list) else snap['zenmux']} "
+          f"| zen={len(snap['zen']) if isinstance(snap['zen'], list) else snap['zen']}")
 
 if __name__ == "__main__":
     main()

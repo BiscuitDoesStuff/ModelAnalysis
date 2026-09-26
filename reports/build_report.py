@@ -39,7 +39,8 @@ def has_callable(m):
     if m.get("or_id"):
         return True
     provs = set(m.get("providers", []))
-    return bool(provs & {"openai", "anthropic", "openrouter", "groq", "cerebras"})
+    return bool(provs & {"openai", "anthropic", "openrouter", "groq", "cerebras",
+                         "nvidia", "zenmux", "zen"})
 
 
 def groups_display(m):
@@ -59,7 +60,7 @@ def pct(vals, p):
 
 
 def prune_reports(keep_stamps):
-    pats = ["*_summary.md", "*_models.json", "*_models.xlsx", "*_report.html"]
+    pats = ["*_summary.md", "*_models.json", "*_models.xlsx", "*_report.html", "*_churn_alert.md"]
     files = []
     for p in pats:
         files += glob.glob(os.path.join(REP, p))

@@ -75,11 +75,12 @@ check(all(m["id"] in ocf_ids for m in l1 if not m.get("router")),
       "L1 callable provisional in OCF intel")
 check(all(m["id"] in ocf_ids for m in l0 if not m.get("router")),
       "L0 AA-only provisional in OCF intel (confined to Intel/Cost/Ratio)")
+CALLABLE_PROVIDERS = {"openai", "anthropic", "openrouter", "groq", "cerebras", "nvidia", "zenmux", "zen"}
 for t in ("max", "high", "medium"):
     for m in r["ocf_stack"][t]["rows"]:
-        check(bool(m.get("or_id")) or bool(set(m.get("providers", [])) & {"openai", "anthropic", "openrouter", "groq", "cerebras"}),
+        check(bool(m.get("or_id")) or bool(set(m.get("providers", [])) & CALLABLE_PROVIDERS),
               f"stack[{t}] callable only")
-        if not (bool(m.get("or_id")) or bool(set(m.get("providers", [])) & {"openai", "anthropic", "openrouter", "groq", "cerebras"})):
+        if not (bool(m.get("or_id")) or bool(set(m.get("providers", [])) & CALLABLE_PROVIDERS)):
             break
 # Ratio three blocks: paid / verified-free / provisional-free, no overlap.
 paid_ids = {m["id"] for m in r.get("all_ratio_paid", [])}
@@ -94,14 +95,18 @@ check(isinstance(a.get("total_groq"), int), f"total_groq present ({a.get('total_
 check(isinstance(a.get("total_cerebras"), int), f"total_cerebras present ({a.get('total_cerebras')})")
 check(isinstance(a.get("groq_ids"), list), "groq_ids list present")
 check(isinstance(a.get("cerebras_ids"), list), "cerebras_ids list present")
-check(all(set(m.get("providers", [])) <= {"openrouter", "openai", "anthropic", "groq", "cerebras"}
+# Phase-2b: NVIDIA + ZenMux + OpenCode Zen (public, keyless like OpenRouter).
+check(isinstance(a.get("total_nvidia"), int), f"total_nvidia present ({a.get('total_nvidia')})")
+check(isinstance(a.get("total_zenmux"), int), f"total_zenmux present ({a.get('total_zenmux')})")
+check(isinstance(a.get("total_zen"), int), f"total_zen present ({a.get('total_zen')})")
+check(all(set(m.get("providers", [])) <= CALLABLE_PROVIDERS | {"openrouter"}
           for m in models),
       "providers tags valid")
 check(all(m.get("slug") for m in models), "canonical slugs present")
 w_files = sorted(glob.glob(os.path.join(ROOT, "raw", "*_models.json")), key=os.path.getmtime)
 if w_files:
     snap = json.load(open(w_files[-1], encoding="utf-8"))
-    for src in ("groq", "cerebras"):
+    for src in ("groq", "cerebras", "nvidia", "zenmux", "zen"):
         v = snap.get(src, "MISSING")
         check(isinstance(v, list) or (isinstance(v, dict) and ("skipped" in v or "error" in v)),
               f"snapshot {src} list-or-skipped")
@@ -121,6 +126,12 @@ check(all(len(ch.get(k, [])) <= 50 for k in
           ["flipped_to_paid", "flipped_to_free", "disappeared", "new_slugs"]),
       "churn lists capped at 50")
 check("free_churn" in r, "report carries free_churn")
+
+# Phase-4: churn alerts stage.
+check(os.path.exists(os.path.join(ROOT, "alerts", "check_churn.py")), "alerts script exists")
+check(os.path.exists(os.path.join(ROOT, "schedule.ps1")), "scheduler script exists")
+run_ps1 = open(os.path.join(ROOT, "run.ps1"), encoding="utf-8").read()
+check("alerts/check_churn.py" in run_ps1, "run.ps1 includes alerts stage")
 if m_files:
     md = open(m_files[-1], encoding="utf-8").read()
     check("[F?]" in md, "md has [F?] marker")
