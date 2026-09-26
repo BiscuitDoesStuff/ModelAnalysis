@@ -6,4 +6,5 @@ analysis/*_analysis.json
 reports/*_models.json
 reports/*_models.xlsx
 reports/*_summary.md
+reports/*_report.html
 __pycache__/
