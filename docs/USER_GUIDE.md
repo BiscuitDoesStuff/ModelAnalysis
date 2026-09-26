@@ -46,7 +46,7 @@ Re-run any time to refresh. Each run prunes older outputs so only the latest sta
 
 ## 4. Read the report
 
-Open `reports/<stamp>_summary.md` — 9 sections, top 20 rows each (full lists in XLSX, uncapped in JSON):
+Open `reports/<stamp>_report.html` in a browser — tabbed dashboard of all 9 sections with per-tab search and click-to-copy OpenCode IDs. `reports/<stamp>_summary.md` holds the same 9 sections as text (top 20 rows each; full lists in HTML/XLSX, uncapped in JSON):
 
 1. **All Data — Intelligence**: every model by score desc, `unscored` tail.
 2. **All Data — Cost**: cheapest first in blended $/1M, `cost-unknown` tail.

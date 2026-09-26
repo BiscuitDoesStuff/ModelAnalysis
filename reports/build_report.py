@@ -1,5 +1,5 @@
-"""3. Report — 9-section OCF views: MD + XLSX + JSON per run. On-use. Keeps latest only."""
-import json, os, glob
+"""3. Report — 9-section OCF views: MD + XLSX + JSON + HTML per run. On-use. Keeps latest only."""
+import json, os, glob, html as _html
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 REP = os.path.join(ROOT, "reports")
@@ -34,7 +34,11 @@ def pct(vals, p):
 
 
 def prune_reports(keep_stamps):
-    for f in glob.glob(os.path.join(REP, "*_summary.md")) + glob.glob(os.path.join(REP, "*_models.json")) + glob.glob(os.path.join(REP, "*_models.xlsx")):
+    pats = ["*_summary.md", "*_models.json", "*_models.xlsx", "*_report.html"]
+    files = []
+    for p in pats:
+        files += glob.glob(os.path.join(REP, p))
+    for f in files:
         bn = os.path.basename(f)
         if not any(bn.startswith(s) for s in keep_stamps):
             os.remove(f)
@@ -113,6 +117,142 @@ def row_md(m):
     r = m["ratio"] if m.get("ratio") is not None else "-"
     oc = f" → `{opencode_ids(m['or_id'])}`" if m.get("or_id") else ""
     return f"- `{m['id']}` [{g}] — score {s} — ${c}/1M — ratio {r}{oc}\n"
+
+
+def esc(v):
+    return _html.escape("" if v is None else str(v))
+
+
+def fmt_cost(m):
+    return "unknown" if m.get("cost_blended") is None else f"${m['cost_blended']}/1M"
+
+
+def fmt_score(m):
+    return "unscored" if m.get("score") is None else str(m["score"])
+
+
+def html_table(rows, note=""):
+    h = ['<input class="search" placeholder="Filter…" oninput="filterRows(this)">']
+    if note:
+        h.append(f'<p class="note">{esc(note)}</p>')
+    h.append('<div class="twrap"><table><thead><tr><th>Model</th><th>Groups</th>'
+             '<th>Score</th><th>Cost</th><th>Ratio</th><th>OpenCode ID <span class="hint">(click to copy)</span></th>'
+             '<th>Sources</th></tr></thead><tbody>')
+    for m in rows:
+        oc = opencode_ids(m.get("or_id", ""))
+        h.append("<tr><td><code>" + esc(m["id"]) + "</code>" +
+                 (f"<br><span class='nm'>{esc(m.get('name', ''))}</span>" if m.get("name") else "") +
+                 "</td><td>" + esc("".join(m.get("groups", [])) or "–") + "</td><td>" + esc(fmt_score(m)) +
+                 "</td><td>" + esc(fmt_cost(m)) + "</td><td>" +
+                 esc(m["ratio"] if m.get("ratio") is not None else "–") + "</td><td>" +
+                 (f"<code class='copy' onclick=\"copyId(this)\" title='click to copy'>{esc(oc)}</code>" if oc else "–") +
+                 "</td><td>" + esc(",".join(m.get("providers", []))) + "</td></tr>")
+    h.append("</tbody></table></div>")
+    return "".join(h)
+
+
+def build_html(a, s, stamp):
+    th = a.get("thresholds", {"max": 50, "high": 40, "medium": 30})
+    chips = (f"<span class='chip'>Models {s['model_count']}</span>"
+             f"<span class='chip'>OCF {s['ocf_count']}</span>"
+             f"<span class='chip'>Scored {sum(1 for m in a.get('models', []) if m.get('score') is not None)}</span>"
+             f"<span class='chip'>Max {len(s['stack']['max']['rows'])}</span>"
+             f"<span class='chip'>High {len(s['stack']['high']['rows'])}</span>"
+             f"<span class='chip'>Medium {len(s['stack']['medium']['rows'])}</span>"
+             f"<span class='chip dim'>Routers {len(s['routers'])} excluded</span>")
+
+    def sec(tid, title, body):
+        return f"<section id='t-{tid}' class='tab'><h2>{esc(title)}</h2>{body}</section>"
+
+    tabs = [("overview", "Overview"), ("all-intel", "All · Intelligence"),
+            ("all-cost", "All · Cost"), ("all-ratio", "All · Ratio"),
+            ("ocf-intel", "OCF · Intelligence"), ("ocf-cost", "OCF · Cost"),
+            ("ocf-ratio", "OCF · Ratio"), ("stack", "Stack"),
+            ("practical", "Practical picks"), ("outliers", "Outliers")]
+    nav = "".join(f"<button data-t='t-{tid}' onclick='showTab(this)'>{t}</button>" for tid, t in tabs)
+
+    ov = f"<p>Snapshot <b>{esc(stamp)}</b> · thresholds {th['max']}/{th['high']}/{th['medium']} " \
+         "(below 30 in All views only) · free models never enter ratios, ranked by score instead.</p>"
+    ov += "<div class='cards'>"
+    for t in TIERS:
+        rows = s["stack"][t]["rows"]
+        top = rows[0] if rows else None
+        gaps = f"<span class='gap'>gaps: {','.join(s['stack'][t]['gaps'])}</span>" if s["stack"][t]["gaps"] else ""
+        ov += (f"<div class='card'><h3>{TIER_LABEL[t]}</h3>"
+               f"<p class='bign'>{len(rows)} models {gaps}</p>" +
+               (f"<p>Top: <code>{esc(top['id'])}</code> ({fmt_score(top)}, {fmt_cost(top)})</p>" if top else "<p>—</p>") +
+               "</div>")
+    ov += "</div><h3>Practical winners</h3><table><thead><tr><th>Tier</th><th>OCF</th><th>OF</th><th>CF</th><th>F-only</th></tr></thead><tbody>"
+    for t in TIERS:
+        cells = []
+        for v in ("OCF", "OF", "CF", "F"):
+            p = next(x for x in s["practical"] if x["tier"] == t and x["variant"] == v)
+            cells.append(f"<code>{esc(p['winner']['id'])}</code>" if p["winner"] else "<span class='gap'>gap</span>")
+        ov += f"<tr><td>{TIER_LABEL[t]}</td><td>{cells[0]}</td><td>{cells[1]}</td><td>{cells[2]}</td><td>{cells[3]}</td></tr>"
+    ov += "</tbody></table>"
+
+    stack_html = ""
+    for t in TIERS:
+        gaps = f" <span class='gap'>gaps: {','.join(s['stack'][t]['gaps'])}</span>" if s["stack"][t]["gaps"] else ""
+        stack_html += f"<h3>{TIER_LABEL[t]}{gaps}</h3>" + html_table(s["stack"][t]["rows"])
+    prac = ("<table><thead><tr><th>Tier</th><th>Variant</th><th>Winner</th><th>Runner-up</th></tr></thead><tbody>" +
+            "".join(f"<tr><td>{TIER_LABEL[p['tier']]}</td><td>{p['variant']}</td>"
+                     f"<td>{('<code>' + esc(p['winner']['id']) + '</code> ' + esc(fmt_score(p['winner'])) + ' / ' + esc(p['winner']['ratio'] if p['winner']['ratio'] is not None else '–')) if p['winner'] else '<span class=gap>gap</span>'}</td>"
+                     f"<td>{('<code>' + esc(p['runner_up']['id']) + '</code>') if p['runner_up'] else '–'}</td></tr>"
+                     for p in s["practical"]) + "</tbody>")
+    out = "".join(f"<h3>{t}</h3>" + html_table(s["outliers"][k]) for k, t in
+                  [("bargains", "Bargains — top-quartile score, bottom-quartile cost"),
+                   ("overpriced", "Overpriced — bottom-quartile score, top-quartile cost"),
+                   ("free_gems", "Free gems — free, score 40+")])
+
+    body = (sec("overview", "Overview", ov) +
+            sec("all-intel", "1 · All Data — Intelligence", html_table(s["all_intel"])) +
+            sec("all-cost", "2 · All Data — Cost", html_table(s["costed"]) +
+                (f"<p class='note'>Cost unknown: {len(s['uncosted'])} — " + esc(", ".join(m["id"] for m in s["uncosted"][:50])) + "</p>" if s["uncosted"] else "")) +
+            sec("all-ratio", "3 · All Data — Ratio (paid) + free by score",
+                "<h3>Paid by ratio</h3>" + html_table(s["paid_ratio"]) +
+                "<h3>Free by score</h3>" + html_table(s["free_block"])) +
+            sec("ocf-intel", "4 · OCF — Intelligence", html_table(s["ocf_intel"])) +
+            sec("ocf-cost", "5 · OCF — Cost", html_table(s["ocf_costed"])) +
+            sec("ocf-ratio", "6 · OCF — Ratio + free by score",
+                "<h3>Paid by ratio</h3>" + html_table(s["ocf_ratio"]) +
+                "<h3>Free by score</h3>" + html_table(s["ocf_free"])) +
+            sec("stack", "7 · OCF — Optimized stack", stack_html) +
+            sec("practical", "8 · OCF — Practical picks", prac) +
+            sec("outliers", "9 · OCF — Outliers", out))
+
+    return f"""<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ModelAnalysis — {esc(stamp)}</title>
+<style>
+body{{font-family:Segoe UI,Arial,sans-serif;background:#020617;color:#e2e8f0;margin:0;padding:24px;max-width:1200px}}
+h1{{font-size:24px}}h2{{color:#7dd3fc}}h3{{color:#bae6fd}}
+.chip{{display:inline-block;background:#082f49;border:1px solid #38bdf8;border-radius:12px;padding:3px 12px;margin:2px;font-size:13px}}
+.dim{{opacity:.6}}nav{{position:sticky;top:0;background:#020617;padding:10px 0;z-index:5}}
+nav button{{background:#1e293b;color:#e2e8f0;border:1px solid #38bdf8;border-radius:8px;padding:6px 12px;margin:2px;cursor:pointer}}
+nav button.on{{background:#0369a1}}.tab{{display:none}}.tab.on{{display:block}}
+table{{border-collapse:collapse;width:100%;font-size:13px}}th,td{{border:1px solid #334155;padding:6px 8px;text-align:left;vertical-align:top}}
+th{{background:#0f172a}}tr:nth-child(even){{background:#0b1220}}code{{color:#7dd3fc}}
+.copy{{cursor:pointer;border-bottom:1px dotted #38bdf8}}.nm{{color:#94a3b8;font-size:12px}}
+.gap{{color:#fbbf24;font-weight:700}}.note{{color:#94a3b8}}.hint{{font-weight:400;font-size:11px;color:#94a3b8}}
+.search{{width:280px;padding:6px 10px;margin:8px 0;background:#0f172a;color:#e2e8f0;border:1px solid #38bdf8;border-radius:8px}}
+.twrap{{overflow-x:auto}}.cards{{display:flex;gap:12px;flex-wrap:wrap}}.card{{background:#0f172a;border:1px solid #38bdf8;border-radius:10px;padding:12px 16px;min-width:200px}}
+.bign{{font-size:15px}}
+</style></head><body>
+<h1>ModelAnalysis — {esc(stamp)}</h1>
+<div>{chips}</div><nav>{nav}</nav>{body}
+<script>
+function showTab(b){{document.querySelectorAll('nav button').forEach(x=>x.classList.remove('on'));
+document.querySelectorAll('.tab').forEach(x=>x.classList.remove('on'));
+b.classList.add('on');document.getElementById(b.dataset.t).classList.add('on');}}
+function filterRows(inp){{const q=inp.value.toLowerCase();
+inp.parentElement.querySelectorAll('tbody tr').forEach(tr=>{{
+tr.style.display=tr.textContent.toLowerCase().includes(q)?'':'none';}});}}
+function copyId(el){{navigator.clipboard.writeText(el.textContent).then(()=>{{
+el.style.color='#4ade80';setTimeout(()=>el.style.color='',800);}});}}
+document.querySelector('nav button').classList.add('on');
+document.querySelector('.tab').classList.add('on');
+</script></body></html>"""
 
 
 def main():
@@ -242,8 +382,10 @@ def main():
         x = "xlsx ok"
     except Exception as e:
         x = f"xlsx skipped: {e}"
+    with open(os.path.join(REP, f"{stamp}_report.html"), "w", encoding="utf-8") as f:
+        f.write(build_html(a, s, stamp))
     prune_reports([os.path.basename(f).replace("_analysis.json", "") for f in afiles[-1:]])
-    print(f"report {stamp} written ({x})")
+    print(f"report {stamp} written ({x} + html)")
 
 
 if __name__ == "__main__":

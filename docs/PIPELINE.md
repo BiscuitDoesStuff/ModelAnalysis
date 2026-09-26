@@ -61,6 +61,7 @@ Input: newest `analysis/*_analysis.json` (`models[]` canonical rows). Outputs sh
 
 - `.md`: header counts + 9 sections, top 20 per list, gap flags inline.
 - `.json`: 9 section keys uncapped + `quartiles` + `score_dist` (p10/p50/p90/max for threshold calibration) + `thresholds` + `routers_excluded` + `collisions`.
+- `.html`: tabbed dashboard (Overview + 9 sections), per-tab search, click-to-copy OpenCode IDs, no dependencies.
 - `.xlsx` (requires `openpyxl`, else `xlsx skipped`): `summary | All_Intel | All_Cost | All_Ratio | OCF_Intel | OCF_Cost | OCF_Ratio | OCF_Stack | OCF_Practical | OCF_Outliers`.
 
 ## Extension points

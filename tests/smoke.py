@@ -13,7 +13,9 @@ def check(cond, msg):
 
 a_files = sorted(glob.glob(os.path.join(ROOT, "analysis", "*_analysis.json")), key=os.path.getmtime)
 r_files = sorted(glob.glob(os.path.join(ROOT, "reports", "*_models.json")), key=os.path.getmtime)
+h_files = sorted(glob.glob(os.path.join(ROOT, "reports", "*_report.html")), key=os.path.getmtime)
 check(a_files and r_files, "analysis + report files exist")
+check(bool(h_files), "html dashboard exists")
 if not (a_files and r_files):
     sys.exit(1)
 
