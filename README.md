@@ -47,6 +47,7 @@ After a run, all dated with `YYYY-MM-DD_HHMM`:
 |---|---|
 | User-friendly dashboard (start here) | `reports/<stamp>_report.html` |
 | Human-readable ranking | `reports/<stamp>_summary.md` |
+| Churn alert (only on free→paid/disappearances) | `reports/<stamp>_churn_alert.md` |
 | Spreadsheet (summary, free_rank, aa_top15, diff) | `reports/<stamp>_models.xlsx` |
 | Machine-readable analysis | `reports/<stamp>_models.json` |
 | Raw provider snapshot | `raw/<stamp>_models.json` |

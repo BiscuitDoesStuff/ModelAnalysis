@@ -97,6 +97,7 @@ None of the above are committed (see `.gitignore`).
 | `no snapshots in raw/` | Run stage 1 first; `raw/` was empty or pruned. |
 | `run analysis first` | No `analysis/*_analysis.json`; run stage 2 first. |
 | `xlsx skipped: ...` | `openpyxl` missing — `pip install -r requirements.txt` and re-run stage 3. |
+| A provider shows `{"error": ...}` in the snapshot | Keyless public catalogs (NVIDIA/ZenMux/Zen) degrade gracefully — that catalog is skipped for the run, everything else proceeds. Retry on next run. |
 | Mostly `unscored` / `cost-unknown` / empty stack | No AA / OpenAI / Anthropic keys — expected for public runs. Add keys and re-run. |
 | AA shows $0 prices but no free gems | AA $0 pricing alone lands in provisional `[F?]` (L1 with an OR listing, L0 AA-only; billing not checked); gem status needs score 40+ plus a callable ID. |
 | Diff always empty on first run | No previous day in `store.sqlite` yet; diffs populate from the second distinct day onward. |
