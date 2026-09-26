@@ -22,6 +22,8 @@ OPENAI_API_KEY=
 ANTHROPIC_API_KEY=
 OPENROUTER_API_KEY=      # optional, raises OpenRouter rate limits
 AA_API_KEY=              # Artificial Analysis scores/prices
+GROQ_API_KEY=            # Groq OpenAI-compatible catalog (skipped when absent)
+CEREBRAS_API_KEY=        # Cerebras OpenAI-compatible catalog (skipped when absent)
 ```
 
 Copy `.env.example` to `.env` and fill in only what you need. Missing keys are fine — that provider's section is skipped or marked `skipped`/`error` in the snapshot.
@@ -67,7 +69,7 @@ Excel (`reports/<stamp>_models.xlsx`) sheets (data sheets carry a `free_status` 
 | `OCF_Practical` | `tier, variant, winner, winner_score, winner_ratio, runner_up` (12 rows) |
 | `OCF_Outliers` | Bargains + overpriced + free gems |
 
-JSON (`reports/<stamp>_models.json`) holds the 9 sections uncapped (`all_intel`, `all_cost`, `all_ratio_*`, `ocf_*`, `ocf_stack{max,high,medium}`, `ocf_practical[]`, `ocf_outliers`, `quartiles`, `thresholds`) for scripting.
+JSON (`reports/<stamp>_models.json`) holds the 9 sections uncapped (`all_intel`, `all_cost`, `all_ratio_*`, `ocf_*`, `ocf_stack{max,high,medium}`, `ocf_practical[]`, `ocf_outliers`, `quartiles`, `thresholds`) plus `free_churn` (free→paid / free→free flips, disappeared and new slugs vs the previous day; empty until two distinct days exist) for scripting.
 
 ## 5. Retention and storage
 

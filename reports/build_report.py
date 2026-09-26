@@ -39,7 +39,7 @@ def has_callable(m):
     if m.get("or_id"):
         return True
     provs = set(m.get("providers", []))
-    return bool(provs & {"openai", "anthropic", "openrouter"})
+    return bool(provs & {"openai", "anthropic", "openrouter", "groq", "cerebras"})
 
 
 def groups_display(m):
@@ -222,6 +222,12 @@ def build_html(a, s, stamp):
     ov = f"<p>Snapshot <b>{esc(stamp)}</b> · thresholds {th['max']}/{th['high']}/{th['medium']} " \
          "(below 30 in All views only) · free models never enter ratios, ranked by score instead. " \
          "[F?] = provisional free (AA $0, billing unverified; exact level in JSON/XLSX).</p>"
+    ch = a.get("free_churn")
+    if ch and ch.get("prev_day"):
+        ov += (f"<p class='note'>Free-status churn vs {esc(ch['prev_day'])}: "
+               f"→paid {ch.get('flipped_to_paid_total', 0)} · →free {ch.get('flipped_to_free_total', 0)} · "
+               f"level-changed {ch.get('level_changed_total', 0)} · disappeared {ch.get('disappeared_total', 0)} · "
+               f"new {ch.get('new_total', 0)}.</p>")
     ov += "<div class='cards'>"
     for t in TIERS:
         rows = s["stack"][t]["rows"]
@@ -382,6 +388,13 @@ def main():
              "(AA $0, billing unverified; stack/practical need a callable or_id/native ID, " +
              "AA-only rows stay in Intel/Cost/Ratio; tier filled only by provisional still flags gap F(verified)). " +
              "Per-model OpenCode compat not verified._\n")
+    ch = a.get("free_churn")
+    if ch and ch.get("prev_day"):
+        L.append(f"\n_Churn vs {ch['prev_day']}: →paid {ch.get('flipped_to_paid_total', 0)} " +
+                 (", ".join(f"`{i}`" for i in ch.get('flipped_to_paid', [])[:MD_CAP]) if ch.get('flipped_to_paid') else "—") +
+                 f" · →free {ch.get('flipped_to_free_total', 0)}" +
+                 (", ".join(f"`{i}`" for i in ch.get('flipped_to_free', [])[:MD_CAP]) if ch.get('flipped_to_free') else "") +
+                 f" · disappeared {ch.get('disappeared_total', 0)} · new {ch.get('new_total', 0)}._\n")
     with open(os.path.join(REP, f"{stamp}_summary.md"), "w", encoding="utf-8") as f:
         f.write("".join(L))
 
@@ -398,6 +411,7 @@ def main():
             "score_dist": dist, "routers_excluded": s["routers"],
             "collisions": a.get("collisions", []),
             "free_status_counts": a.get("free_status_counts", {}),
+            "free_churn": a.get("free_churn", {}),
             "all_intel": s["all_intel"], "all_cost": s["costed"], "all_cost_unknown": s["uncosted"],
             "all_ratio_paid": s["paid_ratio"], "all_ratio_free_by_score": s["free_block"],
             "all_ratio_verified_free_by_score": s["free_block"],
@@ -423,6 +437,15 @@ def main():
         ws.append(["free_verified", fsc.get("verified", "")])
         ws.append(["provisional_l1", fsc.get("provisional-l1", "")])
         ws.append(["provisional_l0", fsc.get("provisional-l0", "")])
+        ws.append(["total_groq", a.get("total_groq", "")])
+        ws.append(["total_cerebras", a.get("total_cerebras", "")])
+        ch = a.get("free_churn", {})
+        if ch and ch.get("prev_day"):
+            ws.append(["churn_vs", ch.get("prev_day", "")])
+            ws.append(["churn_to_paid", ch.get("flipped_to_paid_total", 0)])
+            ws.append(["churn_to_free", ch.get("flipped_to_free_total", 0)])
+            ws.append(["churn_disappeared", ch.get("disappeared_total", 0)])
+            ws.append(["churn_new", ch.get("new_total", 0)])
         for t in TIERS:
             ws.append([f"stack_{t}", len(s["stack"][t]["rows"])])
             ws.append([f"gaps_{t}", ",".join(s["stack"][t]["gaps"])])

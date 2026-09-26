@@ -59,6 +59,8 @@ Keys are local-only (`.env`, OS env, or `User` env vars). Never committed. See `
 | `ANTHROPIC_API_KEY` | Anthropic `/v1/models` listing | Only for Anthropic section |
 | `OPENROUTER_API_KEY` | Higher OpenRouter rate limits | Optional |
 | `AA_API_KEY` | Artificial Analysis scores/prices | Only for AA sections |
+| `GROQ_API_KEY` | Groq `/openai/v1/models` listing | Only for Groq coverage (skipped when absent) |
+| `CEREBRAS_API_KEY` | Cerebras `/v1/models` listing | Only for Cerebras coverage (skipped when absent) |
 | `NVIDIA_API_KEY`, `GOOGLE_AI_STUDIO_KEY` | Reserved for future validation | Not used in v1 |
 
 ## Free rule

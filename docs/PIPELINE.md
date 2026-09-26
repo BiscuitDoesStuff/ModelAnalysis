@@ -16,9 +16,9 @@ reports/build_report.py   → reports/<stamp>_summary.md|.json|.xlsx
 
 - Hybrid: OpenRouter public first (no key), authed sources only when keys exist.
 - `get()` retries 3x with backoff on 5xx/network errors; 4xx fails fast. All retries/failures append to `raw/_errors.log` (truncated at run start).
-- Endpoints: OpenRouter `GET /api/v1/models`; OpenAI `GET /v1/models` (`Authorization: Bearer`); Anthropic `GET /v1/models` (`x-api-key` + `anthropic-version: 2023-06-01`); AA `GET /api/v2/data/llms/models` (`x-api-key`).
-- Missing keys return `{"skipped": "no <KEY>"}`; exceptions return `{"error": ...}` via `safe()`. OpenRouter failure exits 1 with no snapshot.
-- Snapshot schema: `{retrieved_at, openrouter: [...], openai: [...]|{...}, anthropic: [...]|{...}, aa: {...}}`.
+- Endpoints: OpenRouter `GET /api/v1/models`; OpenAI `GET /v1/models` (`Authorization: Bearer`); Anthropic `GET /v1/models` (`x-api-key` + `anthropic-version: 2023-06-01`); Groq `GET /openai/v1/models` (OpenAI-compatible, `Authorization: Bearer`); Cerebras `GET /v1/models` (OpenAI-compatible, `Authorization: Bearer`); AA `GET /api/v2/data/llms/models` (`x-api-key`).
+- Missing keys return `{"skipped": "no <KEY>"}`; exceptions return `{"error": ...}` via `safe()`. OpenRouter failure exits 1 with no snapshot. Groq/Cerebras need `GROQ_API_KEY` / `CEREBRAS_API_KEY`; when absent their catalogs are skipped and analysis proceeds without them.
+- Snapshot schema: `{retrieved_at, openrouter: [...], openai: [...]|{...}, anthropic: [...]|{...}, groq: [...]|{...}, cerebras: [...]|{...}, aa: {...}}`.
 - Retention: `prune(keep=1)` — only the newest `raw/*_models.json` survives.
 
 ## Stage 2 — analysis (`analysis/analyze.py`)
@@ -43,12 +43,16 @@ SQLite (`analysis/store.sqlite`, table `models`):
 (id TEXT, source TEXT, day TEXT, free INT, PRIMARY KEY(id, source, day))
 ```
 
-Legacy tables lacking `source` are renamed to `models_old_<stamp>` and rebuilt. Diffs compare current OpenRouter IDs against the max stored `day < today`: `new_ids_vs_history`, `removed_ids_vs_history` (capped at 50 in JSON, full counts in `new_total`/`removed_total`).
+Sources stored: openrouter (free = strict-free flag), openai / anthropic / groq / cerebras (free = 0). Legacy tables lacking `source` are renamed to `models_old_<stamp>` and rebuilt. Diffs compare current OpenRouter IDs against the max stored `day < today`: `new_ids_vs_history`, `removed_ids_vs_history` (capped at 50 in JSON, full counts in `new_total`/`removed_total`). OR free-flag flips for IDs present on both days are reported as `free_churn.or_flipped_to_paid|or_flipped_to_free`.
 
-Analysis JSON keys: legacy counts, native ID lists, retired/diff/history keys (unchanged) plus `models[]` canonical rows
-`{id, or_id, name, groups[O/C/F], providers[], score|null, cost_blended|null, ratio|null,
+Churn (`free_history` table: `(slug TEXT, day TEXT, free_status TEXT, disp_id TEXT, PRIMARY KEY(slug, day))`, non-router canonical rows only): each run upserts the current day, then diffs against the max stored `day < today` → `free_churn{prev_day, flipped_to_paid (was free-ish, now none), flipped_to_free (was none, now free-ish), level_changed (free-ish → other free-ish level), disappeared (slug gone), new_slugs}`. Lists capped at 50 with `*_total` counts. Empty (`prev_day: null`) until a second distinct day exists — same convention as the OR diffs. The report passes `free_churn` through to JSON uncapped-meta, plus a one-line MD/HTML overview note when `prev_day` exists.
+
+Analysis JSON keys: legacy counts, native ID lists, retired/diff/history keys (unchanged) plus `total_groq` / `groq_ids`, `total_cerebras` / `cerebras_ids`, plus `models[]` canonical rows
+`{id, slug, or_id, name, groups[O/C/F], providers[openrouter/openai/anthropic/groq/cerebras], score|null, cost_blended|null, ratio|null,
 context, free, router, tier, free_status[verified/provisional-l1/provisional-l0/none], free_evidence[]}`, `collisions[]` (same tail slug merged from distinct listings),
-`thresholds{max:50, high:40, medium:30}`, `free_status_counts`, `cost_method: aa_blended_primary_or_derived_fallback_per_1M`.
+`thresholds{max:50, high:40, medium:30}`, `free_status_counts`, `free_churn{prev_day, flipped_to_paid[_total], flipped_to_free[_total], level_changed[_total], disappeared[_total], new_slugs[new_total], or_flipped_to_paid[_total], or_flipped_to_free[_total]}` (lists capped at 50), `cost_method: aa_blended_primary_or_derived_fallback_per_1M`.
+
+Groq/Cerebras normalize like OAI/ANT (OpenAI-compatible `{id, owned_by}`; no display names — native id used as name fallback). Union merges them by tail slug; `providers[]` gains `groq`/`cerebras` tags (no new `groups`; OCF stays O/C/F + provisional). Display priority: oai/ant native → OR → groq → cerebras → AA. `has_callable` (stack/practical/outliers gate) counts `or_id` or any of openrouter/openai/anthropic/groq/cerebras.
 Dead keys (`free_ids`, `aa_top15`, `aa_free_unverified`, `combined_free_rank`) were removed; the report no longer consumes them.
 
 ## Stage 3 — report (`reports/build_report.py`)
@@ -62,7 +66,8 @@ Input: newest `analysis/*_analysis.json` (`models[]` canonical rows). Outputs sh
 9. Outliers: bargains / overpriced via quartiles over OCF paid scored+costed set (provisional excluded from quartiles); free gems = verified/provisional free + score ≥ 40, callable only.
 
 - `.md`: header counts + 9 sections, top 20 per list, gap flags inline. Provisional rows show `[F?]` in the groups bracket.
-- `.json`: 9 section keys uncapped + `quartiles` + `score_dist` (p10/p50/p90/max for threshold calibration) + `thresholds` + `routers_excluded` + `collisions` + `free_status_counts` + `*_verified_free_by_score` / `*_provisional_free_by_score` ratio splits.
+- `.json`: 9 section keys uncapped + `quartiles` + `score_dist` (p10/p50/p90/max for threshold calibration) + `thresholds` + `routers_excluded` + `collisions` + `free_status_counts` + `*_verified_free_by_score` / `*_provisional_free_by_score` ratio splits + `free_churn` (same object as analysis).
+- `.html`: tabbed dashboard (Overview + 9 sections), per-tab search, click-to-copy OpenCode IDs, no dependencies. Overview shows a churn line (`→paid / →free / disappeared / new vs <prev_day>`) once two distinct days exist.
 - `.html`: tabbed dashboard (Overview + 9 sections), per-tab search, click-to-copy OpenCode IDs, no dependencies.
 - `.xlsx` (requires `openpyxl`, else `xlsx skipped`): `summary | All_Intel | All_Cost | All_Ratio | OCF_Intel | OCF_Cost | OCF_Ratio | OCF_Stack | OCF_Practical | OCF_Outliers`. Data sheets carry a `free_status` column (`verified` / `provisional-l1` / `provisional-l0` / `none`); `summary` carries `free_verified` / `provisional_l1` / `provisional_l0` counts.
 

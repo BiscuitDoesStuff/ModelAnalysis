@@ -58,6 +58,18 @@ def fetch_aa():
         return {"skipped": "no AA_API_KEY"}
     return get("https://artificialanalysis.ai/api/v2/data/llms/models", {"x-api-key": key})
 
+def fetch_groq():
+    key = os.getenv("GROQ_API_KEY")
+    if not key:
+        return {"skipped": "no GROQ_API_KEY"}
+    return get("https://api.groq.com/openai/v1/models", {"Authorization": f"Bearer {key}"}).get("data", [])
+
+def fetch_cerebras():
+    key = os.getenv("CEREBRAS_API_KEY")
+    if not key:
+        return {"skipped": "no CEREBRAS_API_KEY"}
+    return get("https://api.cerebras.ai/v1/models", {"Authorization": f"Bearer {key}"}).get("data", [])
+
 def prune(keep=1):
     import glob as g
     files = sorted(g.glob(os.path.join(RAW, "*_models.json")), key=os.path.getmtime)
@@ -83,6 +95,8 @@ def main():
             "openrouter": ors,
             "openai": safe(fetch_openai),
             "anthropic": safe(fetch_anthropic),
+            "groq": safe(fetch_groq),
+            "cerebras": safe(fetch_cerebras),
             "aa": safe(fetch_aa)}
     out = os.path.join(RAW, f"{stamp}_models.json")
     with open(out, "w", encoding="utf-8") as f:
@@ -90,7 +104,9 @@ def main():
     prune(1)
     print(f"wrote {out} | openrouter={len(ors) if isinstance(ors, list) else ors} "
           f"| openai={len(snap['openai']) if isinstance(snap['openai'], list) else snap['openai']} "
-          f"| anthropic={len(snap['anthropic']) if isinstance(snap['anthropic'], list) else snap['anthropic']}")
+          f"| anthropic={len(snap['anthropic']) if isinstance(snap['anthropic'], list) else snap['anthropic']} "
+          f"| groq={len(snap['groq']) if isinstance(snap['groq'], list) else snap['groq']} "
+          f"| cerebras={len(snap['cerebras']) if isinstance(snap['cerebras'], list) else snap['cerebras']}")
 
 if __name__ == "__main__":
     main()
