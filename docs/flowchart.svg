@@ -76,7 +76,7 @@
   <text class="title" x="46" y="542">4 · alerts/check_churn.py (always exit 0)</text>
   <text class="sub" x="46" y="562">reads newest report free_churn → console summary vs previous day</text>
   <text class="sub" x="46" y="582">free→paid flips / disappeared listings → writes reports/&lt;stamp&gt;_churn_alert.md</text>
-  <text class="sub" x="46" y="602">no baseline (first day) or no churn → writes nothing · schedule.ps1 registers run.ps1 daily</text>
+  <text class="sub" x="46" y="602">no baseline (first day) or no churn → writes nothing · churn diffs grow across run days</text>
 
   <!-- arrows -->
   <line class="arrow-dim" x1="230" y1="175" x2="268" y2="175"/>

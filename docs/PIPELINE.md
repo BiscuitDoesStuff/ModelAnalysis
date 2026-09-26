@@ -11,7 +11,7 @@ reports/build_report.py   → reports/<stamp>_summary.md|.json|.xlsx
 alerts/check_churn.py     → console churn summary + reports/<stamp>_churn_alert.md on bad news
 ```
 
-`run.ps1` runs the four stages in order, exiting on first non-zero `$LASTEXITCODE`. `schedule.ps1` registers `run.ps1` as a daily Windows Scheduled Task (`ModelAnalysisDaily`).
+`run.ps1` runs the four stages in order, exiting on first non-zero `$LASTEXITCODE`.
 
 ## Stage 1 — retrieval (`retrieval/fetch_models.py`)
 

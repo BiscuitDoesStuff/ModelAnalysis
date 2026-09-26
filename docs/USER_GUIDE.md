@@ -47,14 +47,6 @@ python alerts/check_churn.py       # stage 4: churn summary + alert file
 
 Re-run any time to refresh. Each run prunes older outputs so only the latest stamp remains. The last stage prints a churn summary vs the previous day; on free→paid flips or disappearances it also writes `reports/<stamp>_churn_alert.md`.
 
-For daily runs, register a scheduled task (runs `run.ps1` every day; churn diffs populate from the second distinct day onward):
-
-```powershell
-powershell -File schedule.ps1          # daily 08:00 local
-powershell -File schedule.ps1 -Time 21:30
-powershell -File schedule.ps1 -Remove  # unregister
-```
-
 ## 4. Read the report
 
 Open `reports/<stamp>_report.html` in a browser — tabbed dashboard of all 9 sections with per-tab search and click-to-copy OpenCode IDs. `reports/<stamp>_summary.md` holds the same 9 sections as text (top 20 rows each; full lists in HTML/XLSX, uncapped in JSON):

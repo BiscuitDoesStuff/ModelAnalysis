@@ -129,7 +129,6 @@ check("free_churn" in r, "report carries free_churn")
 
 # Phase-4: churn alerts stage.
 check(os.path.exists(os.path.join(ROOT, "alerts", "check_churn.py")), "alerts script exists")
-check(os.path.exists(os.path.join(ROOT, "schedule.ps1")), "scheduler script exists")
 run_ps1 = open(os.path.join(ROOT, "run.ps1"), encoding="utf-8").read()
 check("alerts/check_churn.py" in run_ps1, "run.ps1 includes alerts stage")
 if m_files:
