@@ -55,9 +55,9 @@
   <!-- stage 3 -->
   <rect class="box" x="270" y="350" width="600" height="150"/>
   <text class="title" x="286" y="377">3 · reports/build_report.py</text>
-  <text class="sub" x="286" y="397">reads newest analysis/*_analysis.json → writes one &lt;stamp&gt; triple:</text>
-  <text class="sub" x="286" y="417">summary.md (rank 20 · free list + openrouter/ IDs · AA top 15 · diffs · limits)</text>
-  <text class="sub" x="286" y="437">models.json (full object) · models.xlsx (summary · free_rank · aa_top15 · diff)</text>
+  <text class="sub" x="286" y="397">reads newest analysis (models[] canonical rows) → writes one &lt;stamp&gt; triple:</text>
+  <text class="sub" x="286" y="417">summary.md (9 sections: All/OCF intel·cost·ratio, stack, practical, outliers)</text>
+  <text class="sub" x="286" y="437">models.json (9 keys uncapped) · models.xlsx (10 tabs incl. OCF_Stack/Practical)</text>
   <text class="sub" x="286" y="457">needs openpyxl or xlsx skipped · prune older stamps</text>
   <text class="sub" x="286" y="477">OpenCode IDs: openrouter/&lt;or_id&gt; · verify limits in provider docs</text>
 

@@ -45,7 +45,7 @@ After a run, all dated with `YYYY-MM-DD_HHMM`:
 
 Only the latest run is kept on disk (auto-pruned each run). Generated outputs are gitignored; source is what gets committed.
 
-The summary lists: combined free rank (top 20), full strict-$0 free list with OpenCode IDs (`openrouter/<id>`), AA Top 15 by Intelligence Index, native Anthropic IDs, OpenAI retired IDs, and new/removed diffs.
+The summary lists all 9 sections (top 20 each): All-Data Intelligence / Cost / Ratio, OCF Intelligence / Cost / Ratio, Optimized Stack (Max/High/Medium with gap flags), Practical picks table (12 tier × variant cells), and Outliers. Excel holds the same sections as full-list tabs; JSON holds them uncapped.
 
 ## Configuration
 

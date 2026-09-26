@@ -43,15 +43,26 @@ SQLite (`analysis/store.sqlite`, table `models`):
 
 Legacy tables lacking `source` are renamed to `models_old_<stamp>` and rebuilt. Diffs compare current OpenRouter IDs against the max stored `day < today`: `new_ids_vs_history`, `removed_ids_vs_history` (capped at 50 in JSON, full counts in `new_total`/`removed_total`).
 
+Analysis JSON keys: legacy counts and ID lists (unchanged) plus `models[]` canonical rows
+`{id, or_id, name, groups[O/C/F], providers[], score|null, cost_blended|null, ratio|null,
+context, free, tier}`, `thresholds{max:50, high:40, medium:30}`,
+`cost_method: aa_blended_primary_or_derived_fallback_per_1M`.
+
 Analysis JSON keys: `stamp, day, total_openrouter, free_count, free_ids[:300], new_ids_vs_history[:50], new_total, removed_ids_vs_history[:50], removed_total, history_days, total_openai, openai_ids, openai_retired[:50], total_anthropic, anthropic_ids, total_aa, aa_top15, aa_free_unverified[:100], aa_free_count, combined_free_rank[:30]`.
 
 ## Stage 3 — report (`reports/build_report.py`)
 
-Input: newest `analysis/*_analysis.json`. Outputs share one `<stamp>`; older stamps pruned.
+Input: newest `analysis/*_analysis.json` (`models[]` canonical rows). Outputs share one `<stamp>`; older stamps pruned. 9 sections:
 
-- `.md`: header counts, combined rank (20), free list with OpenCode IDs `openrouter/<or_id>` (100), AA Top 15, Anthropic IDs, OpenAI retired (30), diffs, verification-tier note, hand-maintained `LIMITS` table (last checked 2026-09-25 — verify in provider docs), on-use source note.
-- `.json`: full analysis object verbatim.
-- `.xlsx` (requires `openpyxl`, else `xlsx skipped`): sheets `summary | free_rank(30) | aa_top15 | diff`.
+1–3. All Intel / Cost / Ratio (ratio = paid only + free-by-score block + unratable tail).
+4–6. OCF-gated versions of the same (rows with any O/C/F tag).
+7. Stack: tiers by `thresholds`, hierarchy = score desc + ratio tiebreak, `gaps[]` per tier.
+8. Practical: 3 tiers × 4 variants (OCF/OF/CF/F) = 12 `{tier, variant, winner, runner_up}` — winner is first hierarchy row after removing toggled-off groups.
+9. Outliers: bargains / overpriced via quartiles over OCF paid scored+costed set; free gems = free + score ≥ 40.
+
+- `.md`: header counts + 9 sections, top 20 per list, gap flags inline.
+- `.json`: 9 section keys uncapped + `quartiles` + `thresholds` + `cost_method`.
+- `.xlsx` (requires `openpyxl`, else `xlsx skipped`): `summary | All_Intel | All_Cost | All_Ratio | OCF_Intel | OCF_Cost | OCF_Ratio | OCF_Stack | OCF_Practical | OCF_Outliers`.
 
 ## Extension points
 

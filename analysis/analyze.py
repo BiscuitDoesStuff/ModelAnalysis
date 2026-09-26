@@ -77,6 +77,103 @@ def main():
                          "aa_match": best["id"] if best else "", "context": r["context"]})
     combined = sorted(combined, key=lambda r: r["aa_score"], reverse=True)[:30]
 
+    # Canonical deduped models (reports-layer union; raw snapshots untouched).
+    TIER_MAX, TIER_HIGH, TIER_MED = 50, 40, 30
+
+    def tier_of(score):
+        if score is None:
+            return ""
+        if score >= TIER_MAX:
+            return "max"
+        if score >= TIER_HIGH:
+            return "high"
+        if score >= TIER_MED:
+            return "medium"
+        return "below"
+
+    def or_cost_per_1m(pricing):
+        try:
+            p = float((pricing or {}).get("prompt", -1))
+            c = float((pricing or {}).get("completion", -1))
+            if p < 0 or c < 0:
+                return None
+            return round((3 * p + c) / 4 * 1e6, 4)
+        except Exception:
+            return None
+
+    def aa_cost(value):
+        try:
+            return None if value is None else round(float(value), 4)
+        except Exception:
+            return None
+
+    def base_slug(mid):
+        return norm(str(mid).split(":")[0].split("/")[-1])
+
+    or_by_id = {m.get("id", ""): m for m in ors}
+    oai_slugs = {base_slug(m.get("id", "")) for m in oai}
+    ant_slugs = {base_slug(m.get("id", "")) for m in ant}
+    aa_by_base = {base_slug(k): v for k, v in aa_by_slug.items()}
+
+    union = {}
+    for m in ors:
+        mid = m.get("id", "")
+        union.setdefault(base_slug(mid), {"or": [], "oai": [], "ant": [], "aa": None})
+        union[base_slug(mid)]["or"].append(mid)
+    for m in oai:
+        union.setdefault(base_slug(m.get("id", "")), {"or": [], "oai": [], "ant": [], "aa": None})
+        union[base_slug(m.get("id", ""))]["oai"].append(m.get("id", ""))
+    for m in ant:
+        union.setdefault(base_slug(m.get("id", "")), {"or": [], "oai": [], "ant": [], "aa": None})
+        union[base_slug(m.get("id", ""))]["ant"].append(m.get("id", ""))
+    for m in aa:
+        key = base_slug(m.get("slug", "") or m.get("id", ""))
+        union.setdefault(key, {"or": [], "oai": [], "ant": [], "aa": None})
+        union[key]["aa"] = m
+
+    or_free = {r["id"] for r in or_rows if r["free"]}
+    or_ctx = {r["id"]: r["context"] for r in or_rows}
+    or_name = {m.get("id", ""): m.get("name", "") for m in ors}
+    or_price = {m.get("id", ""): m.get("pricing", {}) for m in ors}
+
+    models = []
+    for key in sorted(union):
+        u = union[key]
+        free = any(i in or_free for i in u["or"])
+        groups = []
+        if u["oai"] or any(i.lstrip("~").split("/")[0].lower() == "openai" for i in u["or"] if "/" in i.lstrip("~")):
+            groups.append("O")
+        if u["ant"] or any(i.lstrip("~").split("/")[0].lower() == "anthropic" for i in u["or"] if "/" in i.lstrip("~")):
+            groups.append("C")
+        if free:
+            groups.append("F")
+        providers = []
+        if u["or"]:
+            providers.append("openrouter")
+        if u["oai"]:
+            providers.append("openai")
+        if u["ant"]:
+            providers.append("anthropic")
+        aa_match = aa_by_base.get(key)
+        score = aa_score((aa_match or {}).get("evaluations")) if aa_match else None
+        cost = aa_cost((aa_match or {}).get("pricing", {}).get("price_1m_blended_3_to_1")) if aa_match else None
+        if cost is None:
+            for i in u["or"]:
+                cost = or_cost_per_1m(or_price.get(i))
+                if cost is not None:
+                    break
+        ratio = round(score / cost, 4) if score is not None and cost and cost > 0 else None
+        or_ids = sorted(u["or"])
+        disp_or = next((i for i in or_ids if i in or_free), or_ids[0] if or_ids else "")
+        disp = (u["oai"] or u["ant"] or ([disp_or] if disp_or else []) or
+                ([aa_match.get("slug", "") or aa_match.get("id", "")] if aa_match else [""]))[0]
+        name = (next((or_name.get(i, "") for i in or_ids if or_name.get(i)), "") or
+                (u["ant"] and "") or ((aa_match or {}).get("name", "")))
+        models.append({"id": disp, "or_id": disp_or, "name": name, "groups": groups,
+                       "providers": providers, "score": score, "cost_blended": cost,
+                       "ratio": ratio, "context": or_ctx.get(disp_or),
+                       "free": free, "tier": tier_of(score)})
+
     con = sqlite3.connect(DB)
     cols = [r[1] for r in con.execute("PRAGMA table_info(models)")]
     if cols and "source" not in cols:
@@ -105,7 +202,10 @@ def main():
            "total_anthropic": len(ant_rows), "anthropic_ids": sorted([r["id"] for r in ant_rows]),
            "total_aa": len(aa_rows), "aa_top15": aa_top,
            "aa_free_unverified": aa_free_unverified[:100], "aa_free_count": len(aa_free_unverified),
-           "combined_free_rank": combined}
+           "combined_free_rank": combined,
+           "models": models,
+           "thresholds": {"max": TIER_MAX, "high": TIER_HIGH, "medium": TIER_MED},
+           "cost_method": "aa_blended_primary_or_derived_fallback_per_1M"}
     ap = os.path.join(ROOT, "analysis", f"{stamp}_analysis.json")
     with open(ap, "w", encoding="utf-8") as f:
         json.dump(out, f, indent=1)

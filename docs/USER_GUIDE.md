@@ -46,26 +46,28 @@ Re-run any time to refresh. Each run prunes older outputs so only the latest sta
 
 ## 4. Read the report
 
-Open `reports/<stamp>_summary.md`. Sections:
+Open `reports/<stamp>_summary.md` — 9 sections, top 20 rows each (full lists in XLSX, uncapped in JSON):
 
-- Header counts — `OR`, strict free count, `OAI`, `ANT`, `AA`, new/removed, history days.
-- Combined free rank (top 20) — strict-$0 OpenRouter models sorted by AA score. `unscored` means no AA match.
-- Free list — every strict-$0 ID plus its OpenCode form: `openrouter/<id>`. Use the `openrouter/` form in OpenCode config.
-- AA Top 15 — highest Intelligence Index with creator and blended cost.
-- Anthropic native IDs — full native listing for the run.
-- OpenAI retired — IDs with `shutdown_date` set (first 30).
-- Diff vs history — `New` IDs appeared since the previous stored day; `Removed` disappeared.
+1. **All Data — Intelligence**: every model by score desc, `unscored` tail.
+2. **All Data — Cost**: cheapest first in blended $/1M, `cost-unknown` tail.
+3. **All Data — Ratio**: paid models by score/cost; then free ranked by score; then `unratable` tail. Free never enters the ratio (infinite).
+4–6. **OCF — Intelligence / Cost / Ratio**: same views filtered to OpenAI + Claude + strict-free rows.
+7. **OCF — Optimized stack**: Max (50+) / High (40+) / Medium (30+) tiers, score desc with ratio tiebreak. Each tier flags `gaps:` for any of O/C/F with no qualifier. Below 30 excluded from stack only.
+8. **OCF — Practical picks**: winner + runner-up per tier for each access variant (OCF, OF, CF, F-only). `— (gap)` where a tier/variant has nothing.
+9. **OCF — Outliers**: bargains, overpriced, free gems (free + score 40+).
+
+Row format: `` `id` [groups] — score — $/1M — ratio → `openrouter/id` ``. Groups: O = OpenAI, C = Claude, F = strict-free.
 
 Excel (`reports/<stamp>_models.xlsx`) sheets:
 
-| Sheet | Contents |
-|---|---|
-| `summary` | Header counts |
-| `free_rank` | `or_id, opencode_id, aa_score, aa_match, context` (top 30) |
-| `aa_top15` | `id, name, score, creator, cost_blended` |
-| `diff` | `added/removed, id` |
+| `summary` | Header counts + tier sizes + gaps |
+| `All_Intel`, `All_Cost`, `All_Ratio` | Full-list versions of MD sections 1–3 |
+| `OCF_Intel`, `OCF_Cost`, `OCF_Ratio` | Full-list versions of MD sections 4–6 |
+| `OCF_Stack` | Tier + full row; `GAP:` rows for missing groups |
+| `OCF_Practical` | `tier, variant, winner, winner_score, winner_ratio, runner_up` (12 rows) |
+| `OCF_Outliers` | Bargains + overpriced + free gems |
 
-JSON (`reports/<stamp>_models.json`) holds the full analysis object for scripting.
+JSON (`reports/<stamp>_models.json`) holds the 9 sections uncapped (`all_intel`, `all_cost`, `all_ratio_*`, `ocf_*`, `ocf_stack{max,high,medium}`, `ocf_practical[]`, `ocf_outliers`, `quartiles`, `thresholds`) for scripting.
 
 ## 5. Retention and storage
 
@@ -84,8 +86,8 @@ None of the above are committed (see `.gitignore`).
 | `no snapshots in raw/` | Run stage 1 first; `raw/` was empty or pruned. |
 | `run analysis first` | No `analysis/*_analysis.json`; run stage 2 first. |
 | `xlsx skipped: ...` | `openpyxl` missing — `pip install -r requirements.txt` and re-run stage 3. |
-| Empty OAI / ANT / AA sections | Keys missing — expected for public runs. Add keys and re-run. |
-| `aa_free_unverified` non-empty but `free_ids` empty | AA $0 pricing is unverified (billing not checked); trust `free_ids` for the strict rule. |
+| Mostly `unscored` / `cost-unknown` / empty stack | No AA / OpenAI / Anthropic keys — expected for public runs. Add keys and re-run. |
+| `aa_free_unverified` non-empty but no free gems | AA $0 pricing is unverified (billing not checked); free-gem status needs the strict rule + score. |
 | Diff always empty on first run | No previous day in `store.sqlite` yet; diffs populate from the second distinct day onward. |
 
 ## 7. FAQ
