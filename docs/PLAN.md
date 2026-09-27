@@ -9,9 +9,10 @@
 - `891efc7`: Phase 0b–d, meaning the dead in-memory history is removed, helpers are shared in `analysis/common.py`, and nothing is created on import.
 - Both are verified by the owner's live run `2026-09-27_095157_f0e75f9fb295`: smoke 0 failures, complete coverage.
 - The Context bullets below describe the code *before* `891efc7`. The first bullet (in-memory history) and the import side-effects are already fixed.
-- 0a (`research.json` refresh) is pushed: pins 4.3.2 through 2026-10-04, AA score entries retired, all entries checked 2026-09-27 / expire 2026-10-04. Validated offline only.
+- 0a (`research.json` refresh) is pushed as `1330219` and verified by live run `2026-09-27_102010_2272b1477638`: no AA pin warning, 2 inherited estimates, `ok research registry current`, smoke 0 failures. Entries expire 2026-10-04.
+- That run was **partial coverage**, because `source llmstats: failed (0)`. The key was present, since a missing key reports `skipped`. The reason is in the snapshot's `source_health.llmstats.reason`; the owner has been asked for it (see "Open: LLM Stats failure" under Your steps).
 
-**Next action: wait for the owner's step 3b live run** (checks 0a live), then start Phase 1 (CI). The evidence entries now expire on **2026-10-04**; the next refresh is due before then (repeat step 2, then the 0a pattern).
+**Next action: diagnose the LLM Stats failure from the owner's pasted reason, then start Phase 1 (CI).** The evidence entries now expire on **2026-10-04**; the next refresh is due before then (repeat step 2, then the 0a pattern).
 
 **Constraints that aren't obvious from the code:**
 - **Cloud sessions can't reach the provider APIs** (a proxy returns 403). Live runs happen only on the owner's Windows machine, so validate offline and ask the owner for a live run at the plan's checkpoints.
@@ -41,8 +42,9 @@
 | Your step 1: Python version | **Done** | You run 3.13.14 |
 | Your step 2: evidence check | **Done** | Results and decisions are in 0a below |
 | Your step 3: live run | **Done** | Route churn ran for the first time: 82 events, 0 alerts. You diagnosed all 82 as Zen noise (see Phase 2) |
-| 0a: `research.json` refresh | **Done**, pushed; live check pending (step 3b) | Offline: registry check (current 09-27 and 10-04, expired 10-05), 57 tests OK, fixture replay smoke shows `ok research registry current` and only the known variant-label failure. Entries now expire 2026-10-04 |
-| Your step 3b: live run | **Next** | Expect no "no AA benchmark pinned" warning, 2 inherited estimates, `ok research registry current` |
+| 0a: `research.json` refresh | **Done**, pushed as `1330219`, live-verified in step 3b | Offline: registry check (current 09-27 and 10-04, expired 10-05), 57 tests OK, fixture replay smoke shows `ok research registry current` and only the known variant-label failure. Entries now expire 2026-10-04 |
+| Your step 3b: live run | **Done** | Run `2026-09-27_102010_2272b1477638`: no AA pin warning, 2 inherited estimates, `ok research registry current`, smoke 0 failures, 82 churn events / 0 alerts. But **partial coverage**: `llmstats: failed (0)`, so the site had 1,125 models instead of 1,136 |
+| LLM Stats failure | **Open**, waiting on the reason | Owner runs the diagnostic under "Open: LLM Stats failure" |
 | Phase 1: CI | After 0a | CI tests 3.11 and 3.13 (3.13 is what you run locally) |
 
 ## Context
@@ -354,7 +356,8 @@ Run every command in PowerShell from `C:\DevProjects\ModelAnalysis`. Unless a st
 | 1 | — | — | ✅ Done: Python 3.13.14 |
 | 2 | — | — | ✅ Done: evidence check (results in 0a) |
 | 3 | — | — | ✅ Done: live run `095157_f0e75f9fb295`, smoke 0 failures |
-| 3b | **Now** (0a is pushed) | ~10 min | Live run checkpoint: expect no "no AA benchmark pinned" warning, 2 inherited estimates, `ok research registry current` |
+| 3b | — | — | Live run checkpoint: expect no "no AA benchmark pinned" warning, 2 inherited estimates, `ok research registry current` |
+| 3c | Now | ~1 min | Paste the LLM Stats failure reason ("Open: LLM Stats failure" below) |
 | 4 | After I push the fixture tool (Phase 1) | ~5 min | Record and commit a test fixture, then check that GitHub Actions ran |
 | 5 | After I push identity (Phase 2) | ~20 min | Replay and review the identity diff |
 | 6 | After Phase 2 merges | ~10 min | Live run checkpoint |
@@ -423,6 +426,27 @@ Notes:
 - Each run uses about 19 of the 250 daily LLM Stats quota, so don't run it many times in one day.
 - **After Phase 2:** expect "no trusted baseline" churn on the first run. That's the rule-version bump, not a bug.
 - **After Phase 6:** run twice, a few minutes apart, and paste the Retrieval table from the site's Confidence page for both runs. The second run shows the cache and conditional-request savings.
+
+### Open: LLM Stats failure (step 3c)
+Run `2026-09-27_102010_2272b1477638` reported `source llmstats: failed (0)`. This only reads files; it makes no API calls and uses no quota:
+```powershell
+@'
+import json
+c = json.load(open("runs/current.json", encoding="utf-8"))
+b, r = "runs/" + c["bundle"], c["run_id"]
+snap = json.load(open(f"{b}/raw/{r}_models.json", encoding="utf-8"))
+print("run:", r)
+print("llmstats health:", snap["source_health"].get("llmstats"))
+print("llmstats value:", snap.get("llmstats"))
+try:
+    for line in open(f"{b}/raw/_errors.log", encoding="utf-8"):
+        if "llmstats" in line.lower():
+            print("log:", line.rstrip())
+except FileNotFoundError:
+    print("no _errors.log")
+'@ | python -
+```
+Errors are already passed through `safe_error`, so the key is redacted. Paste the output.
 
 ### Step 4: Test fixture and CI (Phase 1)
 ```powershell
