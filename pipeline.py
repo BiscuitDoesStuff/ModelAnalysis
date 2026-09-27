@@ -163,10 +163,12 @@ def prune_artifacts(state_dir, config):
     for _, path in published:
         if path not in protected:
             shutil.rmtree(path)
+    # Under the writer lock no staging run is in progress, so an old `pending`
+    # manifest is a hard-killed run that never reached its failure handler.
     cutoff = dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=config["failed_days"])
     for p in (state_dir / "staging").glob("*/manifest.json"):
         m = json.loads(p.read_text(encoding="utf-8"))
-        if m.get("state") == "failed" and dt.datetime.fromisoformat(m["started_at"]) < cutoff:
+        if m.get("state") in ("failed", "pending") and dt.datetime.fromisoformat(m["started_at"]) < cutoff:
             shutil.rmtree(p.parent)
 
 
@@ -266,9 +268,10 @@ def run(*, state_dir=None, db_path=None, config=None, snapshot_path=None, websit
             stage("alerts", lambda: check_churn.main(report_path, staging / "reports"))
             manifest["validation"] = stage("validate", lambda: validate_bundle(staging, run_id))
             destination = publish_bundle(state_dir, staging, manifest, db_path, failpoint)
-        except Exception as exc:
+        except BaseException as exc:
+            # BaseException: Ctrl+C is a failure too, so its staging ages out.
             if staging.exists():
-                manifest.update(state="failed", error=safe_error(exc))
+                manifest.update(state="failed", error=safe_error(exc) or type(exc).__name__)
                 atomic_json(staging / "manifest.json", manifest)
             raise
         # Cleanup failures must not roll back an already published run.

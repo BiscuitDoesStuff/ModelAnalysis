@@ -172,8 +172,42 @@ check("free_churn" in r, "report carries free_churn")
 
 # Phase-4: churn alerts stage.
 check(os.path.exists(os.path.join(ROOT, "alerts", "check_churn.py")), "alerts script exists")
-run_ps1 = open(os.path.join(ROOT, "run.ps1"), encoding="utf-8").read()
-check("alerts/check_churn.py" in run_ps1, "run.ps1 includes alerts stage")
+# The bundle manifest records which stages actually ran; legacy flat output has none.
+_manifest_path = os.path.join(DATA_ROOT, "manifest.json")
+if os.path.exists(_manifest_path):
+    _manifest = json.load(open(_manifest_path, encoding="utf-8"))
+    check(_manifest.get("state") == "published", f"manifest published ({_manifest.get('state')})")
+    check(_manifest.get("run_id") == r.get("stamp"), "manifest run_id matches report")
+    _stages = _manifest.get("stages") or {}
+    for _st in ("fetch", "websites", "analyze", "report", "site", "alerts", "validate"):
+        check((_stages.get(_st) or {}).get("status") == "complete", f"manifest stage {_st} complete")
+else:
+    print("warn no manifest.json (legacy flat output); stage checks skipped")
+
+# Schema-3 route churn: verified-free losses alert; everything else is informational.
+_rc = a.get("churn")
+if isinstance(_rc, dict):
+    _events, _alerts = _rc.get("events") or [], _rc.get("alert_events") or []
+    check(_rc.get("trusted_route_history") is True, "route churn is trusted history")
+    check(_rc.get("run_id") == a.get("run_id"), "route churn run_id matches analysis")
+    for _k in ("events", "alert_events", "counts", "source_health", "baselines", "coverage", "daily"):
+        check(_k in _rc, f"route churn key {_k}")
+    _counts = _rc.get("counts") or {}
+    check(all(isinstance(v, int) for v in _counts.values()) and sum(_counts.values()) == len(_events),
+          f"route churn counts sum to events ({len(_events)})")
+    check(_alerts == [e for e in _events if e.get("alert")], "alert_events are the alerting events")
+    check(all(e.get("type") in ("verified_free_paid", "verified_free_removed") for e in _alerts),
+          f"only verified-free losses alert ({len(_alerts)})")
+    _cov = _rc.get("coverage") or {}
+    _complete, _unknown = set(_cov.get("complete_sources", [])), set(_cov.get("unknown_sources", []))
+    check(not (_complete & _unknown) and _complete | _unknown == set(_rc.get("source_health") or {}),
+          f"coverage partitions sources ({len(_complete)} complete)")
+    check(set(_cov.get("compared_sources", [])) <= _complete, "compared sources are complete")
+    check((r.get("churn") or {}).get("run_id") == _rc.get("run_id"), "report carries route churn")
+    _alert_md = os.path.join(DATA_ROOT, "reports", f"{r.get('stamp')}_churn_alert.md")
+    check(os.path.exists(_alert_md) == bool(_alerts), "churn alert file iff verified-free loss")
+else:
+    print("warn no route churn (pre-schema-3 analysis); route churn checks skipped")
 if m_files:
     md = open(m_files[-1], encoding="utf-8").read()
     check("[F?]" in md, "md has [F?] marker")

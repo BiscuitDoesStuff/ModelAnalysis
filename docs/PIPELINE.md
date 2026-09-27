@@ -115,7 +115,7 @@ MD/JSON/XLSX retain nine ranking sections. New-schema XLSX adds `Source_Health` 
 Only the coordinator prunes, after publication:
 
 - Keep recent `artifact_bundles` published bundles and always protect `current.json`'s target (default current + previous).
-- Remove manifested failed staging bundles older than `failed_days`; leave unrelated/legacy files alone.
+- Remove manifested failed or interrupted (`pending`) staging bundles older than `failed_days`; leave unrelated/legacy files alone. Ctrl+C marks a run `failed`; a hard kill leaves `pending`, which is safe to prune because cleanup runs under the writer lock.
 - Prune detailed runs older than `run_days`, protecting the last complete published source baseline per rule version, including its route/known-free evidence through outages.
 - Retain daily summaries for `daily_days`; these are independent of full artifact retention.
 

@@ -1,5 +1,6 @@
 """End-to-end offline pipeline and crash-recovery tests."""
 import contextlib
+import datetime as dt
 import io
 import json
 from contextlib import closing
@@ -112,6 +113,25 @@ class PipelineTests(unittest.TestCase):
         bundle = self.run_pipeline(failpoint=fail)
         self.assertTrue(bundle.exists())
         self.assertEqual(self.current()["run_id"], bundle.name)
+
+    def test_interrupted_and_killed_staging_is_pruned(self):
+        def interrupt(point):
+            if point == "report":
+                raise KeyboardInterrupt
+        with self.assertRaises(KeyboardInterrupt):
+            self.run_pipeline(failpoint=interrupt)
+        (ctrl_c,) = (self.state / "staging").glob("*/manifest.json")
+        self.assertEqual(json.loads(ctrl_c.read_text(encoding="utf-8"))["state"], "failed")
+        # A hard kill never reaches the failure handler and leaves `pending`.
+        killed, recent = self.state / "staging" / "killed", self.state / "staging" / "recent"
+        atomic_json(killed / "manifest.json", {"state": "pending", "started_at": "2020-01-01T00:00:00+00:00"})
+        atomic_json(recent / "manifest.json", {"state": "pending", "started_at": dt.datetime.now(dt.timezone.utc).isoformat()})
+        manifest = json.loads(ctrl_c.read_text(encoding="utf-8"))
+        atomic_json(ctrl_c, dict(manifest, started_at="2020-01-01T00:00:00+00:00"))
+        self.run_pipeline()
+        self.assertFalse(ctrl_c.parent.exists())
+        self.assertFalse(killed.exists())
+        self.assertTrue(recent.exists())
 
     def test_no_usable_catalog_and_mixed_websites_do_not_publish(self):
         self.run_pipeline()

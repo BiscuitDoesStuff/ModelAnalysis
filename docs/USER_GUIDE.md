@@ -31,7 +31,7 @@ Copy `config.example.json` to `config.json` for non-secret settings:
 | `run_days` | 90 | Detailed history retention, with latest complete source baselines protected |
 | `daily_days` | 365 | Daily rollup retention |
 | `artifact_bundles` | 2 | Number of recent published bundles to keep; minimum 2, current protected |
-| `failed_days` | 7 | Failed staging bundle retention |
+| `failed_days` | 7 | Failed or interrupted staging bundle retention |
 | `website_max_pages` | 40 | Per-source website page budget |
 | `cache_days` | 7 | Website cache freshness window |
 | `llmstats_detail_max` | 12 | Default keyed detail-fetch cap |
@@ -133,7 +133,7 @@ MD retains nine ranking sections: All Intelligence/Cost/Ratio, OCF Intelligence/
 
 New-schema Excel has **15 sheets**: `summary`, `All_Intel`, `All_Cost`, `All_Ratio`, `OCF_Intel`, `OCF_Cost`, `OCF_Ratio`, `OCF_Stack`, `OCF_Practical`, `OCF_Outliers`, `Family_Variants`, `BenchLM_Matrix`, `LLMStats_Matrix`, `Source_Health`, `Churn`. Legacy inputs without reliability fields produce 13.
 
-Cleanup runs after publication. Defaults retain current + previous bundles, detailed history for 90 days, daily rollups for 365 days, and failed staging bundles for 7 days. The latest complete source baselines are protected even across longer outages. Legacy/user files are not pruned by bundle cleanup. SQLite is versioned and pruned, not append-only; migration backs up an existing database and leaves legacy tables untouched. Keep each state directory paired with its database when backing up or moving it.
+Cleanup runs after publication. Defaults retain current + previous bundles, detailed history for 90 days, daily rollups for 365 days, and failed or interrupted staging bundles for 7 days. The latest complete source baselines are protected even across longer outages. Legacy/user files are not pruned by bundle cleanup. SQLite is versioned and pruned, not append-only; migration backs up an existing database and leaves legacy tables untouched. Keep each state directory paired with its database when backing up or moving it.
 
 ## Standalone stages and validation
 

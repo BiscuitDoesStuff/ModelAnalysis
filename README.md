@@ -47,7 +47,7 @@ Each bundle is `runs/bundles/<run_id>/`, with a unique UTC timestamp plus random
 | `reports/<run_id>_models.json` | Slug-indexed rankings, model table, source health and structured churn |
 | `reports/<run_id>_churn_alert.md` | Only when a verified-free route becomes paid or is removed |
 
-Default retention: current + previous published bundle, 90 days of detailed SQLite history, 365 days of daily summaries, and 7 days of failed staging runs. The last complete baseline for each source survives longer outages. History defaults to `analysis/store.sqlite`; cache and staging live under `runs/`.
+Default retention: current + previous published bundle, 90 days of detailed SQLite history, 365 days of daily summaries, and 7 days of failed or interrupted staging runs. The last complete baseline for each source survives longer outages. History defaults to `analysis/store.sqlite`; cache and staging live under `runs/`.
 
 ## What the results mean
 
