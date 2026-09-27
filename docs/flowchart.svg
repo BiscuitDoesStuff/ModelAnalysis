@@ -28,7 +28,7 @@
   <text class="file-t" x="44" y="168">Providers</text>
   <text class="file-s" x="44" y="187">OR · NVIDIA · ZenMux · Zen · models.dev</text>
   <text class="file-s" x="44" y="203">(public: OR required, rest keyless)</text>
-  <text class="file-s" x="44" y="219">OAI · ANT · Groq · Cerebras · AA</text>
+  <text class="file-s" x="44" y="219">OAI · ANT · AA</text>
   <text class="file-s" x="44" y="235">(keyed, optional → skipped)</text>
 
   <rect class="file" x="30" y="257" width="200" height="48"/>
@@ -57,7 +57,7 @@
   <rect class="box" x="270" y="350" width="600" height="150"/>
   <text class="title" x="286" y="377">3 · reports/build_report.py</text>
   <text class="sub" x="286" y="397">reads newest analysis (models[] canonical rows + score evidence + Tier1 badges) → writes one &lt;stamp&gt; set:</text>
-  <text class="sub" x="286" y="417">summary.md (9 sections) + report.html (6 pages: Start · Value · Stack · Variants · Free · Explore)</text>
+  <text class="sub" x="286" y="417">summary.md (9 sections) + report.html (7 pages: Start · Value · Stack · Variants · Free · Graph · Explore)</text>
   <text class="sub" x="286" y="437">models.json (9 keys uncapped + free_churn) · models.xlsx (10 tabs incl. OCF_Stack/Practical/Outliers)</text>
   <text class="sub" x="286" y="457">needs openpyxl or xlsx skipped · prune older stamps</text>
   <text class="sub" x="286" y="477">Route IDs: selector else openrouter/&lt;or_id&gt; else fallback · cost/ambiguity/deprecated badges · verify limits</text>

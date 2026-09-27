@@ -22,6 +22,36 @@ if not (a_files and r_files):
 
 a = json.load(open(a_files[-1], encoding="utf-8"))
 r = json.load(open(r_files[-1], encoding="utf-8"))
+# v2 slim shape: sections are slug lists + models_by_slug table; materialize
+# full rows so all contract checks below work on either shape.
+_lookup = r.get("models_by_slug") or {}
+
+def _res(x):
+    return _lookup.get(x, x) if isinstance(x, str) else x
+
+for _k in ("all_intel", "all_cost", "all_cost_unknown", "all_ratio_paid",
+           "all_ratio_free_by_score", "all_ratio_verified_free_by_score",
+           "all_ratio_provisional_free_by_score", "all_ratio_unratable",
+           "ocf_intel", "ocf_cost", "ocf_cost_unknown", "ocf_ratio_paid",
+           "ocf_ratio_free_by_score", "ocf_ratio_verified_free_by_score",
+           "ocf_ratio_provisional_free_by_score"):
+    if isinstance(r.get(_k), list):
+        r[_k] = [_res(x) for x in r[_k]]
+for _t in r.get("ocf_stack", {}):
+    _s = r["ocf_stack"][_t]
+    if isinstance(_s.get("rows"), list):
+        _s["rows"] = [_res(x) for x in _s["rows"]]
+for _p in r.get("ocf_practical", []):
+    for _f in ("winner", "runner_up"):
+        if isinstance(_p.get(_f), str):
+            _p[_f] = _lookup.get(_p[_f])
+for _k in r.get("ocf_outliers", {}):
+    if isinstance(r["ocf_outliers"][_k], list):
+        r["ocf_outliers"][_k] = [_res(x) for x in r["ocf_outliers"][_k]]
+for _f in r.get("family_variants", []):
+    if isinstance(_f.get("rows"), list):
+        _f["rows"] = [_res(x) for x in _f["rows"]]
+check("models_by_slug" in r, "report has models_by_slug table")
 check(a.get("stamp") == r.get("stamp"), f"stamps match ({a.get('stamp')})")
 check(r.get("thresholds") == {"max": 50, "high": 40, "medium": 30}, "thresholds 50/40/30")
 check(len(a.get("models", [])) > 0, f"canonical models non-empty ({len(a.get('models', []))})")
@@ -59,7 +89,7 @@ check(all((m.get("free") is True) == (m.get("free_status") == "verified") for m 
 check(all(("F" in m.get("groups", [])) == (m.get("free_status") == "verified") for m in models
           if not m.get("router")),
       "F group stays verified-only")
-# L1 must have an OR listing; L0 must have no OR listing (may carry groq/cerebras native).
+# L1 must have an OR listing; L0 must have no OR listing (native fallbacks only).
 l1 = [m for m in models if m.get("free_status") == "provisional-l1"]
 l0 = [m for m in models if m.get("free_status") == "provisional-l0"]
 check(all(m.get("or_id") for m in l1), f"L1 all have or_id ({len(l1)})")
@@ -75,7 +105,7 @@ check(all(m["id"] in ocf_ids for m in l1 if not m.get("router")),
       "L1 callable provisional in OCF intel")
 check(all(m["id"] in ocf_ids for m in l0 if not m.get("router")),
       "L0 AA-only provisional in OCF intel (confined to Intel/Cost/Ratio)")
-CALLABLE_PROVIDERS = {"openai", "anthropic", "openrouter", "groq", "cerebras", "nvidia", "zenmux", "zen"}
+CALLABLE_PROVIDERS = {"openai", "anthropic", "openrouter", "nvidia", "zenmux", "zen"}
 for t in ("max", "high", "medium"):
     for m in r["ocf_stack"][t]["rows"]:
         check(bool(m.get("or_id")) or bool(set(m.get("providers", [])) & CALLABLE_PROVIDERS),
@@ -90,11 +120,6 @@ check(not (paid_ids & ver_ids), "paid vs verified-free disjoint")
 check(not (paid_ids & prov_ids), "paid vs provisional-free disjoint")
 check(not (ver_ids & prov_ids), "verified vs provisional disjoint")
 
-# Phase-2: Groq + Cerebras catalogs (keyed-and-skipped like OAI/ANT).
-check(isinstance(a.get("total_groq"), int), f"total_groq present ({a.get('total_groq')})")
-check(isinstance(a.get("total_cerebras"), int), f"total_cerebras present ({a.get('total_cerebras')})")
-check(isinstance(a.get("groq_ids"), list), "groq_ids list present")
-check(isinstance(a.get("cerebras_ids"), list), "cerebras_ids list present")
 # Phase-2b: NVIDIA + ZenMux + OpenCode Zen (public, keyless like OpenRouter).
 check(isinstance(a.get("total_nvidia"), int), f"total_nvidia present ({a.get('total_nvidia')})")
 check(isinstance(a.get("total_zenmux"), int), f"total_zenmux present ({a.get('total_zenmux')})")
@@ -108,7 +133,7 @@ check(all(m.get("slug") for m in models), "canonical slugs present")
 w_files = sorted(glob.glob(os.path.join(ROOT, "raw", "*_models.json")), key=os.path.getmtime)
 if w_files:
     snap = json.load(open(w_files[-1], encoding="utf-8"))
-    for src in ("groq", "cerebras", "nvidia", "zenmux", "zen"):
+    for src in ("nvidia", "zenmux", "zen"):
         v = snap.get(src, "MISSING")
         check(isinstance(v, list) or (isinstance(v, dict) and ("skipped" in v or "error" in v)),
               f"snapshot {src} list-or-skipped")
@@ -298,8 +323,9 @@ try:
     from openpyxl import load_workbook
     wb = load_workbook(r_files[-1].replace("_models.json", "_models.xlsx"))
     want = {"summary", "All_Intel", "All_Cost", "All_Ratio", "OCF_Intel",
-            "OCF_Cost", "OCF_Ratio", "OCF_Outliers", "OCF_Stack", "OCF_Practical", "Family_Variants"}
-    check(set(wb.sheetnames) == want, f"xlsx has 11 tabs ({len(wb.sheetnames)})")
+            "OCF_Cost", "OCF_Ratio", "OCF_Outliers", "OCF_Stack", "OCF_Practical", "Family_Variants",
+            "BenchLM_Matrix", "LLMStats_Matrix"}
+    check(set(wb.sheetnames) == want, f"xlsx has 13 tabs ({len(wb.sheetnames)})")
     hdr = [c.value for c in wb["All_Ratio"][1]]
     check("free_status" in hdr, "xlsx All_Ratio has free_status column")
     for col in ("variant", "efforts", "fallback_id", "cost_source", "variant_ambiguous",
@@ -309,6 +335,43 @@ try:
     check("family" in fh and "peak" in fh, "xlsx Family_Variants has family/peak")
 except ImportError:
     print("skip xlsx check (openpyxl missing)")
+
+# v2 combined-sources contract (additive — legacy 9-section checks above still gate).
+check(isinstance(a.get("total_benchlm"), int), f"total_benchlm present ({a.get('total_benchlm')})")
+check(isinstance(a.get("observations_count"), int), "observations_count present")
+check(isinstance(a.get("views"), dict), "analysis views present")
+for _vk in ("benchlm_leaderboard", "llmstats_leaderboard", "vals_leaderboard",
+            "capabilities", "pricing", "provisional_triage", "confidence"):
+    check(_vk in (a.get("views") or {}), f"views key {_vk}")
+check(isinstance(a.get("website_stats"), dict), "website_stats present")
+if w_files:
+    _snap2 = json.load(open(w_files[-1], encoding="utf-8"))
+    for _src in ("benchlm", "llmstats", "vals"):
+        _v = _snap2.get(_src, "MISSING")
+        check(isinstance(_v, (list, dict)), f"snapshot {_src} present")
+    check("benchlm" in _snap2 and isinstance(_snap2["benchlm"], dict), "snapshot benchlm dict present")
+    _llm = _snap2.get("llmstats", {})
+    if isinstance(_llm, dict) and "skipped" not in _llm:
+        check(isinstance(_llm.get("models"), list) and len(_llm["models"]) > 100,
+              f"llmstats keyed models bulk present ({len(_llm.get('models', []))})")
+        check(isinstance(_llm.get("rankings"), dict) and "general" in _llm["rankings"],
+              "llmstats rankings present")
+# No scale mixing: benchlm/llmstats/vals scores live outside AA score/score_source.
+_bmixed = [m for m in models if isinstance(m.get("benchlm"), dict) and m["benchlm"].get("overall") == m.get("score")
+           and m.get("score") is not None and m["benchlm"].get("overall") is not None]
+check(not _bmixed, "benchlm overall kept separate from AA score")
+check(all(m.get("score_source") is None or m["score_source"].get("benchmark") in
+          ("aa-intelligence-index", None) or m["score_source"].get("kind") in ("aa-api", "external", "inherited-estimate")
+          for m in models), "AA score_source benchmark unmixed")
+# Site report (reference-site style) exists when build_site ran.
+import glob as _g
+_sites = sorted(_g.glob(os.path.join(ROOT, "reports", "*_site")), key=os.path.getmtime)
+if _sites:
+    _s = _sites[-1]
+    for _p in ("index.html", "benchmarks.html", "compare.html", "methodology.html", "confidence.html", "data.json"):
+        check(os.path.exists(os.path.join(_s, _p)), f"site has {_p}")
+else:
+    print("skip site check (no *_site yet — run reports/build_site.py)")
 
 print(f"{len(fails)} failures")
 sys.exit(1 if fails else 0)

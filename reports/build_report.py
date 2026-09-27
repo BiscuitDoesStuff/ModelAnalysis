@@ -124,7 +124,7 @@ def has_callable(m):
     if m.get("or_id"):
         return True
     provs = set(m.get("providers", []))
-    return bool(provs & {"openai", "anthropic", "openrouter", "groq", "cerebras",
+    return bool(provs & {"openai", "anthropic", "openrouter",
                          "nvidia", "zenmux", "zen"})
 
 
@@ -812,19 +812,29 @@ def main():
             "collisions": a.get("collisions", []),
             "free_status_counts": a.get("free_status_counts", {}),
             "free_churn": a.get("free_churn", {}),
-            "all_intel": s["all_intel"], "all_cost": s["costed"], "all_cost_unknown": s["uncosted"],
-            "all_ratio_paid": s["paid_ratio"], "all_ratio_free_by_score": s["free_block"],
-            "all_ratio_verified_free_by_score": s["free_block"],
-            "all_ratio_provisional_free_by_score": s["provisional_block"],
-            "all_ratio_unratable": s["unratable"] + s["free_unscored"] + s["provisional_unscored"],
-            "ocf_intel": s["ocf_intel"], "ocf_cost": s["ocf_costed"],
-            "ocf_cost_unknown": s["ocf_uncosted"], "ocf_ratio_paid": s["ocf_ratio"],
-            "ocf_ratio_free_by_score": s["ocf_free"],
-            "ocf_ratio_verified_free_by_score": s["ocf_free"],
-            "ocf_ratio_provisional_free_by_score": s["ocf_provisional"],
-            "ocf_stack": {t: {"rows": s["stack"][t]["rows"], "gaps": s["stack"][t]["gaps"]} for t in TIERS},
-            "ocf_practical": s["practical"], "ocf_outliers": s["outliers"],
-            "family_variants": s.get("family_variants", [])}
+            "models_by_slug": {m["slug"]: m for m in s["all_intel"]},
+            "all_intel": [m["slug"] for m in s["all_intel"]],
+            "all_cost": [m["slug"] for m in s["costed"]],
+            "all_cost_unknown": [m["slug"] for m in s["uncosted"]],
+            "all_ratio_paid": [m["slug"] for m in s["paid_ratio"]],
+            "all_ratio_free_by_score": [m["slug"] for m in s["free_block"]],
+            "all_ratio_verified_free_by_score": [m["slug"] for m in s["free_block"]],
+            "all_ratio_provisional_free_by_score": [m["slug"] for m in s["provisional_block"]],
+            "all_ratio_unratable": [m["slug"] for m in s["unratable"] + s["free_unscored"] + s["provisional_unscored"]],
+            "ocf_intel": [m["slug"] for m in s["ocf_intel"]],
+            "ocf_cost": [m["slug"] for m in s["ocf_costed"]],
+            "ocf_cost_unknown": [m["slug"] for m in s["ocf_uncosted"]],
+            "ocf_ratio_paid": [m["slug"] for m in s["ocf_ratio"]],
+            "ocf_ratio_free_by_score": [m["slug"] for m in s["ocf_free"]],
+            "ocf_ratio_verified_free_by_score": [m["slug"] for m in s["ocf_free"]],
+            "ocf_ratio_provisional_free_by_score": [m["slug"] for m in s["ocf_provisional"]],
+            "ocf_stack": {t: {"rows": [m["slug"] for m in s["stack"][t]["rows"]], "gaps": s["stack"][t]["gaps"]} for t in TIERS},
+            "ocf_practical": [{"tier": p["tier"], "variant": p["variant"],
+                               "winner": p["winner"]["slug"] if p["winner"] else None,
+                               "runner_up": p["runner_up"]["slug"] if p["runner_up"] else None}
+                              for p in s["practical"]],
+            "ocf_outliers": {k: [m["slug"] for m in v] for k, v in s["outliers"].items()},
+            "family_variants": [{"family": f["family"], "peak": f["peak"], "rows": [m["slug"] for m in f["rows"]]} for f in s.get("family_variants", [])]}
     with open(os.path.join(REP, f"{stamp}_models.json"), "w", encoding="utf-8") as f:
         json.dump(full, f, indent=1)
 
@@ -838,8 +848,6 @@ def main():
         ws.append(["free_verified", fsc.get("verified", "")])
         ws.append(["provisional_l1", fsc.get("provisional-l1", "")])
         ws.append(["provisional_l0", fsc.get("provisional-l0", "")])
-        ws.append(["total_groq", a.get("total_groq", "")])
-        ws.append(["total_cerebras", a.get("total_cerebras", "")])
         ws.append(["total_modelsdev", a.get("total_modelsdev", "")])
         ch = a.get("free_churn", {})
         if ch and ch.get("prev_day"):
@@ -886,6 +894,35 @@ def main():
         for f in s.get("family_variants", []):
             for m in f["rows"]:
                 w.append([f["family"], f["peak"]] + slim(m))
+        vws = a.get("views", {}) or {}
+        _pby = {p.get("slug"): p for p in (vws.get("pricing", []) or [])}
+        w = wb.create_sheet("BenchLM_Matrix")
+        w.append(["id", "slug", "creator", "overall", "evidence", "agentic", "coding",
+                  "reasoning", "knowledge", "in_price", "out_price"])
+        for r in vws.get("benchlm_leaderboard", []):
+            cats = r.get("categories", {}) or {}
+            _pp = _pby.get(r.get("slug"), {}) or {}
+            w.append([r.get("model"), r.get("slug"), r.get("creator"), r.get("overall"),
+                      r.get("evidence"), cats.get("agentic"), cats.get("coding"),
+                      cats.get("reasoning"), cats.get("knowledge"),
+                      _pp.get("benchlm_in"), _pp.get("benchlm_out")])
+        w = wb.create_sheet("LLMStats_Matrix")
+        w.append(["id", "slug", "rank_general", "rating_general", "evals_general",
+                  "rank_reasoning", "rating_reasoning", "rank_code", "rating_code",
+                  "rank_agents", "rating_agents", "url"])
+        _lrank = {}
+        for m in s["all_intel"]:
+            rk = m.get("llmstats_rank") or {}
+            if rk:
+                _lrank[m["slug"]] = (m.get("id", ""), rk)
+        for slug, (mid, rk) in _lrank.items():
+            g = rk.get("general", {}) or {}
+            h = rk.get("reasoning", {}) or {}
+            c = rk.get("code", {}) or {}
+            t = rk.get("agents", {}) or {}
+            w.append([mid, slug, g.get("rank"), g.get("rating"), g.get("evals"),
+                      h.get("rank"), h.get("rating"), c.get("rank"), c.get("rating"),
+                      t.get("rank"), t.get("rating"), g.get("url", "")])
         wb.save(os.path.join(REP, f"{stamp}_models.xlsx"))
         x = "xlsx ok"
     except Exception as e:

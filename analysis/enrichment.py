@@ -16,6 +16,14 @@ def enrich(models, registry, day, modelsdev_by_slug=None):
     """Mutate base rows and append explicitly evidenced route/effort estimates."""
     datetime.date.fromisoformat(day)
     cohort = registry.get('snapshot_benchmarks', {}).get(day)
+    if not cohort:
+        known = registry.get('snapshot_benchmarks', {})
+        if known:
+            latest = max(known)
+            cohort = known[latest]
+            print(f"warn no AA benchmark pinned for day {day}; defaulting to latest known {cohort} from {latest} — pin this day in research.json")
+        else:
+            print(f"warn no AA snapshot_benchmarks at all; external AA-version scores stay reference-only")
     by_slug = {m['slug']: m for m in models}
     modelsdev_by_slug = modelsdev_by_slug or {}
     for m in models:

@@ -22,8 +22,8 @@ OPENAI_API_KEY=
 ANTHROPIC_API_KEY=
 OPENROUTER_API_KEY=      # optional, raises OpenRouter rate limits
 AA_API_KEY=              # Artificial Analysis scores/prices
-GROQ_API_KEY=            # Groq OpenAI-compatible catalog (skipped when absent)
-CEREBRAS_API_KEY=        # Cerebras OpenAI-compatible catalog (skipped when absent)
+LLM_STATS_API_KEY=       # LLM Stats bulk scores (skipped when absent; website pages still crawled keyless)
+LLM_STATS_DETAIL_MAX=    # optional, per-model detail cap for keyed fetch (default 12; ~19 quota/run of 250/day)
 ```
 
 Copy `.env.example` to `.env` and fill in only what you need. Missing keys are fine — that provider's section is skipped or marked `skipped`/`error` in the snapshot.
@@ -39,9 +39,11 @@ powershell -File run.ps1
 Stages run in order and stop on first failure (`$LASTEXITCODE` checked after each step):
 
 ```powershell
-python retrieval/fetch_models.py   # stage 1: snapshot
-python analysis/analyze.py         # stage 2: analyze + diff
+python retrieval/fetch_models.py   # stage 1: snapshot (providers + BenchLM/LLM-Stats/Vals)
+python retrieval/fetch_websites.py # stage 1b: website crawl (BenchLM md + LLM-Stats/Vals pages)
+python analysis/analyze.py         # stage 2: analyze + diff (+ crosswalk/observations/views)
 python reports/build_report.py     # stage 3: report
+python reports/build_site.py       # stage 3b: browsable site
 python alerts/check_churn.py       # stage 4: churn summary + alert file
 ```
 
@@ -49,7 +51,7 @@ Re-run any time to refresh. Each run prunes older outputs so only the latest sta
 
 ## 4. Read the report
 
-Open `reports/<stamp>_report.html` in a browser — 7-page dashboard (Start here · Best value · Stack · Variants · Free · Graph · Explore) with search, Explore filters, and click-to-copy OpenCode IDs. `reports/<stamp>_summary.md` holds the 9 sections as text (top 20 rows each; full lists in XLSX, uncapped in JSON):
+Open `reports/<stamp>_site/index.html` in a browser for the reference-site view: Leaderboard with AA/BenchLM/LLM-Stats/Vals tabs, per-model pages (scores on separate scales, capabilities, pricing, sources), Benchmarks catalog, Compare (practical winners + top families), Methodology, Confidence. Open `reports/<stamp>_report.html` for the 7-page dashboard (Start here · Best value · Stack · Variants · Free · Graph · Explore) with search, Explore filters, and click-to-copy OpenCode IDs. `reports/<stamp>_summary.md` holds the 9 sections as text (top 20 rows each; full lists in XLSX, uncapped in JSON):
 
 1. **Start here**: copy-ready Top quality / Best value / Free cards + tier cards + practical winners + churn/freshness notes.
 2. **Best value**: paid OCF rows in score bands (±1.5, 30+ floor), cheapest-first in band with saving vs priciest. Answers close-score/big-cost choices.
@@ -87,15 +89,16 @@ Excel (`reports/<stamp>_models.xlsx`) sheets (data sheets carry `free_status`: `
 | `OCF_Outliers` | Bargains + overpriced + free gems |
 | `Family_Variants` | Full per-family table: `family, peak` + full row for every multi-variant family |
 
-JSON (`reports/<stamp>_models.json`) holds the 9 sections uncapped (`all_intel`, `all_cost`, `all_ratio_*`, `ocf_*`, `ocf_stack{max,high,medium}`, `ocf_practical[]`, `ocf_outliers`, `family_variants`, `quartiles`, `thresholds`) plus `free_churn` (free→paid flips, newly free, disappeared and new slugs vs the previous day; empty until two distinct days exist) for scripting. Each model row carries `variant`, `variant_ambiguous`, `aa_variant_name`, `efforts[]`, `default_effort`, `efforts_hint`, `or_reasoning_status`, `fallback_id`, `fallback_provider`, `nearest_callable` (display-only), `cost_source`, `deprecated_upstream`, `modality_status`.
+JSON (`reports/<stamp>_models.json`) holds the 9 sections as slug-indexed lists (`all_intel`, `all_cost`, `all_ratio_*`, `ocf_*`, `ocf_stack{max,high,medium}`, `ocf_practical[]`, `ocf_outliers`, `family_variants`, `quartiles`, `thresholds`) plus a `models_by_slug` full-row table (single copy of each model — sections reference it, ~3× smaller than duplicating rows) plus `free_churn` (free→paid flips, newly free, disappeared and new slugs vs the previous day; empty until two distinct days exist) for scripting. Each model row carries `variant`, `variant_ambiguous`, `aa_variant_name`, `efforts[]`, `default_effort`, `efforts_hint`, `or_reasoning_status`, `fallback_id`, `fallback_provider`, `nearest_callable` (display-only), `cost_source`, `deprecated_upstream`, `modality_status`.
 
 Verify with `python tests/smoke.py` (MD/JSON 9-section + HTML 7-page/Graph contract + provisional-free + variants + Zen-free + churn + Tier 1 models.dev + cost/ambiguity/capability badges; warns when research registry is past `expires_at`).
 
 ## 5. Retention and storage
 
 - `raw/<stamp>_models.json` — latest raw snapshot only; previous pruned. `_errors.log` records retries/failures for the run.
-- `analysis/<stamp>_analysis.json` — latest analysis only.
-- `reports/<stamp>_*.md|.json|.xlsx` — latest stamp only.
+- `raw/<stamp>_websites.json` — latest website crawl only (allowlist + per-page best-effort).
+- `analysis/<stamp>_analysis.json` — latest analysis only (models + observations/views).
+- `reports/<stamp>_*.md|.json|.xlsx` — latest stamp only. `reports/<stamp>_site/` — latest site only.
 - `analysis/store.sqlite` — append-only local history used for diffs. Safe to delete to reset history (diffs then show empty until the second run).
 
 None of the above are committed (see `.gitignore`).
@@ -110,6 +113,12 @@ None of the above are committed (see `.gitignore`).
 | `xlsx skipped: ...` | `openpyxl` missing — `pip install -r requirements.txt` and re-run stage 3. |
 | A provider shows `{"error": ...}` in the snapshot | Keyless public catalogs (NVIDIA/ZenMux/Zen/models.dev) degrade gracefully — that catalog is skipped for the run, everything else proceeds. Retry on next run. |
 | Mostly `unscored` / `cost-unknown` / empty stack | No AA / OpenAI / Anthropic keys — expected for public runs. Add keys and re-run. |
+| Key set but run still `skipped` it | Stale terminal env: User vars load only in terminals opened *after* the key was set. Close the terminal completely, open a fresh one, verify with `$env:LLM_STATS_API_KEY.Length`, then re-run. |
+| BenchLM shows fewer models than the site | Leaderboard API is top-N; `?limit=1000` fetches 194 ranked. Unranked models stay unscored. |
+| LLM Stats leaderboard empty | No `LLM_STATS_API_KEY` and scores are JS-rendered (not in static HTML). Pricing/context hints still crawl keyless; add key for bulk scores. |
+| `llmstats ... 422` in `_errors.log` | Rankings `limit` above endpoint max — fetcher uses `limit=50`; if ZeroEval changes caps, lower the limit in `fetch_llmstats()`. |
+| LLM Stats quota exhausted (429) | ~19 data responses/run on Community 250/day. Wait for UTC reset; set `LLM_STATS_DETAIL_MAX=0` to skip per-model details (~12/run) on refresh-only runs. |
+| Vals coverage thin (top-8) | Vals board is JS-rendered; static fetch captures top links only. Per-model pages still enrich the allowlist. |
 | AA shows $0 prices but no free gems | AA $0 pricing alone lands in provisional `[F?]` (L1 with an OR listing, L0 AA-only; billing not checked); gem status needs score 40+ plus a callable ID. |
 | Diff always empty on first run | No previous day in `store.sqlite` yet; diffs populate from the second distinct day onward. |
 | `warn research expired` / `warn snapshot modelsdev missing` | Evidence registry past `expires_at` (manual refresh needed) or snapshot pre-dates Tier 1 — re-run retrieval to repopulate models.dev, then refresh `research.json` dates. |
@@ -129,3 +138,5 @@ None of the above are committed (see `.gitignore`).
 **How do I use variants (high/xhigh/max)?** Variants are separate rows with own scores. The base OR row lists `supported_efforts` (e.g. `max/xhigh/high/medium/low/minimal *medium`, `*` = default). In OpenCode V2 select an available `provider/model#variant` (e.g. `opencode/muse-spark-1.3-contributor-free#xhigh`); variant names come from catalog metadata and unknown variants error. Example: `meta/muse-spark-1.3 (max)` 48.1 vs `(xhigh)` 45.1; `Claude Opus 5 (medium)` 44.8 vs `(max)` 50.8 — compare in All Intel, O/C variants also in OCF Intel. The free Contributor estimate uses `xhigh` because models.dev lists only up to `xhigh` for that route — `max` is not advertised there.
 
 **How fresh is the data?** Point-in-time per run. Re-run on use.
+
+**How are AA / BenchLM / LLM-Stats / Vals scores combined?** They aren't averaged — each keeps its own scale in parallel views (AA Intelligence Index for ranking; BenchLM overall + supported/estimated tiers; LLM-Stats TrueSkill + eval counts; Vals task % ±SE with cost/test/latency). Per-cell provenance (source, version, URL, expiry) is in `data.json` observations.

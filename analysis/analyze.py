@@ -66,8 +66,6 @@ def main():
     ors = snap.get("openrouter", []) if isinstance(snap.get("openrouter"), list) else []
     oai = snap.get("openai", []) if isinstance(snap.get("openai"), list) else []
     ant = snap.get("anthropic", []) if isinstance(snap.get("anthropic"), list) else []
-    groq = snap.get("groq", []) if isinstance(snap.get("groq"), list) else []
-    cerebras = snap.get("cerebras", []) if isinstance(snap.get("cerebras"), list) else []
     nvidia = snap.get("nvidia", []) if isinstance(snap.get("nvidia"), list) else []
     zenmux = snap.get("zenmux", []) if isinstance(snap.get("zenmux"), list) else []
     zen = snap.get("zen", []) if isinstance(snap.get("zen"), list) else []
@@ -75,6 +73,15 @@ def main():
     modelsdev = modelsdev_raw if isinstance(modelsdev_raw, list) else []
     aa_raw = snap.get("aa", {})
     aa = aa_raw.get("data", []) if isinstance(aa_raw, dict) else []
+    # Website-native crawl (raw/*_websites.json, same stamp family). Optional.
+    websites = {}
+    try:
+        w_files = sorted(glob.glob(os.path.join(RAW, "*_websites.json")), key=os.path.getmtime)
+        if w_files:
+            with open(w_files[-1], encoding="utf-8") as _wf:
+                websites = json.load(_wf)
+    except Exception:
+        websites = {}
 
     or_rows = [{"id": m.get("id", ""), "name": m.get("name", ""), "context": m.get("context_length"),
                 "free": (is_free_or(m.get("pricing", {})) or str(m.get("id", "")).endswith(":free"))
@@ -86,8 +93,6 @@ def main():
     oai_rows = [{"id": m.get("id", ""), "owned_by": m.get("owned_by", ""), "shutdown": m.get("shutdown_date", "")} for m in oai]
     ant_rows = [{"id": m.get("id", ""), "name": m.get("display_name", ""),
                  "ctx_in": m.get("max_input_tokens"), "ctx_out": m.get("max_tokens")} for m in ant]
-    groq_rows = [{"id": m.get("id", ""), "owned_by": m.get("owned_by", "")} for m in groq]
-    cerebras_rows = [{"id": m.get("id", ""), "owned_by": m.get("owned_by", "")} for m in cerebras]
     nvidia_rows = [{"id": m.get("id", ""), "owned_by": m.get("owned_by", "")} for m in nvidia]
     zenmux_rows = [{"id": m.get("id", ""), "owned_by": m.get("owned_by", "")} for m in zenmux]
     zen_rows = [{"id": m.get("id", ""), "owned_by": m.get("owned_by", "")} for m in zen]
@@ -202,8 +207,9 @@ def main():
     aa_by_base = {base_slug(k): v for k, v in aa_by_slug.items()}
 
     def _entry():
-        return {"or": [], "oai": [], "ant": [], "groq": [], "cerebras": [],
-                "nvidia": [], "zenmux": [], "zen": [], "aa": None}
+        return {"or": [], "oai": [], "ant": [],
+                "nvidia": [], "zenmux": [], "zen": [], "aa": None,
+                "benchlm": None, "llm": None}
 
     union = {}
     for m in ors:
@@ -216,12 +222,6 @@ def main():
     for m in ant:
         union.setdefault(base_slug(m.get("id", "")), _entry())
         union[base_slug(m.get("id", ""))]["ant"].append(m.get("id", ""))
-    for m in groq:
-        union.setdefault(base_slug(m.get("id", "")), _entry())
-        union[base_slug(m.get("id", ""))]["groq"].append(m.get("id", ""))
-    for m in cerebras:
-        union.setdefault(base_slug(m.get("id", "")), _entry())
-        union[base_slug(m.get("id", ""))]["cerebras"].append(m.get("id", ""))
     for m in nvidia:
         union.setdefault(base_slug(m.get("id", "")), _entry())
         union[base_slug(m.get("id", ""))]["nvidia"].append(m.get("id", ""))
@@ -235,6 +235,24 @@ def main():
         key = base_slug(m.get("slug", "") or m.get("id", ""))
         union.setdefault(key, _entry())
         union[key]["aa"] = m
+    # Benchmark-only rows (no provider listing): complete the BenchLM board and
+    # LLM Stats ranked set as reference-only entities. No AA score, no callable
+    # ID, excluded from OCF/stack — same precedent as AA-only rows.
+    _bench_snap = snap.get("benchlm", {}) if isinstance(snap.get("benchlm"), dict) else {}
+    for m in (_bench_snap.get("leaderboard", []) if isinstance(_bench_snap.get("leaderboard"), list) else []):
+        if isinstance(m, dict) and m.get("model"):
+            key = base_slug(m["model"])
+            union.setdefault(key, _entry())
+            if union[key]["benchlm"] is None:
+                union[key]["benchlm"] = m
+    _llm_snap = snap.get("llmstats", {}) if isinstance(snap.get("llmstats"), dict) else {}
+    for cat_rows in ((_llm_snap.get("rankings", {}) or {}).values() if isinstance(_llm_snap.get("rankings"), dict) else []):
+        for r in cat_rows if isinstance(cat_rows, list) else []:
+            if isinstance(r, dict) and (r.get("model_id") or r.get("model_name")):
+                key = base_slug(r.get("model_id", "") or r.get("model_name", ""))
+                union.setdefault(key, _entry())
+                if union[key]["llm"] is None:
+                    union[key]["llm"] = r
 
     collisions = []
     for key, entry in union.items():
@@ -281,10 +299,6 @@ def main():
             providers.append("openai")
         if u["ant"]:
             providers.append("anthropic")
-        if u["groq"]:
-            providers.append("groq")
-        if u["cerebras"]:
-            providers.append("cerebras")
         if u["nvidia"]:
             providers.append("nvidia")
         if u["zenmux"]:
@@ -306,15 +320,19 @@ def main():
         ratio = round(score / cost, 4) if score is not None and cost and cost > 0 else None
         or_ids = sorted(u["or"])
         disp_or = next((i for i in or_ids if i in or_free), or_ids[0] if or_ids else "")
+        _bench_name = (u["benchlm"] or {}).get("model", "") if isinstance(u.get("benchlm"), dict) else ""
+        _llm_name = (u["llm"] or {}).get("model_name", "") if isinstance(u.get("llm"), dict) else ""
         disp = (u["oai"] or u["ant"] or ([disp_or] if disp_or else []) or
-                u["groq"] or u["cerebras"] or u["nvidia"] or u["zenmux"] or u["zen"] or
-                ([aa_match.get("slug", "") or aa_match.get("id", "")] if aa_match else [""]))[0]
+                u["nvidia"] or u["zenmux"] or u["zen"] or
+                ([aa_match.get("slug", "") or aa_match.get("id", "")] if aa_match else []) or
+                ([_bench_name] if _bench_name else []) or
+                ([_llm_name] if _llm_name else []) or [""])[0]
         name = (next((or_name.get(i, "") for i in or_ids if or_name.get(i)), "") or
                 next((ant_name.get(i, "") for i in u["ant"] if ant_name.get(i)), "") or
                 next((zenmux_name.get(i, "") for i in u["zenmux"] if zenmux_name.get(i)), "") or
                 ((aa_match or {}).get("name", "")) or
-                ((u["groq"][:1] + [""])[0]) or ((u["cerebras"][:1] + [""])[0]) or
-                ((u["nvidia"][:1] + [""])[0]) or ((u["zen"][:1] + [""])[0]))
+                ((u["nvidia"][:1] + [""])[0]) or ((u["zen"][:1] + [""])[0]) or
+                _bench_name or _llm_name)
         router = disp_or.lower().lstrip("~").startswith("openrouter/")
         aa_zero = bool(aa_match and aa_match.get("zero_price"))
         has_or = bool(u["or"])
@@ -379,7 +397,7 @@ def main():
         zm_out = next((z.get("output_modalities", []) for z in zm_matches if z.get("output_modalities")), [])
         fallback_id, fallback_provider = "", ""
         if not disp_or:
-            for prov_key in ("oai", "ant", "groq", "cerebras", "nvidia", "zenmux", "zen"):
+            for prov_key in ("oai", "ant", "nvidia", "zenmux", "zen"):
                 if u[prov_key]:
                     fallback_id = sorted(u[prov_key])[0]
                     fallback_provider = {"oai": "openai", "ant": "anthropic"}.get(prov_key, prov_key)
@@ -387,6 +405,7 @@ def main():
         models.append({"id": disp, "slug": key, "or_id": disp_or, "name": name, "groups": groups,
                        "providers": providers, "score": score, "cost_blended": cost,
                        "cost_source": cost_source,
+                       "bench_only": bool(not providers and not aa_match and (u.get("benchlm") or u.get("llm"))),
                        "ratio": ratio, "context": or_ctx.get(disp_or),
                        "free": free, "router": router, "tier": tier_of(score),
                        "free_status": free_status, "free_evidence": free_evidence,
@@ -409,7 +428,7 @@ def main():
         enrich(models, json.load(f), day, md_by_slug)
 
     # Backlog: effort-disambiguation + callable hints (pure local, post-enrich so derived rows group).
-    CALLABLE_SET = {"openai", "anthropic", "openrouter", "groq", "cerebras", "nvidia", "zenmux", "zen"}
+    CALLABLE_SET = {"openai", "anthropic", "openrouter", "nvidia", "zenmux", "zen"}
     families = {}
     for m in models:
         fam = family_of(m.get("slug", ""), m.get("variant", ""))
@@ -474,11 +493,61 @@ def main():
             m.setdefault("zenmux_output", [])
 
     con = sqlite3.connect(DB)
+    # v2 entity/observation layer (additive — legacy models[] output preserved).
+    try:
+        from .crosswalk import attach_crosswalk
+        from .observations import build_observations
+        from .views import build_views
+    except ImportError:
+        from crosswalk import attach_crosswalk
+        from observations import build_observations
+        from views import build_views
+    bench_meta = attach_crosswalk(models, snap, websites)
+    observations = build_observations(models, day)
+    views = build_views(models)
+    bench_lb = (snap.get("benchlm", {}) or {}).get("leaderboard", []) if isinstance(snap.get("benchlm"), dict) else []
+    bench_pr = (snap.get("benchlm", {}) or {}).get("pricing", []) if isinstance(snap.get("benchlm"), dict) else []
+    llm_snap = snap.get("llmstats", {}) if isinstance(snap.get("llmstats"), dict) else {}
+    vals_snap = snap.get("vals", {}) if isinstance(snap.get("vals"), dict) else {}
+    web_stats = {"allowlist": len((websites or {}).get("allowlist", [])),
+                 "benchlm_md": len((websites or {}).get("benchlm_md", {})),
+                 "llmstats": len((websites or {}).get("llmstats", {})),
+                 "vals": len((websites or {}).get("vals", {}))} if websites else {}
     cols = [r[1] for r in con.execute("PRAGMA table_info(models)")]
     if cols and "source" not in cols:
         con.execute(f"ALTER TABLE models RENAME TO models_old_{stamp.replace('-', '')}")
     con.execute("CREATE TABLE IF NOT EXISTS models(id TEXT, source TEXT, day TEXT, free INT, PRIMARY KEY(id, source, day))")
     con.execute("CREATE TABLE IF NOT EXISTS free_history(slug TEXT, day TEXT, free_status TEXT, disp_id TEXT, PRIMARY KEY(slug, day))")
+    con.execute("CREATE TABLE IF NOT EXISTS observations(entity TEXT, source TEXT, field TEXT, value TEXT, day TEXT, PRIMARY KEY(entity, source, field, day))")
+    con.execute("CREATE TABLE IF NOT EXISTS bench_sources(source TEXT, day TEXT, count INT, status TEXT, PRIMARY KEY(source, day))")
+    con.execute("DELETE FROM observations WHERE day=?", (day,))
+    for _o in observations[:8000]:
+        try:
+            con.execute("INSERT OR REPLACE INTO observations VALUES(?,?,?,?,?)",
+                        (str(_o.get("entity", ""))[:200], str(_o.get("source", ""))[:40],
+                         str(_o.get("field", ""))[:60], str(_o.get("value", ""))[:400], day))
+        except Exception:
+            break
+    def _bench_status(v):
+        if isinstance(v, dict) and ("skipped" in v or "error" in v):
+            return v.get("skipped", v.get("error", ""))[:200]
+        return "ok"
+    for _src, _cnt in (("benchlm_lb", len(bench_lb) if isinstance(bench_lb, list) else 0),
+                       ("benchlm_pr", len(bench_pr) if isinstance(bench_pr, list) else 0),
+                       ("websites", web_stats.get("allowlist", 0) if web_stats else 0)):
+        try:
+            con.execute("INSERT OR REPLACE INTO bench_sources VALUES(?,?,?,?)",
+                        (_src, day, int(_cnt), _bench_status(snap.get("benchlm", {})) if _src.startswith("benchlm") else "ok"))
+        except Exception:
+            pass
+    try:
+        con.execute("INSERT OR REPLACE INTO bench_sources VALUES(?,?,?,?)",
+                    ("llmstats", day, 0, _bench_status(llm_snap)))
+        con.execute("INSERT OR REPLACE INTO bench_sources VALUES(?,?,?,?)",
+                    ("vals", day, len(vals_snap.get("models", [])) if isinstance(vals_snap.get("models"), list) else 0,
+                     _bench_status(vals_snap)))
+    except Exception:
+        pass
     prev_or_rows = con.execute(
         "SELECT id, free FROM models WHERE source='openrouter' AND day="
         "(SELECT MAX(day) FROM models WHERE source='openrouter' AND day<?)", (day,)).fetchall()
@@ -490,10 +559,6 @@ def main():
         con.execute("INSERT OR REPLACE INTO models VALUES(?,?,?,?)", (r["id"], "openai", day, 0))
     for r in ant_rows:
         con.execute("INSERT OR REPLACE INTO models VALUES(?,?,?,?)", (r["id"], "anthropic", day, 0))
-    for r in groq_rows:
-        con.execute("INSERT OR REPLACE INTO models VALUES(?,?,?,?)", (r["id"], "groq", day, 0))
-    for r in cerebras_rows:
-        con.execute("INSERT OR REPLACE INTO models VALUES(?,?,?,?)", (r["id"], "cerebras", day, 0))
     for r in nvidia_rows:
         con.execute("INSERT OR REPLACE INTO models VALUES(?,?,?,?)", (r["id"], "nvidia", day, 0))
     for r in zenmux_rows:
@@ -502,7 +567,7 @@ def main():
         con.execute("INSERT OR REPLACE INTO models VALUES(?,?,?,?)", (r["id"], "zen", day, 0))
     # Canonical free-status history (non-router rows only; reports filter routers).
     canon = [(m.get("slug") or base_slug(m.get("id", "")), m.get("free_status", "none"), m.get("id", ""))
-             for m in models if not m.get("router") and not m.get("history_excluded") and (m.get("slug") or m.get("id"))]
+             for m in models if not m.get("router") and not m.get("history_excluded") and not m.get("bench_only") and (m.get("slug") or m.get("id"))]
     cur_free = {s: f for s, f, _ in canon}
     cur_disp = {s: d for s, f, d in canon}
     for s, f, d in canon:
@@ -556,13 +621,26 @@ def main():
            "total_openai": len(oai_rows), "openai_ids": sorted([r["id"] for r in oai_rows]),
            "openai_retired": sorted([r["id"] for r in oai_rows if r["shutdown"]])[:50],
            "total_anthropic": len(ant_rows), "anthropic_ids": sorted([r["id"] for r in ant_rows]),
-           "total_groq": len(groq_rows), "groq_ids": sorted([r["id"] for r in groq_rows]),
-           "total_cerebras": len(cerebras_rows), "cerebras_ids": sorted([r["id"] for r in cerebras_rows]),
            "total_nvidia": len(nvidia_rows), "nvidia_ids": sorted([r["id"] for r in nvidia_rows]),
            "total_zenmux": len(zenmux_rows), "zenmux_ids": sorted([r["id"] for r in zenmux_rows]),
            "total_zen": len(zen_rows), "zen_ids": sorted([r["id"] for r in zen_rows]),
            "total_modelsdev": len(modelsdev),
            "total_aa": len(aa_rows),
+           "total_benchlm": len(bench_lb) if isinstance(bench_lb, list) else 0,
+           "total_benchlm_pricing": len(bench_pr) if isinstance(bench_pr, list) else 0,
+           "benchlm_meta": bench_meta,
+           "llmstats_status": ({"models": llm_snap.get("model_count", 0),
+                                  "benchmarks": llm_snap.get("benchmark_count", 0),
+                                  "rank_cats": sorted((llm_snap.get("rankings", {}) or {}).keys()),
+                                  "details": len(llm_snap.get("details", {}) or {}),
+                                  "quota_remaining": (llm_snap.get("meta", {}) or {}).get("quota_remaining"),
+                                  **{k: v for k, v in llm_snap.items() if k in ("skipped", "error")}}
+                                 if isinstance(llm_snap, dict) else {}),
+           "vals_status": ({"count": len(vals_snap.get("models", [])), **{k: v for k, v in vals_snap.items() if k in ("skipped", "error", "source")}}
+                           if isinstance(vals_snap, dict) else {}),
+           "website_stats": web_stats,
+           "views": views,
+           "observations_count": len(observations),
            "free_churn": free_churn,
            "free_status_counts": {"verified": _fsc.get("verified", 0),
                                   "provisional-l1": _fsc.get("provisional-l1", 0),
@@ -579,8 +657,10 @@ def main():
         os.remove(old)
         print(f"pruned analysis {os.path.basename(old)}")
     print(f"{stamp}: OR={len(or_rows)} free={len(free_ids)} OAI={len(oai_rows)} ANT={len(ant_rows)} "
-          f"GROQ={len(groq_rows)} CER={len(cerebras_rows)} NV={len(nvidia_rows)} ZM={len(zenmux_rows)} ZEN={len(zen_rows)} "
-          f"MD={len(modelsdev)} AA={len(aa_rows)} new={len(new_or)} removed={len(removed_or)} "
+          f"NV={len(nvidia_rows)} ZM={len(zenmux_rows)} ZEN={len(zen_rows)} "
+          f"MD={len(modelsdev)} AA={len(aa_rows)} BENCHLM={len(bench_lb) if isinstance(bench_lb, list) else 0} "
+          f"VALS={(len(vals_snap.get('models', [])) if isinstance(vals_snap, dict) and isinstance(vals_snap.get('models'), list) else vals_snap)} "
+          f"OBS={len(observations)} new={len(new_or)} removed={len(removed_or)} "
           f"churn_vs={prev_fh_day} to_paid={len(to_paid)} to_free={len(to_free)} gone={len(disappeared)} days={len(hist_days)} -> {ap}")
     con.close()
 
