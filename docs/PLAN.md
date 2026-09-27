@@ -43,7 +43,7 @@
 | Your step 2: evidence check | **Done** | Results and decisions are in 0a below |
 | Your step 3: live run | **Done** | Route churn ran for the first time: 82 events, 0 alerts. You diagnosed all 82 as Zen noise (see Phase 2) |
 | 0a: `research.json` refresh | **Done**, pushed as `1330219`, live-verified in step 3b | Offline: registry check (current 09-27 and 10-04, expired 10-05), 57 tests OK, fixture replay smoke shows `ok research registry current` and only the known variant-label failure. Entries now expire 2026-10-04 |
-| Your step 3b: live run | **Done** | Run `2026-09-27_102010_2272b1477638`: no AA pin warning, 2 inherited estimates, `ok research registry current`, smoke 0 failures, 82 churn events / 0 alerts. But **partial coverage**: `llmstats: failed (0)`, so the site had 1,125 models instead of 1,136 |
+| Your step 3b: live run | **Done** | Run `2026-09-27_102010_2272b1477638`: no AA pin warning, 2 inherited estimates, `ok research registry current`, smoke 0 failures, 82 churn events / 0 alerts. But **partial coverage**: `llmstats: failed (0)`, and canonical models dropped to 1,131 from 1,136 |
 | LLM Stats failure | **Open**, waiting on the reason | Owner runs the diagnostic under "Open: LLM Stats failure" |
 | Phase 1: CI | After 0a | CI tests 3.11 and 3.13 (3.13 is what you run locally) |
 
