@@ -17,3 +17,4 @@ __pycache__/
 replay-runs/
 replay-history.sqlite*
 identity-diff.txt
+tools/a11y/node_modules/
