@@ -44,6 +44,8 @@ The reliability foundation is implemented: pinned run bundles, staged publicatio
 
 ## 5. Retrieval efficiency and observability
 
+**Status (2026-09-27):** Phase 6 implemented offline and measurement-baselined (run `2026-09-27_131528_052735b81989`): `retrieval/http.py`, per-source/per-host metrics in `source_health.retrieval`, LLM Stats quota before/after, Retrieval table on the Confidence page, plus all four optimisation bullets (jitter, capped Retry-After, conditional 304 revalidation, parallel fetch ×4, `llmstats_daily_budget`); 135 offline tests green. Remaining: the live two-run before/after verification (step 7). See `docs/PLAN.md` and `.sw/comms/tasks/phase6-measure-first/`.
+
 **Goal:** reduce redundant requests and quota use while retaining accurate coverage and source-fetch times.
 
 **Dependencies:** component-level health, cache timestamps, configurable budgets, saved paginated/failure fixtures.

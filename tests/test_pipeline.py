@@ -158,6 +158,66 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual(report["churn"]["coverage"]["complete_sources"], [])
         self.assertEqual(report["source_health"]["openrouter"]["status"], "partial")
 
+    def test_recorded_retrieval_metrics_survive_network_free_replay(self):
+        from openpyxl import load_workbook
+        # Invented measurements, not a live baseline; replay must not replace them.
+        api = {"source": "openrouter", "kind": "api", "requests": 3, "response_bytes": 12345,
+               "request_seconds": 0.75, "elapsed_seconds": 3.75, "retries": 2, "cache_hits": 0,
+               "hosts": {"fixture.invalid": {"requests": 3, "response_bytes": 12345,
+                                              "request_seconds": 0.75, "retries": 2}}}
+        web_metrics = {**api, "source": "benchlm", "kind": "website", "cache_hits": 1}
+        data = snapshot()
+        data["source_health"]["openrouter"]["retrieval"] = api
+        data["source_health"]["llmstats"]["retrieval"] = {**api, "source": "llmstats",
+            "quota": {"before": {"remaining": 100, "day": "2026-09-27"},
+                      "after": {"remaining": 94, "day": "2026-09-27"}}}
+        atomic_json(self.input, data)
+        web = self.root / "websites.json"
+        atomic_json(web, {"retrieved_at": "fixture", "run_id": "fixture", "benchlm_md": {}, "llmstats": {}, "vals": {},
+                          "source_health": {"benchlm_md": source_status("complete", scope="selected-pages", retrieval=web_metrics)}})
+        for _ in range(2):
+            bundle = self.run_pipeline(websites_path=web)
+            run_id = bundle.name
+            for path in (bundle / "analysis" / f"{run_id}_analysis.json", bundle / "reports" / f"{run_id}_models.json",
+                         bundle / "reports" / f"{run_id}_site" / "data.json"):
+                result = json.loads(path.read_text(encoding="utf-8"))
+                self.assertEqual(result["source_health"]["openrouter"]["retrieval"], api)
+                self.assertEqual(result["website_health"]["benchlm_md"]["retrieval"], web_metrics)
+                self.assertEqual(result["source_health"]["llmstats"]["retrieval"]["quota"],
+                                 data["source_health"]["llmstats"]["retrieval"]["quota"])
+            with closing(sqlite3.connect(self.db)) as con:
+                health = con.execute("SELECT health_json FROM history_sources WHERE run_id=? AND source='openrouter'", (run_id,)).fetchone()[0]
+                self.assertEqual(json.loads(health)["retrieval"], api)
+            for path in (bundle / "reports" / f"{run_id}_report.html", bundle / "reports" / f"{run_id}_site" / "confidence.html",
+                         bundle / "reports" / f"{run_id}_summary.md"):
+                rendered = path.read_text(encoding="utf-8")
+                self.assertIn("retained on replay, not new activity", rendered)
+                self.assertIn("12345", rendered)
+            wb = load_workbook(bundle / "reports" / f"{run_id}_models.xlsx", read_only=True)
+            try:
+                health = dict(wb["Source_Health"].values)
+                self.assertEqual(json.loads(health["openrouter.retrieval.response_bytes"]), 12345)
+                self.assertEqual(json.loads(health["website_health.benchlm_md.retrieval.cache_hits"]), 1)
+                self.assertEqual(json.loads(health["llmstats.retrieval.quota.after.remaining"]), 94)
+            finally:
+                wb.close()
+
+    def test_fetch_stage_passes_the_state_cache_dir(self):
+        from retrieval import fetch_models
+
+        class Captured(Exception):
+            pass
+        calls = {}
+
+        def spy(output_dir=None, run_id=None, started_at=None, config=None, cache_dir=None):
+            calls.update(run_id=run_id, cache_dir=cache_dir)
+            raise Captured
+
+        with patch.object(fetch_models, "main", spy):
+            with self.assertRaises(Captured), contextlib.redirect_stdout(io.StringIO()):
+                pipeline.run(state_dir=self.state, db_path=self.db)  # no snapshot: the fetch stage must run
+        self.assertEqual(calls["cache_dir"], self.state.resolve() / "cache")
+
     def test_writer_lock_is_exclusive(self):
         with pipeline.writer_lock(self.state):
             with self.assertRaisesRegex(RuntimeError, "Another pipeline"):

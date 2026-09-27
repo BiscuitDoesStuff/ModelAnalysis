@@ -118,6 +118,23 @@ def reliability_tables(a):
         yield "Daily summary", ["Day", "Source", "Net events", "Observed events", "Latest complete", "Baseline", "Coverage"], rows
     else:
         yield "Daily summary", ["Day / field", "Summary"], list(daily.items())
+    retrieval = []
+    for name, health, _ in health_entries(a):
+        metrics = health.get("retrieval") or {}
+        def recorded(key):
+            value = metrics.get(key)
+            return "unknown" if value is None else value
+        quota = metrics.get("quota") or {}
+        def quota_text(when):
+            sample = quota.get(when) or {}
+            return {key: "unknown" if sample.get(key) is None else sample[key] for key in ("remaining", "day")}
+        retrieval.append([name, recorded("requests"), recorded("response_bytes"),
+                          recorded("request_seconds"), recorded("elapsed_seconds"),
+                          recorded("retries"), recorded("cache_hits"),
+                          quota_text("before"), quota_text("after")])
+    yield ("Retrieval — recorded fetch metrics; retained on replay, not new activity",
+           ["Source", "Requests (attempts)", "Body bytes", "HTTP seconds", "Elapsed seconds",
+            "Retries", "Cache hits", "Quota before (remaining / day)", "Quota after (remaining / day)"], retrieval)
 
 
 def reliability_markdown(a):

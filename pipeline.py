@@ -247,7 +247,8 @@ def run(*, state_dir=None, db_path=None, config=None, snapshot_path=None, websit
                 snap.setdefault("source_health", _legacy_health(snap))
                 stage("fetch", lambda: atomic_json(raw, snap))
             else:
-                stage("fetch", lambda: fetch_models.main(staging / "raw", run_id, started_at, cfg))
+                stage("fetch", lambda: fetch_models.main(staging / "raw", run_id, started_at, cfg,
+                                                         cache_dir=state_dir / "cache"))
                 snap = json.loads(raw.read_text(encoding="utf-8"))
                 origin_id = run_id
             check_identity(snap, run_id, "snapshot")

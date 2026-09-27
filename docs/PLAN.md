@@ -2,11 +2,13 @@
 
 ## Handoff (for the next session)
 
-**Read this first.** You're continuing the roadmap plan below on branch `biscuit` of `BiscuitDoesStuff/ModelAnalysis`. Work and push directly on `biscuit`, which is the owner's working branch. Use the plan's phase order.
+**Read this first.** Continue the roadmap on solo branch `main` of `BiscuitDoesStuff/ModelAnalysis`. The owner approved this move on 2026-09-27 after adopting SuperWorkspace; the former `biscuit` branch is preserved. Agents implement and validate locally; the owner commits/publishes. Use the plan's phase order.
+
+**Local continuation (2026-09-27):** `git pull origin biscuit` completed successfully before creating `main` from the existing local history (including the workspace adoption). The owner then merged `main` into `biscuit` as PR #1 (`f21f8f1`; tree-identical to `3507b7d`, history only). Remote `main` exists at `3507b7d`, in sync with local. Owner's pending GitHub steps: set default branch to `main`, rename `biscuit` → `biscuit-worktree`, then fast-forward the worktree to `main` (exact commands handed over 2026-09-27; task record `.sw/comms/tasks/phase6-measure-first/`). **Phase 6 is implemented offline:** "measure first" plus all four optimisation bullets (jittered retries, capped Retry-After on 429/503, conditional 304 revalidation, bounded-4 parallel fetch, `llmstats_daily_budget`); 135 offline tests green. Baseline run `2026-09-27_131528_052735b81989` recorded in run-notes. Remaining: the live two-run before/after verification (step 7).
 
 **Session 4 runs locally** on the owner's Windows machine (`C:\DevProjects\ModelAnalysis`), not in a cloud container. That changes some constraints; see "Local environment" below.
 
-**Checkpoint (2026-09-27, end of session 3):**
+**Historical checkpoint (2026-09-27, end of session 3):**
 - `biscuit` is at `d2354bb`, clean and pushed. [CI run #13](https://github.com/BiscuitDoesStuff/ModelAnalysis/actions/runs/36317729178) passed all 6 jobs.
 - Start with `git pull origin biscuit`.
 - The cloud branch `claude/magical-albattani-fwbgif` was never used for work (it stays at `4414048`); ignore it.
@@ -35,7 +37,7 @@
 - **Step R (evidence refresh), due before 2026-10-04:** the owner ran `refresh_evidence.py list` but hasn't confirmed anything yet. If they paste what they saw, run the `confirm`/`retire`/`version-confirm` commands for them, then commit `analysis/research.json` and `docs/run-notes.md`.
 - **Step 8 (UX review):** screenshots were sent in session 3. The owner still needs to try their next run's site by keyboard. Fix anything they report within Phase 5's scope.
 
-**Next action: Phase 6 (retrieval efficiency and observability).** Nothing is coded yet.
+**Current work: Phase 6 (retrieval efficiency and observability).** "Measure first" is **done and live-baselined** (`2026-09-27_131528_052735b81989`, run-notes); all four optimisation bullets are **implemented and offline-green** (135 tests): jittered retries, capped Retry-After on 429/503, conditional 304 revalidation for catalogs/BenchLM JSON, parallel fetch bounded to 4 threads with fixed output order, `llmstats_daily_budget` (default 0 = today's behaviour). Next: the live two-run before/after check (step 7), which needs a quota window and owner approval.
 1. Start with "Measure first": a shared `retrieval/http.py` with per-host counters, then `source_health` metrics and the Retrieval table on the Confidence page.
 2. Take one baseline live run before any optimisation. The first run of step 7 is that baseline. Step 7 needs two runs a few minutes apart, and costs about 38 LLM Stats requests.
 3. Replay tests use recorded fixtures and never touch the network.
@@ -60,7 +62,8 @@ After Phase 6 comes Phase 7.
   - Run `npm ci --prefix tools/a11y` and `npm exec --prefix tools/a11y -- playwright install chromium` (Playwright 1.56.1).
   - Then `python -B tools/golden_bundle.py <dir>` and `node tools/a11y/check.mjs <bundle> --shots <dir>`.
   - The check also works on a real bundle (`runs/bundles/<run_id>`).
-- **GitHub:** push with plain `git push origin biscuit`. Check CI in the Actions tab or with `gh run list --branch biscuit` if `gh` is installed.
+- **GitHub (owner only):** `git push origin main` publishes the current branch (first publish uses `git push -u origin main`). Check CI in the Actions tab or with `gh run list --branch main` if `gh` is installed. CI triggers on any push — no branch pinning.
+- **Task records:** `.sw/comms/` files are committed on `biscuit-worktree` only, and only when worth keeping; never stage them on `main` (selected-paths `git add` keeps them out by default). Close finished tasks with `sw comms close <task-id>` so the log doesn't rot.
 
 **Owner instructions and preferences:**
 - Don't get sidetracked debugging owner steps (for example quota refusals). Record the result and keep moving on the plan.
@@ -121,7 +124,7 @@ Reading the code turned up problems that change the order of work:
 
 ## How the work is delivered
 
-- Each phase lands as small commits on `biscuit`, the same flow as `d8ff832`.
+- Each phase is prepared as a small validated change on `main`; the owner commits and publishes it.
 - Before every push: the full offline suite (`python -B -m unittest discover -s tests -p "test_*.py"` and `python -B tests/test_units.py`), plus CI once Phase 1 is in.
 - Phases that change retrieval, matching or scoring end with **you** doing a live `run.ps1` and `python -B tests/smoke.py`, because this environment can't reach the provider APIs.
 - `docs/run-notes.md`, README, USER_GUIDE, PIPELINE and ROADMAP are updated in the same commit as the behaviour they describe.
@@ -445,7 +448,7 @@ Phases 5 and 6 can run alongside 3 and 4. Each phase is independently shippable.
 
 ## Your steps, in order
 
-Run every command in PowerShell from `C:\DevProjects\ModelAnalysis`. Unless a step says otherwise, start with `git pull origin biscuit`.
+Run every command in PowerShell from `C:\DevProjects\ModelAnalysis`. Start with `git pull --ff-only origin main` (remote `main` is published and in sync). Publication commands below are for the owner, not agents.
 
 | # | When | Time | What |
 |---|---|---|---|
@@ -510,7 +513,7 @@ I then prepare the `research.json` edits: new dates, per-day pins through the ne
 
 ### Step 3 (and 6, 7): Live run checkpoint
 ```powershell
-git pull origin biscuit
+git pull --ff-only origin main
 powershell -File run.ps1
 python -B tests/smoke.py
 ```
@@ -528,7 +531,7 @@ Notes:
 ### Step 4 + 7a: Record the real fixture and check Phase 3 live
 The recorder needs a bundle where **every** source is complete, so run this after 00:00 UTC, when LLM Stats' quota resets.
 ```powershell
-git pull origin biscuit
+git pull --ff-only origin main
 powershell -File run.ps1
 python -B tests/smoke.py
 $c = Get-Content runs/current.json -Raw | ConvertFrom-Json
@@ -543,9 +546,13 @@ Expect:
 
 If the recorder succeeds:
 ```powershell
+python -B tools/ci.py
+if ($LASTEXITCODE -ne 0) { throw "CI checks failed" }
+ruff check --select F401,F811,F821,F841 .
+if ($LASTEXITCODE -ne 0) { throw "Lint failed" }
 git add tests/fixtures
 git commit -m "test: recorded fixture from live run"
-git push origin biscuit
+git push origin main
 ```
 Paste the `Published` line, any `warn` lines, smoke's result, the audit's output and the recorder's output.
 
@@ -553,7 +560,7 @@ CI itself is already confirmed green ([run #1](https://github.com/BiscuitDoesStu
 
 ### Step R: Evidence refresh (before entries expire; next due 2026-10-04)
 ```powershell
-git pull origin biscuit
+git pull --ff-only origin main
 python tools/refresh_evidence.py list
 ```
 `list` prints the AA Intelligence Index version range and every entry expiring within 7 days, each with the URLs to re-check. Open them in your browser, then for each entry:
@@ -564,9 +571,13 @@ python tools/refresh_evidence.py list
 
 Then:
 ```powershell
+python -B tools/ci.py
+if ($LASTEXITCODE -ne 0) { throw "CI checks failed" }
+ruff check --select F401,F811,F821,F841 .
+if ($LASTEXITCODE -ne 0) { throw "Lint failed" }
 git add analysis/research.json docs/run-notes.md
 git commit -m "evidence refresh <today>"
-git push origin biscuit
+git push origin main
 ```
 Or paste your findings and I'll run the commands.
 

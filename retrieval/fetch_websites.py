@@ -11,40 +11,37 @@ import json
 import os
 import re
 import sys
-import time
 import datetime
-import urllib.request
-import urllib.error
 from pathlib import Path
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+# Do this before urllib imports: retrieval/http.py must not shadow stdlib http.
+if __package__ in (None, ""):
+    sys.path[0] = str(Path(__file__).resolve().parents[1])
 from pipeline_common import atomic_json, safe_error, utc_now, source_status, load_config, SCHEMA_VERSION
 from analysis.common import TIERS, kebab, norm
+from retrieval.http import SourceClient
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-# Defaults only; pipeline.py passes the staging and cache directories.
-RAW = os.path.join(ROOT, "raw")
-CACHE = os.path.join(RAW, "cache_websites")
-ERRLOG = os.path.join(RAW, "_errors.log")
+class FetchContext:
+    def __init__(self, source, config, cache_dir, error_log, client=None):
+        self.source, self.config = source, config
+        self.cache_dir, self.error_log = Path(cache_dir), Path(error_log)
+        self.client = client or SourceClient(source, "website", log=self.log_err)
 
-MAX_PAGES_PER_SOURCE = 40
-CACHE_MAX_DAYS = 7
-
-
-def log_err(msg):
-    os.makedirs(os.path.dirname(ERRLOG), exist_ok=True)
-    with open(ERRLOG, "a", encoding="utf-8") as f:
-        f.write(f"{utc_now()} {safe_error(msg)}\n")
+    def log_err(self, msg):
+        self.error_log.parent.mkdir(parents=True, exist_ok=True)
+        with self.error_log.open("a", encoding="utf-8") as f:
+            f.write(f"{utc_now()} {safe_error(msg)}\n")
 
 
-def _cache_path(source, slug):
+def _cache_path(ctx, slug):
     safe = re.sub(r"[^a-z0-9_-]", "_", slug.lower())[:120]
-    return os.path.join(CACHE, f"{source}__{safe}.json")
+    return ctx.cache_dir / f"{ctx.source}__{safe}.json"
 
 
-def cache_get(source, slug, max_days=None):
+def cache_get(ctx, slug, max_days=None):
     """Slug-keyed cache: BenchLM md rarely changes; refresh after max_days."""
     try:
-        p = _cache_path(source, slug)
+        p = _cache_path(ctx, slug)
         if not os.path.exists(p):
             return None
         with open(p, encoding="utf-8") as f:
@@ -54,39 +51,22 @@ def cache_get(source, slug, max_days=None):
         if observed.tzinfo is None:
             return None
         age = datetime.datetime.now(datetime.timezone.utc) - observed
-        if age.total_seconds() > (CACHE_MAX_DAYS if max_days is None else max_days) * 86400:
+        if age.total_seconds() > (ctx.config["cache_days"] if max_days is None else max_days) * 86400:
             return None
         value["cache_hit"] = True
+        ctx.client.cache_hits += 1
         return value
     except Exception:
         return None
 
 
-def cache_put(source, slug, payload):
+def cache_put(ctx, slug, payload):
     try:
         payload["fetched_at"] = utc_now()
         payload["cache_hit"] = False
-        atomic_json(_cache_path(source, slug), payload)
+        atomic_json(_cache_path(ctx, slug), payload)
     except Exception as e:
-        log_err(f"websites cache write failed {source}/{slug}: {e}")
-
-def get_text(url, timeout=25, retries=2):
-    last = None
-    for i in range(retries):
-        try:
-            req = urllib.request.Request(url, headers={"User-Agent": "model-watch/1"})
-            with urllib.request.urlopen(req, timeout=timeout) as r:
-                return r.read().decode("utf-8", "replace")
-        except urllib.error.HTTPError as e:
-            if 400 <= e.code < 500:
-                raise
-            last = e
-        except Exception as e:  # URLError, timeout, decode
-            last = e
-        log_err(f"websites retry {i+1}/{retries} {url}: {last}")
-        if i < retries - 1:
-            time.sleep(1)
-    raise last if last else RuntimeError(f"fetch failed {url}")
+        ctx.log_err(f"websites cache write failed {ctx.source}/{slug}: {e}")
 
 
 
@@ -133,7 +113,7 @@ def build_allowlist(snap):
     return out[:150]
 
 
-def fetch_benchlm_md(allowlist, leaderboard):
+def fetch_benchlm_md(ctx, allowlist, leaderboard):
     """Per-model markdown mirrors: /md/models/<kebab>.md (static, reliable)."""
     lb_by_norm = {}
     for m in leaderboard:
@@ -142,24 +122,24 @@ def fetch_benchlm_md(allowlist, leaderboard):
     matched = [a for a in allowlist if a["slug"] in lb_by_norm]
     matched += [a for a in allowlist if a["slug"] not in lb_by_norm]
     pages, hits = {}, 0
-    for item in matched[:MAX_PAGES_PER_SOURCE]:
+    for item in matched[:ctx.config["website_max_pages"]]:
         target = lb_by_norm.get(item["slug"])
         if not target:
             continue
         slug = kebab(target.get("model", ""))
         if not slug:
             continue
-        cached = cache_get("benchlm", slug)
+        cached = cache_get(ctx, slug)
         if cached is not None:
             pages[item["slug"]] = cached
             hits += 1
             continue
         url = f"https://benchlm.ai/md/models/{slug}.md"
         try:
-            md = get_text(url)
+            md = ctx.client.get_text(url)
             pages[item["slug"]] = {"url": url, "benchlm_slug": slug,
                                    "model": target.get("model"), "md": md[:20000]}
-            cache_put("benchlm", slug, pages[item["slug"]])
+            cache_put(ctx, slug, pages[item["slug"]])
         except Exception as e:
             pages[item["slug"]] = {"url": url, "error": str(e)[:300]}
     print(f"websites benchlm_md: {len(pages)} ({hits} cached)")
@@ -199,20 +179,20 @@ def parse_llmstats_model(html):
     return out
 
 
-def fetch_llmstats_pages(allowlist):
+def fetch_llmstats_pages(ctx, allowlist):
     pages, hits = {}, 0
-    for item in allowlist[:MAX_PAGES_PER_SOURCE]:
+    for item in allowlist[:ctx.config["website_max_pages"]]:
         slug = kebab(item.get("name", "") or item["slug"])
         if not slug:
             continue
-        cached = cache_get("llmstats", slug)
+        cached = cache_get(ctx, slug)
         if cached is not None:
             pages[item["slug"]] = cached
             hits += 1
             continue
         url = f"https://llm-stats.com/models/{slug}"
         try:
-            html = get_text(url)
+            html = ctx.client.get_text(url)
             if "Could not find" in html[:5000] or len(html) < 5000:
                 pages[item["slug"]] = {"url": url, "error": "not-found-or-thin"}
                 continue
@@ -220,14 +200,14 @@ def fetch_llmstats_pages(allowlist):
             parsed["url"] = url
             parsed["llmstats_slug"] = slug
             pages[item["slug"]] = parsed
-            cache_put("llmstats", slug, parsed)
+            cache_put(ctx, slug, parsed)
         except Exception as e:
             pages[item["slug"]] = {"url": url, "error": str(e)[:300]}
     print(f"websites llmstats: {len(pages)} ({hits} cached)")
     return pages
 
 
-def fetch_vals_pages(snap, allowlist):
+def fetch_vals_pages(ctx, snap, allowlist):
     """Vals model pages via index hrefs matched by normalized name."""
     vals = snap.get("vals", {}) if isinstance(snap.get("vals"), dict) else {}
     hrefs = [r.get("href", "") for r in (vals.get("models", []) if isinstance(vals.get("models"), list) else [])
@@ -236,7 +216,7 @@ def fetch_vals_pages(snap, allowlist):
     allow_norms = {a["slug"]: a for a in allowlist}
     fetched = 0
     for href in hrefs:
-        if fetched >= MAX_PAGES_PER_SOURCE:
+        if fetched >= ctx.config["website_max_pages"]:
             break
         tail = href.split("/models/", 1)[-1] if "/models/" in href else href
         key = norm(tail.replace("_", " ").replace("-", " "))
@@ -247,7 +227,7 @@ def fetch_vals_pages(snap, allowlist):
                 break
         if not match:
             continue
-        cached = cache_get("vals", tail)
+        cached = cache_get(ctx, tail)
         if cached is not None:
             pages[match] = cached
             hits += 1
@@ -255,7 +235,7 @@ def fetch_vals_pages(snap, allowlist):
             continue
         url = f"https://www.vals.ai{href}"
         try:
-            html = get_text(url)
+            html = ctx.client.get_text(url)
             acc = re.findall(r"(\d{1,2}\.\d{1,2})\s*%", html)
             cost = re.search(r"\$\s*([0-9]+\.[0-9]+)\s*(?:per test|/ ?test)", html, re.I)
             lat = re.search(r"(\d+\s*min\s*\d+\s*s|\d+\s*s)\s*(?:latency)?", html, re.I)
@@ -264,7 +244,7 @@ def fetch_vals_pages(snap, allowlist):
                             "cost_per_test_hint": cost.group(1) if cost else "",
                             "latency_hint": lat.group(1) if lat else "",
                             "html_len": len(html)}
-            cache_put("vals", tail, pages[match])
+            cache_put(ctx, tail, pages[match])
             fetched += 1
         except Exception as e:
             pages[match] = {"url": url, "error": str(e)[:300]}
@@ -274,18 +254,13 @@ def fetch_vals_pages(snap, allowlist):
 
 
 def main(input_path=None, output_dir=None, cache_dir=None, config=None):
-    global RAW, CACHE, ERRLOG, MAX_PAGES_PER_SOURCE, CACHE_MAX_DAYS
     cfg = config or load_config()
-    MAX_PAGES_PER_SOURCE, CACHE_MAX_DAYS = cfg["website_max_pages"], cfg["cache_days"]
     if input_path is None:
         raise ValueError("websites requires an explicit input snapshot")
-    if output_dir is not None:
-        RAW = str(output_dir)
-    if cache_dir is not None:
-        CACHE = str(cache_dir)
-    os.makedirs(RAW, exist_ok=True)
-    os.makedirs(CACHE, exist_ok=True)
-    ERRLOG = os.path.join(RAW, "_errors.log")
+    raw = Path(output_dir) if output_dir is not None else Path(ROOT) / "raw"
+    cache = Path(cache_dir) if cache_dir is not None else Path(ROOT) / "raw" / "cache_websites"
+    raw.mkdir(parents=True, exist_ok=True)
+    cache.mkdir(parents=True, exist_ok=True)
     with open(input_path, encoding="utf-8") as f:
         snap = json.load(f)
     stamp = str(snap.get("retrieved_at", datetime.datetime.now().strftime("%Y-%m-%d_%H%M")))
@@ -296,21 +271,24 @@ def main(input_path=None, output_dir=None, cache_dir=None, config=None):
     if isinstance(bench.get("leaderboard"), list):
         leaderboard = bench["leaderboard"]
     out = {"retrieved_at": stamp, "run_id": snap.get("run_id", stamp), "schema_version": SCHEMA_VERSION,
-           "allowlist": allowlist,
-           "benchlm_md": {} if "benchlm" in cfg["disabled_sources"] else fetch_benchlm_md(allowlist, leaderboard),
-           "llmstats": {} if "llmstats" in cfg["disabled_sources"] else fetch_llmstats_pages(allowlist),
-           "vals": {} if "vals" in cfg["disabled_sources"] else fetch_vals_pages(snap, allowlist)}
+           "allowlist": allowlist}
+    fetchers = {"benchlm_md": lambda ctx: fetch_benchlm_md(ctx, allowlist, leaderboard),
+                "llmstats": lambda ctx: fetch_llmstats_pages(ctx, allowlist),
+                "vals": lambda ctx: fetch_vals_pages(ctx, snap, allowlist)}
     out["source_health"] = {}
     for src in ("benchlm_md", "llmstats", "vals"):
-        pages = out[src]
+        source = "benchlm" if src == "benchlm_md" else src
+        ctx = FetchContext(source, cfg, cache, raw / "_errors.log")
+        disabled = source in cfg["disabled_sources"]
+        pages = out[src] = {} if disabled else fetchers[src](ctx)
         failed = sum("error" in v for v in pages.values())
         cached = sum(bool(v.get("cache_hit")) for v in pages.values())
-        disabled = ("benchlm" if src == "benchlm_md" else src) in cfg["disabled_sources"]
         out["source_health"][src] = source_status("skipped" if disabled else "partial" if failed else "complete",
                                                   len(pages) - failed, scope="selected-pages", complete=False,
                                                   attempted_count=len(pages), failed_count=failed, cache_hits=cached,
-                                                  oldest_data_at=min((v["fetched_at"] for v in pages.values() if v.get("fetched_at")), default=None))
-    path = os.path.join(RAW, f"{stamp}_websites.json")
+                                                  oldest_data_at=min((v["fetched_at"] for v in pages.values() if v.get("fetched_at")), default=None),
+                                                  retrieval=ctx.client.snapshot())
+    path = str(raw / f"{stamp}_websites.json")
     atomic_json(path, out)
     print(f"wrote {path} | benchlm_md={len(out['benchlm_md'])} "
            f"llmstats={len(out['llmstats'])} vals={len(out['vals'])}")

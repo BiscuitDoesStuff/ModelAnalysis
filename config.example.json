@@ -6,5 +6,6 @@
   "failed_days": 7,
   "website_max_pages": 40,
   "cache_days": 7,
-  "llmstats_detail_max": 12
+  "llmstats_detail_max": 12,
+  "llmstats_daily_budget": 0
 }
