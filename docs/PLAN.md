@@ -4,45 +4,72 @@
 
 **Read this first.** You're continuing the roadmap plan below on branch `biscuit` of `BiscuitDoesStuff/ModelAnalysis`. Work and push directly on `biscuit`, which is the owner's working branch. Use the plan's phase order.
 
-**Where things stand (2026-09-27, end of session 3):**
+**Session 4 runs locally** on the owner's Windows machine (`C:\DevProjects\ModelAnalysis`), not in a cloud container. That changes some constraints; see "Local environment" below.
+
+**Checkpoint (2026-09-27, end of session 3):**
+- `biscuit` is at `d2354bb`, clean and pushed. [CI run #13](https://github.com/BiscuitDoesStuff/ModelAnalysis/actions/runs/36317729178) passed all 6 jobs.
+- Start with `git pull origin biscuit`.
+- The cloud branch `claude/magical-albattani-fwbgif` was never used for work (it stays at `4414048`); ignore it.
+
+**Where things stand:**
 - **Done and live-verified:** Phase 0 (0a–d), Phase 1 (CI), Phase 2 (identity), Phase 3 (provenance), Phase 4 (evidence maintenance). Each phase's Status note below says what landed and where it differs from the original text. Live evidence is in the Status table and `docs/run-notes.md`.
-- **Done offline, owner review pending (step 8):** Phase 5 (UX and accessibility). See its Status note. It changes only report rendering, so it needs no live run, but the owner's next ordinary run shows it on real data.
-- **CI:** GitHub Actions runs `python -B tools/ci.py` on Windows and Linux × Python 3.11 and 3.13, a ruff job, and (since Phase 5) an `a11y` job: axe-core, a keyboard pass and 390px checks on the golden bundle, with screenshots uploaded as an artifact. `tools/ci.py` runs: fixture staleness check, unit checks, 101 unittest tests, golden replay + smoke + coverage + `audit_provenance`, and the same for `recorded_*` once that fixture exists.
-- **Latest owner live run:** `2026-09-27_112035_c0dfcdeef530`. Smoke 0 failures, 0 identity conflicts, 3,666 observations, audit 0 orphans.
+- **Done offline, owner review pending (step 8):** Phase 5 (UX and accessibility), commits `686dd45` (code), `0701cd6` (CI a11y job) and `d2354bb` (docs). See its Status note. It changes only report rendering, so it needs no special live run. The owner's next ordinary run shows it on real data, and `validate_bundle` now also checks page structure on that run.
+- **CI:** GitHub Actions runs `python -B tools/ci.py` on Windows and Linux × Python 3.11 and 3.13, a ruff job, and an `a11y` job (axe-core, keyboard pass and 390px checks on the golden bundle, with screenshots uploaded as the `a11y-screenshots` artifact).
+  - `tools/ci.py` runs: fixture staleness check, unit checks, 101 unittest tests, golden replay + smoke + coverage + `audit_provenance`, and the same for `recorded_*` once that fixture exists.
+- **Latest owner live run:** `2026-09-27_112035_c0dfcdeef530`, from before Phase 5. Smoke 0 failures, 0 identity conflicts, 3,666 observations, audit 0 orphans.
   - Every run on 09-27 after ~10:00 UTC had **partial coverage only because LLM Stats' daily quota was spent** (it resets 00:00 UTC). That's expected, not a bug.
-- **Session 2 changes that aren't obvious from the plan text:**
+- **Changes from sessions 2–3 that aren't obvious from the plan text:**
   - The golden fixture is synthetic (`tests/fixtures/make_golden.py`, `--check` in CI). The owner chose `record`, so `tools/record_fixture.py` writes `tests/fixtures/recorded_*.json`, which CI replays when present.
   - Replay flags `--as-of` and `--registry` fix the evidence day and registry.
   - Churn `RULE_VERSION` is 3.
   - `identity.json` has the step 5 aliases `spacexai`→`xai` and `longcat`→`meituan`.
   - `research.json` uses `aa_index_versions` ranges, and inheritance entries carry `version`.
+  - `tools/golden_bundle.py <dir>` replays the golden fixture and prints the bundle path.
 
 **Owner items (independent of the phase work; don't block on them):**
-- **Step 4 (record fixture), after 00:00 UTC:** `run.ps1` then `python tools/record_fixture.py`, then commit `tests/fixtures`. It was refused three times on 09-27 (quota). When the push lands, check the CI run shows `== recorded replay` and `== recorded provenance audit` green.
+- **Step 4 (record fixture), after 00:00 UTC:**
+  - Run `run.ps1`, then `python tools/record_fixture.py`, then commit `tests/fixtures`.
+  - It was refused three times on 09-27 (quota), and nothing has been pushed yet.
+  - The local session can run it with the owner's go-ahead. When the push lands, check that the CI run shows `== recorded replay` and `== recorded provenance audit` green.
   - If the recorded fixture shows the AA response's non-`data` keys, revisit the Phase 4 "AA API version field" item.
-- **Step R (evidence refresh), due before 2026-10-04:** the owner ran `refresh_evidence.py list` but hasn't confirmed anything yet. If they paste findings, run the `confirm`/`retire`/`version-confirm` commands for them, then commit `analysis/research.json` and `docs/run-notes.md`.
+- **Step R (evidence refresh), due before 2026-10-04:** the owner ran `refresh_evidence.py list` but hasn't confirmed anything yet. If they paste what they saw, run the `confirm`/`retire`/`version-confirm` commands for them, then commit `analysis/research.json` and `docs/run-notes.md`.
+- **Step 8 (UX review):** screenshots were sent in session 3. The owner still needs to try their next run's site by keyboard. Fix anything they report within Phase 5's scope.
 
-**Next action: Phase 6 (retrieval efficiency and observability).** Nothing is coded yet. Start with "Measure first": a shared `retrieval/http.py` with per-host counters, then the Retrieval table on the Confidence page, then ask the owner for one live run (step 7 needs two runs, a few minutes apart, and costs about 38 LLM Stats requests) before any optimisation. Replay tests use recorded fixtures and never touch the network. After Phase 6 comes Phase 7.
+**Next action: Phase 6 (retrieval efficiency and observability).** Nothing is coded yet.
+1. Start with "Measure first": a shared `retrieval/http.py` with per-host counters, then `source_health` metrics and the Retrieval table on the Confidence page.
+2. Take one baseline live run before any optimisation. The first run of step 7 is that baseline. Step 7 needs two runs a few minutes apart, and costs about 38 LLM Stats requests.
+3. Replay tests use recorded fixtures and never touch the network.
+
+After Phase 6 comes Phase 7.
 
 **Phase 5 notes for later phases:**
 - New pages or tables must use `reports/ui.py`: `ui.table`/`kv_table` (captions and scoped headers), `ui.copy_button`, `ui.tabs`, `ui.filter_input` inside a `.tblock`, and `ui.page_shell`. Otherwise `validate_bundle` (`ui.check_html`) fails the run.
 - Shared model columns come from `build_report.row_view` and `score_td`/`price_td`. Those keep the `<td class='sc|cc' data-obs=…>` format that `tools/audit_provenance.py` parses.
-- Phase 6's Retrieval table on the Confidence page should be a `ui.table`. For browser checks: `npm ci --prefix tools/a11y`, `python -B tools/golden_bundle.py <dir>`, then `node tools/a11y/check.mjs <bundle> --shots <dir>`. Playwright is pinned to 1.56.1 to match the preinstalled `/opt/pw-browsers` Chromium, and Node 22 is at `/opt/node22/bin`.
+- Phase 6's Retrieval table on the Confidence page should be a `ui.table`.
 
-**Constraints that aren't obvious from the code:**
-- **Cloud sessions can't reach the provider APIs** (a proxy returns 403). Live runs happen only on the owner's Windows machine, so validate offline and ask the owner for a live run at the plan's checkpoints.
-- **The owner uses Windows PowerShell 5.1 and Python 3.13.14.**
-  - Commands for them must be PowerShell.
-  - For big JSON files, pipe a here-string into Python (`@' ... '@ | python -`) instead of using `ConvertFrom-Json`, which fails on large files in 5.1.
-  - `runs/current.json` is small, so `ConvertFrom-Json` is fine for that one.
-- **LLM Stats quota:** each live run uses about 19 of the 250 daily requests, so don't ask for repeated runs on the same day.
-- **Before every push:** `python -B tools/ci.py` (fixture staleness, unit checks, 101 unittest tests, golden replay + smoke + coverage + provenance audit) and `ruff check --select F401,F811,F821,F841 .`; CI runs both on every push. In a fresh container, first run `pip install -r requirements.lock ruff==0.15.8`.
-- **Owner instruction (session 2):** don't get sidetracked debugging owner steps (for example quota refusals). Record the result and keep moving on the plan.
+**Local environment (session 4 onward):**
+- **Shell:** Windows PowerShell 5.1, Python 3.13.14, working directory `C:\DevProjects\ModelAnalysis`. Commands for the owner must be PowerShell.
+  - For big JSON files, pipe a here-string into Python (`@' ... '@ | python -`) instead of using `ConvertFrom-Json`, which fails on large files in 5.1. `runs/current.json` is small, so `ConvertFrom-Json` is fine for that one.
+- **Provider APIs are reachable locally**; cloud sessions got a proxy 403.
+  - Even so, **ask the owner before running `run.ps1`.** It spends LLM Stats quota (about 19 of 250 daily requests per run) and writes the real `runs/` and history database.
+  - Offline experiments use `pipeline.py --snapshot … --state-dir replay-runs --db replay-history.sqlite` (gitignored) or `tools/golden_bundle.py`.
+- **API keys in child processes.** A `powershell -File` child started from an automation shell may not see keys set at Windows User scope. Before launching `run.ps1` from a tool, inject each needed key, for example `$env:LLM_STATS_API_KEY = [System.Environment]::GetEnvironmentVariable('LLM_STATS_API_KEY','User')`. Do the same for `ANTHROPIC_API_KEY` and any other key the run needs; see run-notes 2026-09-26.
+- **Keep `.ps1` files UTF-8 with BOM.** Windows PowerShell 5.1 misreads them without it (run-notes 2026-09-26).
+- **Before every push:** `python -B tools/ci.py` and `ruff check --select F401,F811,F821,F841 .`; CI runs both on every push. If they aren't installed: `python -m pip install -r requirements.lock ruff==0.15.8`.
+- **Browser a11y check (optional locally; CI always runs it):** needs Node 22.
+  - Run `npm ci --prefix tools/a11y` and `npm exec --prefix tools/a11y -- playwright install chromium` (Playwright 1.56.1).
+  - Then `python -B tools/golden_bundle.py <dir>` and `node tools/a11y/check.mjs <bundle> --shots <dir>`.
+  - The check also works on a real bundle (`runs/bundles/<run_id>`).
+- **GitHub:** push with plain `git push origin biscuit`. Check CI in the Actions tab or with `gh run list --branch biscuit` if `gh` is installed.
+
+**Owner instructions and preferences:**
+- Don't get sidetracked debugging owner steps (for example quota refusals). Record the result and keep moving on the plan.
+- Stay on the plan and don't wander into side topics.
+- Update this plan (its Status table and "Your steps") as work lands, and keep `docs/run-notes.md` current.
+
+**Other constraints:**
 - **`runs/`, `raw/` and all generated reports are gitignored.** The owner's bundles exist only on their machine.
-- **Route churn:** Phase 2 bumped `churn.RULE_VERSION` to 3, so the first live run after it only sets baselines ("no trusted baseline" is expected); the ~82 Zen `catalog_changed` events disappear from the run after that.
-- **Owner preferences:**
-  - Stay on the plan and don't wander into side topics.
-  - Update this plan (its Status table and "Your steps") as work lands, and keep `docs/run-notes.md` current.
+- **Route churn:** Phase 2 bumped `churn.RULE_VERSION` to 3, so the first live run after it only sets baselines ("no trusted baseline" is expected). The ~82 Zen `catalog_changed` events disappear from the run after that.
 
 ---
 
@@ -59,7 +86,7 @@
 | LLM Stats failure | **Closed**: daily quota spent | `quota too low (4 remaining), need ~8 for base calls; wait for UTC reset`. The guard worked as designed |
 | Phase 1: CI | **Done**: [run #1](https://github.com/BiscuitDoesStuff/ModelAnalysis/actions/runs/36312905540) green on Windows + Linux × 3.11 + 3.13, and lint | `python -B tools/ci.py` passes in clean Python 3.11 and 3.13 venvs from `requirements.lock`: 59 tests, golden replay, smoke 0 failures, golden coverage OK |
 | Your step 5: identity review | **Done** | Replay `2026-09-27_105813_e741d6e03a9d` vs `104304`: 1,129 → 1,129 entities, 0 splits/merges/renames, 0 rank/score/free/pick changes. 6 `aa-creator-unaliased` (grok420/43/45/46/47, longcat20) resolved by aliases `spacexai`→`xai`, `longcat`→`meituan` |
-| Phase 5: UX and accessibility | **Done offline**; your review is step 8 | 101 tests incl. `test_ui.py` (contrast, tab wiring, checker, zero vs unknown, dashboard/site/XLSX row match); axe 0 violations (any impact) on the golden bundle in dark/light and at 390px; keyboard pass OK; golden audit 426 cells, 0 orphans |
+| Phase 5: UX and accessibility | **Done offline**, [CI #13](https://github.com/BiscuitDoesStuff/ModelAnalysis/actions/runs/36317729178) green; your review is step 8 | 101 tests incl. `test_ui.py` (contrast, tab wiring, checker, zero vs unknown, dashboard/site/XLSX row match); axe 0 violations (any impact) on the golden bundle in dark/light and at 390px; keyboard pass OK; golden audit 426 cells, 0 orphans |
 | Phase 4: evidence maintenance | **Done**, live-verified (7a) | `aa_index_versions` ranges replace per-day pins; `analysis/registry.py` validation; `tools/refresh_evidence.py`; expiry warnings in pipeline, Start page, Methodology; 90 tests incl. `test_registry.py` boundaries |
 | Your step 7a: Phase 3/4 live check | **Done** | Run `2026-09-27_112035_c0dfcdeef530`: 3,666 observations, 0 contract problems, all scores/prices traced; `audit_provenance`: 1,888 cells, 0 orphans/mismatches/wrong scale/missing version/URL/stale; smoke 0 failures |
 | Phase 3: provenance | **Done**, live-verified (7a) | 82 tests incl. `test_provenance.py` (contract, scale guard, audit catches orphans/mismatches); golden audit: 409 cells, 0 orphans; CI runs the audit |
