@@ -96,6 +96,8 @@ def main():
             if missing:
                 print(f"{name} fixture no longer covers: " + ", ".join(missing))
                 return 1
+            print(f"== {name} provenance audit", flush=True)
+            subprocess.run(PY + ["tools/audit_provenance.py", str(bundle), "--sample", "0"], cwd=ROOT, check=True, env=ENV)
     print("CI checks passed")
     return 0
 

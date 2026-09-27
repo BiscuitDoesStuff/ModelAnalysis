@@ -385,6 +385,20 @@ except ImportError:
 # v2 combined-sources contract (additive — legacy 9-section checks above still gate).
 check(isinstance(a.get("total_benchlm"), int), f"total_benchlm present ({a.get('total_benchlm')})")
 check(isinstance(a.get("observations_count"), int), "observations_count present")
+# Phase 3 provenance: saved observations back every displayed score/price.
+if isinstance(a.get("observations"), list):
+    sys.path.insert(0, ROOT)
+    from analysis.scales import problems as _obs_problems, RANKING_UNIT
+    _obs = {o.get("obs_id"): o for o in a["observations"]}
+    check(len(_obs) == len(a["observations"]) == a.get("observations_count"), f"observations saved with unique obs_id ({len(_obs)})")
+    _bad = [o.get("obs_id") for o in a["observations"] if _obs_problems(o)]
+    check(not _bad, f"observations meet unit/benchmark/url contract ({len(_bad)} bad)")
+    check(all(_obs.get(((m.get("provenance") or {}).get("score") or {}).get("obs_id"), {}).get("unit") == RANKING_UNIT
+              for m in models if m.get("score") is not None), "every displayed score traces to an aa-index observation")
+    check(all(((m.get("provenance") or {}).get("price") or {}).get("obs_id") in _obs
+              for m in models if m.get("cost_blended") is not None), "every displayed price traces to an observation")
+else:
+    print("warn no saved observations (pre-Phase-3 analysis); provenance checks skipped")
 check(isinstance(a.get("views"), dict), "analysis views present")
 for _vk in ("benchlm_leaderboard", "llmstats_leaderboard", "vals_leaderboard",
             "capabilities", "pricing", "provisional_triage", "confidence"):

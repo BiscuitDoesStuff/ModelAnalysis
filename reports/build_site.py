@@ -10,9 +10,12 @@ import html as _html
 from urllib.parse import quote
 
 if __package__:
-    from .build_report import IDENTITY_HEADERS, copy_id, identity_rows, reliability_data, reliability_html, source_summary
+    from .build_report import (IDENTITY_HEADERS, copy_id, identity_rows, prov_attrs, reliability_data,
+                               reliability_html, score_evidence, source_summary)
 else:
-    from build_report import IDENTITY_HEADERS, copy_id, identity_rows, reliability_data, reliability_html, source_summary
+    from build_report import (IDENTITY_HEADERS, copy_id, identity_rows, prov_attrs, reliability_data,
+                              reliability_html, score_evidence, source_summary)
+from analysis.common import evidence_label
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -131,7 +134,7 @@ def main(input_path=None, output_dir=None):
                  "<input class='search' placeholder='Search all models…' oninput=\"f(this,'t-models')\">"
                  "<div class='twrap'><table id='t-models'><thead><tr><th>Model</th><th>Name</th><th>Score</th><th>Route</th></tr></thead><tbody>")
     directory += "".join(f"<tr><td>{model_link(m)}</td><td>{esc(m.get('name', ''))}</td>"
-                         f"<td>{esc(m.get('score', 'unscored'))}</td><td>{copy_control(m)}</td></tr>" for m in models)
+                         f"<td{prov_attrs(m, 'score')}>{esc(m.get('score', 'unscored'))}</td><td>{copy_control(m)}</td></tr>" for m in models)
     directory += "</tbody></table></div>"
     with open(os.path.join(site, "models.html"), "w", encoding="utf-8") as f:
         f.write(page("Model directory", stamp, nav_html(), directory))
@@ -145,9 +148,9 @@ def main(input_path=None, output_dir=None):
              "<div class='twrap'><table id='t-aa'><thead><tr><th>#</th><th>Model</th><th>Score</th>"
              "<th>Cost</th><th>Groups</th><th>Route</th><th>Evidence</th></tr></thead><tbody>"]
         for i, m in enumerate(aa_rows, 1):
-            ev = (m.get("score_source") or {}).get("kind", "unscored")
+            ev = score_evidence(m)[0]
             h.append(f"<tr><td>{i}</td><td>{model_link(m)}</td>"
-                     f"<td>{esc(m.get('score','unscored'))}</td><td>{esc(m.get('cost_blended','unknown'))}</td>"
+                     f"<td{prov_attrs(m, 'score')}>{esc(m.get('score','unscored'))}</td><td{prov_attrs(m, 'price')}>{esc(m.get('cost_blended','unknown'))}</td>"
                      f"<td>{esc(''.join(m.get('groups',[])) or '–')}</td>"
                      f"<td>{copy_control(m)}</td><td>{esc(ev)}</td></tr>")
         return "".join(h) + "</tbody></table></div>"
@@ -246,8 +249,9 @@ def main(input_path=None, output_dir=None):
                 f"free {esc(m.get('free_status','none'))}</p>"
                 f"<p>Route: {copy_control(m)}</p>" + routes_html(m) +
                 f"<h2>Scores (separate scales)</h2><table><tr><th>Source</th><th>Value</th><th>Evidence</th></tr>"
-                f"<tr><td>AA Intelligence</td><td>{esc(m.get('score','unscored'))}</td><td>{esc((m.get('score_source') or {}).get('kind','unscored'))}</td></tr>"
-                f"<tr><td>BenchLM overall</td><td>{esc(b.get('overall','–'))}</td><td>{esc(b.get('evidence','–'))}</td></tr>"
+                f"<tr><td>AA Intelligence</td><td{prov_attrs(m, 'score')}>{esc(m.get('score','unscored'))}</td><td>{esc(score_evidence(m)[0])}</td></tr>"
+                f"<tr><td>Price (USD/1M, 3:1 blend)</td><td{prov_attrs(m, 'price')}>{esc(m.get('cost_blended','unknown'))}</td><td>{esc(m.get('cost_source') or 'none')}</td></tr>"
+                f"<tr><td>BenchLM overall</td><td>{esc(b.get('overall','–'))}</td><td>{esc(evidence_label('external-reference') + ' (BenchLM: ' + str(b.get('evidence') or 'unstated') + ')' if b else '–')}</td></tr>"
                 f"</table>"
                 f"<h3>BenchLM categories</h3><table>{cats or '<tr><td>–</td></tr>'}</table>"
                 + (f"<h3>LLM Stats ranks (TrueSkill conservative)</h3><table><tr><th>Category</th><th>Rank</th><th>Rating</th><th>Evals</th></tr>{rk_rows}</table>" if rk_rows else "")
@@ -294,7 +298,7 @@ def main(input_path=None, output_dir=None):
                     "<tr><th>Model</th><th>Variant</th><th>Score</th><th>Cost</th><th>Route</th></tr>")
         for m in [_resolve(x) for x in fam.get("rows", [])]:
             comp.append(f"<tr><td>{model_link(m)}</td><td>{esc(m.get('variant',''))}</td>"
-                        f"<td>{esc(m.get('score',''))}</td><td>{esc(m.get('cost_blended',''))}</td>"
+                        f"<td{prov_attrs(m, 'score')}>{esc(m.get('score',''))}</td><td{prov_attrs(m, 'price')}>{esc(m.get('cost_blended',''))}</td>"
                         f"<td><code>{esc(copy_id(m))}</code></td></tr>")
         comp.append("</table></div>")
     with open(os.path.join(site, "compare.html"), "w", encoding="utf-8") as f:

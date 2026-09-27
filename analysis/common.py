@@ -28,3 +28,25 @@ def tier_of(score):
         if score >= TIERS[tier]:
             return tier
     return "below"
+
+
+# One evidence vocabulary for every output (reports render these labels only).
+EVIDENCE = {
+    "measured": "measured",
+    "external-reference": "external reference",
+    "inherited-estimate": "inherited estimate",
+    "hint": "website hint",
+    "provisional": "provisional",
+    "unknown": "unknown",
+}
+# score_source.kind -> evidence type.
+SCORE_KIND_EVIDENCE = {"aa-api": "measured", "external": "external-reference",
+                       "inherited-estimate": "inherited-estimate"}
+
+
+def evidence_label(evidence):
+    return EVIDENCE.get(evidence, EVIDENCE["unknown"])
+
+
+def score_evidence_type(m):
+    return SCORE_KIND_EVIDENCE.get((m.get("score_source") or {}).get("kind"), "unknown")

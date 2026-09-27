@@ -27,6 +27,7 @@ sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "tools"))
 from analysis.common import base_slug, norm  # noqa: E402
 from pipeline_common import PROVIDERS, SOURCES, resolve_credentials  # noqa: E402
+import audit_provenance  # noqa: E402
 import ci  # noqa: E402
 
 PREFIX = "recorded"
@@ -263,6 +264,11 @@ def record(bundle, out_dir, registry_path=None, secrets=None):
         gaps = ci.golden_coverage(replayed, recorded=True)
         if gaps:
             print("trimmed fixture lacks: " + ", ".join(gaps) + "; nothing written")
+            return 1
+        trace = audit_provenance.audit(replayed, 0)
+        if trace["orphans"] or trace["mismatches"] or trace["wrong_scale"]:
+            print("provenance audit failed on the trimmed fixture; nothing written: "
+                  + "; ".join((trace["orphans"] + trace["mismatches"] + trace["wrong_scale"])[:5]))
             return 1
         out_dir = Path(out_dir)
         out_dir.mkdir(parents=True, exist_ok=True)

@@ -485,13 +485,18 @@ def main(input_path=None, output_dir=None, websites_path=None, registry_path=Non
     try:
         from .crosswalk import attach_crosswalk
         from .observations import build_observations
+        from .scales import problems as obs_problems
         from .views import build_views
     except ImportError:
         from crosswalk import attach_crosswalk
         from observations import build_observations
+        from scales import problems as obs_problems
         from views import build_views
     bench_meta = attach_crosswalk(models, snap, websites)
-    observations = build_observations(models, day)
+    observations = build_observations(models, day, snap.get("source_health", {}))
+    bad_obs = [(o["obs_id"], p) for o in observations for p in obs_problems(o)]
+    if bad_obs:
+        print(f"warn {len(bad_obs)} observation contract problems, e.g. {bad_obs[:3]}")
     views = build_views(models)
     bench_lb = (snap.get("benchlm", {}) or {}).get("leaderboard", []) if isinstance(snap.get("benchlm"), dict) else []
     bench_pr = (snap.get("benchlm", {}) or {}).get("pricing", []) if isinstance(snap.get("benchlm"), dict) else []
@@ -530,7 +535,7 @@ def main(input_path=None, output_dir=None, websites_path=None, registry_path=Non
                            if isinstance(vals_snap, dict) else {}),
            "website_stats": web_stats,
            "views": views,
-           "observations_count": len(observations),
+           "observations_count": len(observations), "observations": observations,
            "free_status_counts": {"verified": _fsc.get("verified", 0),
                                   "provisional-l1": _fsc.get("provisional-l1", 0),
                                   "provisional-l0": _fsc.get("provisional-l0", 0),

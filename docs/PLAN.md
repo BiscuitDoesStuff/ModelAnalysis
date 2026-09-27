@@ -15,7 +15,7 @@
 - **Owner decided `record`** (accepting that a trimmed real fixture publishes some AA/BenchLM/LLM Stats data in this public repo). `tools/record_fixture.py` is built and pushed; the owner records from the next complete-coverage run (step 4). The synthetic fixture stays and CI replays both. First attempt (10:43 UTC 09-27) was correctly refused (quota); retry after 00:00 UTC.
 - **Phase 2 is pushed** (see its Status note): `analysis/identity.py` + `identity.json`, churn rule 3 (report identity + Zen `created` ignored), identity conflicts in site/XLSX/MD, `tools/compare_bundles.py`, registry-slug warning. Offline only so far; the owner's step 5 replay review decides any joins/splits.
 
-**Next action: Phase 3 (provenance).** Step 4 (record fixture) still waits for a complete-coverage run after 00:00 UTC; when its push lands, check CI shows `== recorded replay` green. Step 4 (record fixture) is independent: when that push lands, check its CI run includes `== recorded replay` and is green. Phase 3 starts after step 5 is settled. The evidence entries now expire on **2026-10-04**; the next refresh is due before then (repeat step 2, then the 0a pattern).
+**Next action: Phase 4 (evidence and version maintenance).** Phase 3 is pushed; its live checkpoint (step 7a) is folded into the owner's next run after 00:00 UTC together with step 4 (record fixture). When that fixture push lands, check CI shows `== recorded replay` and `== recorded provenance audit` green. Step 4 (record fixture) is independent: when that push lands, check its CI run includes `== recorded replay` and is green. Phase 3 starts after step 5 is settled. The evidence entries now expire on **2026-10-04**; the next refresh is due before then (repeat step 2, then the 0a pattern).
 
 **Constraints that aren't obvious from the code:**
 - **Cloud sessions can't reach the provider APIs** (a proxy returns 403). Live runs happen only on the owner's Windows machine, so validate offline and ask the owner for a live run at the plan's checkpoints.
@@ -46,6 +46,7 @@
 | LLM Stats failure | **Closed**: daily quota spent | `quota too low (4 remaining), need ~8 for base calls; wait for UTC reset`. The guard worked as designed |
 | Phase 1: CI | **Done**: [run #1](https://github.com/BiscuitDoesStuff/ModelAnalysis/actions/runs/36312905540) green on Windows + Linux × 3.11 + 3.13, and lint | `python -B tools/ci.py` passes in clean Python 3.11 and 3.13 venvs from `requirements.lock`: 59 tests, golden replay, smoke 0 failures, golden coverage OK |
 | Your step 5: identity review | **Done** | Replay `2026-09-27_105813_e741d6e03a9d` vs `104304`: 1,129 → 1,129 entities, 0 splits/merges/renames, 0 rank/score/free/pick changes. 6 `aa-creator-unaliased` (grok420/43/45/46/47, longcat20) resolved by aliases `spacexai`→`xai`, `longcat`→`meituan` |
+| Phase 3: provenance | **Pushed**; live check in step 4+7a | 82 tests incl. `test_provenance.py` (contract, scale guard, audit catches orphans/mismatches); golden audit: 409 cells, 0 orphans; CI runs the audit |
 | Phase 2: identity | **Done**, live-verified in step 6 |
 | Your step 6: live run | **Done** | Run `2026-09-27_110352_9cb7c4c6bb66`: 0 identity conflicts, each route owned once, XLSX 16 tabs, churn 0 events (rule-3 baseline run), smoke 0 failures. Partial coverage only from LLM Stats quota | 77 tests incl. `test_identity.py` (all plan fixtures), `test_compare_bundles.py`, Zen fingerprint test; CI green |
 | Fixture source | **Decided: record** | `tools/record_fixture.py` pushed; synthetic fixture kept alongside. Your step 4 records the real one |
@@ -230,6 +231,16 @@ You replay your latest real snapshot through the new code into `replay-runs/` an
 
 ## Phase 3: Benchmark provenance and scale audit (roadmap item 2)
 
+**Status (2026-09-27): pushed; live check pending (step 4+7a).** Built as below, with these specifics:
+- **Saved observations:** the analysis JSON now has `observations` (with `obs_id`); the slim report doesn't. Each model carries `provenance.score`/`provenance.price` = `{obs_id, source, version, observed_at, evidence}`, a compact reference for rendering tooltips. The full row, with URL, unit and expiry, stays in the analysis.
+- **Real timestamps:** `observed_at` is the source's `fetched_at`; website hints use the cached page's original `fetched_at`; registry rows use `checked_at`/`expires_at`.
+- **Real sources:** price sources are now `aa`, `openrouter` or `registry`, with `detail` keeping `cost_source`.
+- **Units:** closed list in `analysis/scales.py`. Score observations need a benchmark and a URL or `url_unavailable_reason`; a missing AA version is stated as `version_unavailable_reason`.
+- **Evidence vocabulary:** `analysis/common.EVIDENCE`. Labels in the dashboard, site and MD come from it.
+- **Cells:** score/price cells in the dashboard tables, site leaderboard, directory, model pages and compare carry `data-obs` plus a tooltip. XLSX row sheets get `score_provenance`/`cost_provenance` columns next to the values. The MD gets a provenance legend. Inline numbers in prose (pick cards, value bands) are text, not cells, and aren't audited.
+- **Scale guard** (`tests/test_provenance.py`): rewriting every BenchLM/LLM Stats/Vals value leaves ranks, ratios, tiers and stack unchanged.
+- **`tools/audit_provenance.py <bundle> [--sample N]`:** traces cells in the dashboard, every site page, the XLSX and the report JSON. It fails on orphans, value mismatches and wrong scales, and warns on missing version/URL and stale evidence. CI runs it on every fixture with `--sample 0`, and the recorder runs it before writing.
+
 - **Save observations.** Write the full observations list into `analysis/<run>_analysis.json`. Give each one an `obs_id` (a hash of entity, source, field and version) so report cells can reference it. Leave it out of the slim report JSON, which only carries `obs_id` references.
 - **Real timestamps.** `observed_at` = the source's `fetched_at` from `source_health`, or the original `fetched_at` of a cached website page, not the run day. Carry `expires_at` from registry entries.
 - **Fix source and unit fields.** Price observations use the real source (`openrouter`, `aa`, `zenmux`, `registry`) and keep `cost_source` as a separate field. Add a closed **unit/scale list** in `analysis/scales.py`: `aa-index`, `benchlm-100`, `llmstats-trueskill`, `llmstats-rank`, `percent`, `usd-per-1m-blended-3to1`, `usd-per-test`, `tokens`, `effort-list`, …. Every observation must use a listed unit, and a score observation must have a `benchmark` and either a `url` or `url_unavailable_reason`.
@@ -385,11 +396,11 @@ Run every command in PowerShell from `C:\DevProjects\ModelAnalysis`. Unless a st
 | 3 | — | — | ✅ Done: live run `095157_f0e75f9fb295`, smoke 0 failures |
 | 3b | — | — | Live run checkpoint: expect no "no AA benchmark pinned" warning, 2 inherited estimates, `ok research registry current` |
 | 3c | — | — | ✅ Done: LLM Stats failure was the daily quota |
-| 4 | **After 00:00 UTC** (LLM Stats quota reset) | ~15 min | `run.ps1`, then record and commit the real fixture. Tries at 10:43 and 11:03 UTC on 09-27 were correctly refused (quota) |
+| 4 + 7a | **After 00:00 UTC** (LLM Stats quota reset) | ~15 min | One `run.ps1`: smoke + `audit_provenance.py` on it (Phase 3 live check), then record and commit the real fixture. Earlier step 4 tries (10:43, 11:03 UTC 09-27) were correctly refused (quota) |
 | 5 | — | — | ✅ Done: 0 splits; 2 aliases added |
 | 6 | — | — | ✅ Done: run `110352_9cb7c4c6bb66`, 0 conflicts, smoke 0 failures |
 | 6b | Any run after 00:00 UTC | — | Informational: Zen `catalog_changed` noise should be gone (0 events vs ~82) | Live run checkpoint (first run after rule 3 sets baselines only) |
-| 7 | After Phases 3 and 6 | ~10 min each | Live run checkpoints (Phase 6 needs two runs) |
+| 7 | After Phase 6 | ~10 min | Live run checkpoint (Phase 6 needs two runs); Phase 3's is 7a above |
 | 8 | During Phase 5 | ~10 min | Review screenshots and try the site by keyboard |
 
 ### Step 1: Python version
@@ -455,20 +466,29 @@ Notes:
 - **After Phase 2:** expect "no trusted baseline" churn on the first run. That's the rule-version bump, not a bug.
 - **After Phase 6:** run twice, a few minutes apart, and paste the Retrieval table from the site's Confidence page for both runs. The second run shows the cache and conditional-request savings.
 
-### Step 4: Record the real fixture (Phase 1)
-The recorder needs a bundle where **every** source is complete. Your current one (`2026-09-27_102010_2272b1477638`) isn't, because LLM Stats was out of quota, so the recorder would refuse it. Do this after 00:00 UTC, when the quota resets.
+### Step 4 + 7a: Record the real fixture and check Phase 3 live
+The recorder needs a bundle where **every** source is complete, so run this after 00:00 UTC, when LLM Stats' quota resets.
 ```powershell
 git pull origin biscuit
 powershell -File run.ps1
+python -B tests/smoke.py
+$c = Get-Content runs/current.json -Raw | ConvertFrom-Json
+python tools/audit_provenance.py "runs/$($c.bundle)"
 python tools/record_fixture.py
 ```
-The run must end with `Published <run_id> (complete coverage)`. The recorder must print `secret scan: clean` and `fixture verified: smoke 0 failures, coverage OK`. If either is missing, nothing is written; paste its output instead. If both are there:
+Expect:
+- `Published <run_id> (complete coverage)`.
+- Smoke `0 failures`, including `observations meet unit/benchmark/url contract (0 bad)` and the two `traces to` lines.
+- The audit shows `ok   orphans: 0`, `ok   mismatches: 0` and `ok   wrong_scale: 0`.
+- The recorder shows `secret scan: clean` and `fixture verified: ...`.
+
+If the recorder succeeds:
 ```powershell
 git add tests/fixtures
 git commit -m "test: recorded fixture from live run"
 git push origin biscuit
 ```
-Paste the recorder's output. I'll check that the CI run for your push replays the recorded fixture and is green.
+Paste the `Published` line, any `warn` lines, smoke's result, the audit's output and the recorder's output.
 
 CI itself is already confirmed green ([run #1](https://github.com/BiscuitDoesStuff/ModelAnalysis/actions/runs/36312905540)). To reproduce it locally, offline and with no quota: `python -m pip install -r requirements.lock`, then `python -B tools/ci.py`, which ends with `CI checks passed`.
 

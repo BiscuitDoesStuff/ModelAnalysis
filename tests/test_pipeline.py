@@ -179,6 +179,7 @@ class PipelineTests(unittest.TestCase):
         finally:
             holder.stdin.close()
             holder.wait(timeout=30)
+            holder.stdout.close()
         with pipeline.writer_lock(self.state):
             pass
 

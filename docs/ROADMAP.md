@@ -14,6 +14,8 @@ The reliability foundation is implemented: pinned run bundles, staged publicatio
 
 ## 2. Benchmark provenance and scale audit
 
+**Status (2026-09-27):** implemented as Phase 3 of `docs/PLAN.md` (saved observations with `obs_id`, `analysis/scales.py`, evidence vocabulary, per-cell provenance, `tools/audit_provenance.py` in CI); live check pending.
+
 **Goal:** audit every displayed score, price, and estimate for source, measurement/version, effort, units, and freshness. Keep AA rankings and other benchmark scales separate.
 
 **Dependencies:** stable entity mappings, observations/views, evidence registry, saved source fixtures.

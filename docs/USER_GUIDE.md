@@ -158,6 +158,8 @@ python -B tests/smoke.py
 python -B tests/smoke.py --bundle runs/bundles/<run_id>
 # Everything CI runs (golden replay + smoke + coverage included):
 python -B tools/ci.py
+# Trace displayed scores/prices to their saved observations (0 orphans expected):
+python tools/audit_provenance.py runs/bundles/<run_id>
 # Record a trimmed, key-free fixture from the current complete-coverage bundle (verified before writing):
 python tools/record_fixture.py
 ```

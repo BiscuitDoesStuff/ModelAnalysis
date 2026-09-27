@@ -4,7 +4,7 @@ import json, os, sys, html as _html
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
-from analysis.common import EFFORTS as EFFORT_TOKENS, TIERS as TIER_FLOORS
+from analysis.common import EFFORTS as EFFORT_TOKENS, EVIDENCE, TIERS as TIER_FLOORS, evidence_label, score_evidence_type
 
 MD_CAP = 20
 TIERS = ["max", "high", "medium"]
@@ -179,9 +179,31 @@ def metadata_rows(value, path=""):
         yield [path, json.dumps(value, ensure_ascii=False)]
 
 
+def provenance_text(m, field):
+    """One line naming where a displayed score/price came from: source, version, time, evidence, obs_id."""
+    p = (m.get("provenance") or {}).get(field)
+    if not p:
+        return ""
+    return (f"{p['source']} · {p.get('version') or 'version unknown'} · observed {p.get('observed_at') or 'unknown'}"
+            f" · {evidence_label(p.get('evidence'))} · {p['obs_id']}")
+
+
+def prov_attrs(m, field):
+    """Attributes for a score (sc) or price (cc) cell; audit_provenance traces data-obs."""
+    cls = "sc" if field == "score" else "cc"
+    p = (m.get("provenance") or {}).get(field)
+    if not p:
+        return f" class='{cls}'"
+    return f" class='{cls}' data-obs='{esc(p['obs_id'])}' title='{esc(provenance_text(m, field))}'"
+
+
 def score_evidence(m):
     source = m.get('score_source') or {}
-    text = source.get('kind', 'unscored')
+    text = evidence_label(score_evidence_type(m)) if source else 'unscored'
+    if source.get('kind') == 'aa-api':
+        text += ' (AA API)'
+    elif source.get('kind') == 'external':
+        text += ' (registry)'
     if source.get('source_slug'):
         text += ' from ' + source['source_slug']
     if source.get('version'):
@@ -508,8 +530,8 @@ def html_table(rows, note=""):
                       else "AA-only / no callable ID" + (f"<br><span class='hint'>nearest {esc(m.get('nearest_callable',''))} display-only</span>" if m.get("nearest_callable") else ""))
         h.append("<tr><td><code>" + esc(m["id"]) + "</code>" +
                  (f"<br><span class='nm'>{esc(m.get('name', ''))}</span>" if m.get("name") else "") +
-                 "</td><td>" + esc(groups_display(m)) + "</td><td>" + esc(fmt_score(m)) +
-                 "</td><td>" + cost_cell + "</td><td>" +
+                 "</td><td>" + esc(groups_display(m)) + "</td><td" + prov_attrs(m, "score") + ">" + esc(fmt_score(m)) +
+                 "</td><td" + prov_attrs(m, "price") + ">" + cost_cell + "</td><td>" +
                  esc(m["ratio"] if m.get("ratio") is not None else "–") + "</td><td>" +
                  var_cell + "</td><td>" +
                  eff_cell + "</td><td>" +
@@ -549,8 +571,8 @@ def explore_table(rows):
         route_cell = (f"<code class='copy' onclick=\"copyId(this)\" title='click to copy'>{esc(oc)}</code><span class='hint'>{esc(hint)}</span>" if oc
                       else "AA-only / no callable ID" + (f"<br><span class='hint'>nearest {esc(m.get('nearest_callable',''))} display-only</span>" if m.get("nearest_callable") else ""))
         h.append(f"<tr data-groups=\"{esc(groups_display(m))}\" data-cost=\"{esc(m.get('cost_source',''))}\" data-free=\"{esc(free_status_of(m))}\">"
-                 "<td><code>" + esc(m["id"]) + "</code></td><td>" + esc(groups_display(m)) + "</td><td>" + esc(fmt_score(m)) +
-                 "</td><td>" + cost_cell + "</td><td>" + esc(m["ratio"] if m.get("ratio") is not None else "–") + "</td><td>" +
+                 "<td><code>" + esc(m["id"]) + "</code></td><td>" + esc(groups_display(m)) + "</td><td" + prov_attrs(m, "score") + ">" + esc(fmt_score(m)) +
+                 "</td><td" + prov_attrs(m, "price") + ">" + cost_cell + "</td><td>" + esc(m["ratio"] if m.get("ratio") is not None else "–") + "</td><td>" +
                  var_cell + "</td><td>" + esc(efforts_display(m) or "–") + "</td><td>" + route_cell +
                  "</td><td>" + esc(",".join(m.get("providers", []))) + "</td><td>" + evidence_html(m) + "</td></tr>")
     h.append("</tbody></table></div>")
@@ -916,13 +938,20 @@ def main(input_path=None, output_dir=None):
              "Variants are separate AA rows; OpenCode V2 uses available provider/model#variant selectors. Inherited scores are estimates, not destination measurements. " +
              "L0 = AA $0 only, intel-only unless a native fallback ID is shown (e.g. zen). Zen *-free routes count as verified free. " +
              "Per-model OpenCode compat not verified._\n")
+    L.append("\n_Provenance legend: every score is the AA Intelligence Index (`aa-index`), from the AA API "
+             "(measured) or `research.json` (external reference / inherited estimate); every price is USD per 1M tokens, "
+             "3:1 blend, from the tagged source (`aa`, `or-derived` = OpenRouter, `inherited` = registry). Each value's "
+             "source, version, observation time and `obs_id` are in the XLSX `*_provenance` columns, the dashboard/site "
+             "cell tooltips, and the analysis JSON `observations`. Evidence labels: "
+             + ", ".join(f"{k} = {v}" for k, v in EVIDENCE.items()) + "._\n")
     L.insert(2, reliability_markdown(a))
     for key, value in reliability_data(a).items():
         L.append(f"\n## {key}\n\n```json\n{json.dumps(value, ensure_ascii=False, indent=2)}\n```\n")
     with open(os.path.join(rep, f"{stamp}_summary.md"), "w", encoding="utf-8") as f:
         f.write("".join(L))
 
-    slim = lambda m: [m["id"], groups_display(m), m["score"], m["cost_blended"],
+    slim = lambda m: [m["id"], groups_display(m), m["score"], provenance_text(m, "score"),
+                      m["cost_blended"], provenance_text(m, "price"),
                       m.get("cost_source", ""), m["ratio"], copy_id(m), ",".join(m["providers"]),
                       free_status_of(m), m.get("variant", ""), bool(m.get("variant_ambiguous", False)),
                       m.get("variant_label", ""),
@@ -990,7 +1019,7 @@ def main(input_path=None, output_dir=None):
         for t in TIERS:
             ws.append([f"stack_{t}", len(s["stack"][t]["rows"])])
             ws.append([f"gaps_{t}", ",".join(s["stack"][t]["gaps"])])
-        H = ["id", "groups", "score", "cost_per_1M", "cost_source", "ratio", "opencode_id", "providers", "free_status",
+        H = ["id", "groups", "score", "score_provenance", "cost_per_1M", "cost_provenance", "cost_source", "ratio", "opencode_id", "providers", "free_status",
              "variant", "variant_ambiguous", "variant_label", "efforts", "default_effort", "default_effort_source",
              "efforts_source", "efforts_hint", "efforts_hint_source", "or_reasoning_status",
              "fallback_id", "fallback_provider", "nearest_callable",
