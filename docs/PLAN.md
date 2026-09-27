@@ -12,9 +12,10 @@
 - 0a (`research.json` refresh) is pushed as `1330219` and verified by live run `2026-09-27_102010_2272b1477638`: no AA pin warning, 2 inherited estimates, `ok research registry current`, smoke 0 failures. Entries expire 2026-10-04.
 - That run was **partial coverage** only because LLM Stats' daily quota was spent (`quota too low (4 remaining)`); the fetcher's guard skipped it by design. Nothing to fix.
 - **Phase 1 is pushed** (see its Status note): `requirements.lock`, `.github/workflows/ci.yml`, `tools/ci.py`, a **synthetic** golden fixture, `--as-of`/`--registry` replay flags, cross-process lock test, ruff job. Verified locally in clean 3.11 and 3.13 venvs, and **CI run #1 is green** on all 5 jobs (https://github.com/BiscuitDoesStuff/ModelAnalysis/actions/runs/36312905540).
-- **Owner decided `record`** (accepting that a trimmed real fixture publishes some AA/BenchLM/LLM Stats data in this public repo). `tools/record_fixture.py` is built and pushed; the owner records from the next complete-coverage run (step 4). The synthetic fixture stays and CI replays both.
+- **Owner decided `record`** (accepting that a trimmed real fixture publishes some AA/BenchLM/LLM Stats data in this public repo). `tools/record_fixture.py` is built and pushed; the owner records from the next complete-coverage run (step 4). The synthetic fixture stays and CI replays both. First attempt (10:43 UTC 09-27) was correctly refused (quota); retry after 00:00 UTC.
+- **Phase 2 is pushed** (see its Status note): `analysis/identity.py` + `identity.json`, churn rule 3 (report identity + Zen `created` ignored), identity conflicts in site/XLSX/MD, `tools/compare_bundles.py`, registry-slug warning. Offline only so far; the owner's step 5 replay review decides any joins/splits.
 
-**Next action: start Phase 2 (identity).** In parallel the owner does step 4 (record the fixture); when that push lands, check its CI run includes `== recorded replay` and is green. The evidence entries now expire on **2026-10-04**; the next refresh is due before then (repeat step 2, then the 0a pattern).
+**Next action: act on the owner's step 5 identity diff** (add `joins`/`splits` to `analysis/identity.json` or aliases to `vendor_aliases` as they decide), then ask for step 6 (live run). Step 4 (record fixture) is independent: when that push lands, check its CI run includes `== recorded replay` and is green. Phase 3 starts after step 5 is settled. The evidence entries now expire on **2026-10-04**; the next refresh is due before then (repeat step 2, then the 0a pattern).
 
 **Constraints that aren't obvious from the code:**
 - **Cloud sessions can't reach the provider APIs** (a proxy returns 403). Live runs happen only on the owner's Windows machine, so validate offline and ask the owner for a live run at the plan's checkpoints.
@@ -23,13 +24,9 @@
   - For big JSON files, pipe a here-string into Python (`@' ... '@ | python -`) instead of using `ConvertFrom-Json`, which fails on large files in 5.1.
   - `runs/current.json` is small, so `ConvertFrom-Json` is fine for that one.
 - **LLM Stats quota:** each live run uses about 19 of the 250 daily requests, so don't ask for repeated runs on the same day.
-- **Before every push:**
-  - `python -B tests/test_units.py`
-  - `python -B -m unittest discover -s tests -p "test_*.py"` (57 tests)
-  - a fixture replay through `pipeline.py --snapshot` plus `tests/smoke.py --bundle <bundle>`.
-  - Known issue: the thin test fixture fails only "md shows variant labels" in smoke. That's expected until the Phase 1 golden fixture exists.
+- **Before every push:** `python -B tools/ci.py` (fixture staleness, unit checks, 77 unittest tests, golden replay + smoke + coverage) and `ruff check --select F401,F811,F821,F841 .`; CI runs both on every push.
 - **`runs/`, `raw/` and all generated reports are gitignored.** The owner's bundles exist only on their machine.
-- **Route churn noise:** each run shows about 82 Zen `catalog_changed` events. It's known and harmless, since `catalog_changed` never alerts, and it gets fixed in Phase 2 (see there).
+- **Route churn:** Phase 2 bumped `churn.RULE_VERSION` to 3, so the first live run after it only sets baselines ("no trusted baseline" is expected); the ~82 Zen `catalog_changed` events disappear from the run after that.
 - **Owner preferences:**
   - Stay on the plan and don't wander into side topics.
   - Update this plan (its Status table and "Your steps") as work lands, and keep `docs/run-notes.md` current.
@@ -48,6 +45,7 @@
 | Your step 3b: live run | **Done** | Run `2026-09-27_102010_2272b1477638`: no AA pin warning, 2 inherited estimates, `ok research registry current`, smoke 0 failures, 82 churn events / 0 alerts. But **partial coverage**: `llmstats: failed (0)`, and canonical models dropped to 1,131 from 1,136 |
 | LLM Stats failure | **Closed**: daily quota spent | `quota too low (4 remaining), need ~8 for base calls; wait for UTC reset`. The guard worked as designed |
 | Phase 1: CI | **Done**: [run #1](https://github.com/BiscuitDoesStuff/ModelAnalysis/actions/runs/36312905540) green on Windows + Linux × 3.11 + 3.13, and lint | `python -B tools/ci.py` passes in clean Python 3.11 and 3.13 venvs from `requirements.lock`: 59 tests, golden replay, smoke 0 failures, golden coverage OK |
+| Phase 2: identity | **Pushed**; your step 5 review next | 77 tests incl. `test_identity.py` (all plan fixtures), `test_compare_bundles.py`, Zen fingerprint test; CI green |
 | Fixture source | **Decided: record** | `tools/record_fixture.py` pushed; synthetic fixture kept alongside. Your step 4 records the real one |
 
 ## Context
@@ -162,6 +160,14 @@ Changes to `analysis/research.json`:
 ---
 
 ## Phase 2: Provider identity and collisions (roadmap item 1)
+
+**Status (2026-09-27): pushed; waiting on your step 5 review.** Built as described below, with these specifics:
+- **AA creator not in the alias table:** the AA row still joins when it's the only AA row for its tail and exactly one entity has that tail. It's recorded as an `aa-creator-unaliased` conflict, so an unaliased creator can't silently lose a model's score; add the alias to confirm it. With two AA rows for a tail, the strict rule applies.
+- **Zen `-free` routes stay separate report entities,** as before. The `research.json` inheritance rules decide their scores. For churn, a free-only Zen entity gets its paid counterpart's `canonical_id` when exactly one entity has that tail, so loss alerts still list it as an alternative.
+- **Benchmark-only rows** (BenchLM, LLM Stats rankings) attach to the one entity with their tail. They're skipped if several share it, and become reference-only rows if none do.
+- **`enrich` returns registry slugs that match no model.** They print a warning, land in `analysis.registry_missing_targets`, and fail the fixture coverage check.
+- **`tools/compare_bundles.py`** rebuilds route ownership for pre-identity bundles from the old tail rule. It also lists score changes, which is where a detached AA score would show up.
+- **Golden fixture** gains an alias pair (`meta-llama`/`meta`), a two-vendor collision (`acme`/`orbit` `nova-1`) and an ambiguous Zen `nova-1`.
 
 **New module `analysis/identity.py`** (pure functions, heavily fixture-tested). It takes over the grouping logic from `analyze.py:215-262`.
 
@@ -378,8 +384,8 @@ Run every command in PowerShell from `C:\DevProjects\ModelAnalysis`. Unless a st
 | 3b | — | — | Live run checkpoint: expect no "no AA benchmark pinned" warning, 2 inherited estimates, `ok research registry current` |
 | 3c | — | — | ✅ Done: LLM Stats failure was the daily quota |
 | 4 | After 00:00 UTC (LLM Stats quota reset) | ~15 min | Record and commit the real fixture. First try at 10:43 UTC on 09-27 was correctly refused: `llmstats=failed` (quota) |
-| 5 | After I push identity (Phase 2) | ~20 min | Replay and review the identity diff |
-| 6 | After Phase 2 merges | ~10 min | Live run checkpoint |
+| 5 | **Now** (Phase 2 is pushed) | ~20 min | Replay and review the identity diff |
+| 6 | After step 5 is settled | ~10 min | Live run checkpoint (first run after rule 3 sets baselines only) |
 | 7 | After Phases 3 and 6 | ~10 min each | Live run checkpoints (Phase 6 needs two runs) |
 | 8 | During Phase 5 | ~10 min | Review screenshots and try the site by keyboard |
 

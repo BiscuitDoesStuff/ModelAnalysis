@@ -27,9 +27,11 @@ def aa_creator(m):
     return c.get("name", "") if isinstance(c, dict) else str(c)
 
 try:
-    from .common import EFFORTS as EFFORTS_ORDERED, TIERS, base_slug, norm, tier_of
+    from .common import EFFORTS as EFFORTS_ORDERED, TIERS, base_slug, tier_of
+    from .identity import load_overrides as load_identity_overrides, resolve as resolve_identity
 except ImportError:
-    from common import EFFORTS as EFFORTS_ORDERED, TIERS, base_slug, norm, tier_of
+    from common import EFFORTS as EFFORTS_ORDERED, TIERS, base_slug, tier_of
+    from identity import load_overrides as load_identity_overrides, resolve as resolve_identity
 
 
 def parse_variant(aa_name="", aa_slug=""):
@@ -52,7 +54,7 @@ def parse_variant(aa_name="", aa_slug=""):
             return v
     return ""
 
-def main(input_path=None, output_dir=None, websites_path=None, registry_path=None, as_of=None):
+def main(input_path=None, output_dir=None, websites_path=None, registry_path=None, as_of=None, identity_path=None):
     """as_of/registry_path pin the evidence day and registry for fixture replays (default: run day, research.json)."""
     if input_path is None:
         raise ValueError("analysis requires an explicit input snapshot")
@@ -102,7 +104,6 @@ def main(input_path=None, output_dir=None, websites_path=None, registry_path=Non
         aa_rows.append({"id": m.get("slug", "") or m.get("id", ""), "name": m.get("name", ""),
                         "creator": aa_creator(m), "score": aa_score(m.get("evaluations")),
                         "cost_blended": p.get("price_1m_blended_3_to_1"), "zero_price": zero})
-    aa_by_slug = {norm(r["id"]): r for r in aa_rows}
 
     # Canonical deduped models (reports-layer union; raw snapshots untouched).
     def or_cost_per_1m(pricing):
@@ -122,7 +123,7 @@ def main(input_path=None, output_dir=None, websites_path=None, registry_path=Non
             return None
 
     def family_of(slug, variant):
-        s = str(slug or "")
+        s = str(slug or "").split(".")[0]  # split entities: <tail>.<vendor>
         if "__" in s:
             s = s.split("__")[0]
         v = str(variant or "")
@@ -183,64 +184,63 @@ def main(input_path=None, output_dir=None, websites_path=None, registry_path=Non
         if not rid:
             continue
         md_by_slug.setdefault(base_slug(rid), []).append(r)
-    aa_by_base = {base_slug(k): v for k, v in aa_by_slug.items()}
-
     def _entry():
         return {"or": [], "oai": [], "ant": [],
                 "nvidia": [], "zenmux": [], "zen": [], "aa": None,
                 "benchlm": None, "llm": None}
 
+    # Provider identity (analysis/identity.py): vendor-aware joins, recorded conflicts.
+    ident = resolve_identity(
+        {"openrouter": [m.get("id", "") for m in ors], "openai": [m.get("id", "") for m in oai],
+         "anthropic": [m.get("id", "") for m in ant], "nvidia": [m.get("id", "") for m in nvidia],
+         "zenmux": [m.get("id", "") for m in zenmux], "zen": [m.get("id", "") for m in zen]},
+        [{"slug": r["id"], "creator": r["creator"]} for r in aa_rows],
+        load_identity_overrides(identity_path))
+    union_keys = {"openrouter": "or", "openai": "oai", "anthropic": "ant",
+                  "nvidia": "nvidia", "zenmux": "zenmux", "zen": "zen"}
+    aa_by_id = {r["id"]: r for r in aa_rows}
     union = {}
-    for m in ors:
-        mid = m.get("id", "")
-        union.setdefault(base_slug(mid), _entry())
-        union[base_slug(mid)]["or"].append(mid)
-    for m in oai:
-        union.setdefault(base_slug(m.get("id", "")), _entry())
-        union[base_slug(m.get("id", ""))]["oai"].append(m.get("id", ""))
-    for m in ant:
-        union.setdefault(base_slug(m.get("id", "")), _entry())
-        union[base_slug(m.get("id", ""))]["ant"].append(m.get("id", ""))
-    for m in nvidia:
-        union.setdefault(base_slug(m.get("id", "")), _entry())
-        union[base_slug(m.get("id", ""))]["nvidia"].append(m.get("id", ""))
-    for m in zenmux:
-        union.setdefault(base_slug(m.get("id", "")), _entry())
-        union[base_slug(m.get("id", ""))]["zenmux"].append(m.get("id", ""))
-    for m in zen:
-        union.setdefault(base_slug(m.get("id", "")), _entry())
-        union[base_slug(m.get("id", ""))]["zen"].append(m.get("id", ""))
-    for m in aa:
-        key = base_slug(m.get("slug", "") or m.get("id", ""))
-        union.setdefault(key, _entry())
-        union[key]["aa"] = m
+    for slug, e in ident["entities"].items():
+        entry = union.setdefault(slug, _entry())
+        for provider, ids in e["routes"].items():
+            entry[union_keys[provider]].extend(ids)
+        entry["aa"] = aa_by_id.get(e["aa"]) if e["aa"] else None
+    by_tail = {}
+    for slug, e in ident["entities"].items():
+        by_tail.setdefault(e["tail"], []).append(slug)
+
+    def bench_entity(key):
+        """Benchmark rows attach to the one entity with their tail, else become reference-only."""
+        found = by_tail.get(key, [])
+        if len(found) > 1:
+            return None
+        if not found:
+            by_tail[key] = [key]
+            ident["entities"][key] = {"slug": key, "tail": key, "vendor": "", "key": f"?/{key}",
+                                      "basis": "exact", "routes": {}, "aa": None,
+                                      "canonical_id": key, "conflicts": []}
+        return union.setdefault(by_tail[key][0], _entry())
     # Benchmark-only rows (no provider listing): complete the BenchLM board and
     # LLM Stats ranked set as reference-only entities. No AA score, no callable
     # ID, excluded from OCF/stack — same precedent as AA-only rows.
     _bench_snap = snap.get("benchlm", {}) if isinstance(snap.get("benchlm"), dict) else {}
     for m in (_bench_snap.get("leaderboard", []) if isinstance(_bench_snap.get("leaderboard"), list) else []):
         if isinstance(m, dict) and m.get("model"):
-            key = base_slug(m["model"])
-            union.setdefault(key, _entry())
-            if union[key]["benchlm"] is None:
-                union[key]["benchlm"] = m
+            entry = bench_entity(base_slug(m["model"]))
+            if entry is not None and entry["benchlm"] is None:
+                entry["benchlm"] = m
     _llm_snap = snap.get("llmstats", {}) if isinstance(snap.get("llmstats"), dict) else {}
     for cat_rows in ((_llm_snap.get("rankings", {}) or {}).values() if isinstance(_llm_snap.get("rankings"), dict) else []):
         for r in cat_rows if isinstance(cat_rows, list) else []:
             if isinstance(r, dict) and (r.get("model_id") or r.get("model_name")):
-                key = base_slug(r.get("model_id", "") or r.get("model_name", ""))
-                union.setdefault(key, _entry())
-                if union[key]["llm"] is None:
-                    union[key]["llm"] = r
+                entry = bench_entity(base_slug(r.get("model_id", "") or r.get("model_name", "")))
+                if entry is not None and entry["llm"] is None:
+                    entry["llm"] = r
 
-    collisions = []
-    for key, entry in union.items():
-        bases = {i.split(":")[0] for i in entry["or"]}
-        if len(bases) > 1:
-            collisions.append({"slug": key, "ids": sorted(entry["or"])})
-    if collisions:
-        print(f"note: {len(collisions)} slug-collision merges (same tail slug, kept merged): " +
-              ", ".join(c["slug"] for c in collisions[:10]))
+    identity_conflicts = ident["conflicts"]
+    if identity_conflicts:
+        print(f"note: {len(identity_conflicts)} identity conflicts (kept separate or flagged): " +
+              ", ".join(sorted({c.get("tail", c.get("route", "")) for c in identity_conflicts}))[:300])
 
     models = []
     for key in sorted(union):
@@ -248,7 +248,8 @@ def main(input_path=None, output_dir=None, websites_path=None, registry_path=Non
         zen_free_ids = [i for i in u["zen"] if str(i).endswith("-free")]
         free = any(i in or_free for i in u["or"]) or bool(zen_free_ids)
         zen_free = bool(zen_free_ids)
-        aa_match = aa_by_base.get(key)
+        ent = ident["entities"][key]
+        aa_match = u["aa"]
         aa_creator_name = ""
         try:
             if aa_match:
@@ -284,7 +285,6 @@ def main(input_path=None, output_dir=None, websites_path=None, registry_path=Non
             providers.append("zenmux")
         if u["zen"]:
             providers.append("zen")
-        aa_match = aa_by_base.get(key)
         score = aa_match["score"] if aa_match else None
         cost = aa_cost(aa_match["cost_blended"]) if aa_match else None
         cost_source = "aa" if cost is not None else ""
@@ -346,8 +346,8 @@ def main(input_path=None, output_dir=None, websites_path=None, registry_path=Non
         efforts_source = "or" if efforts else ""
         default_effort_source = "or" if default_effort else ("unspecified-upstream" if efforts else "")
         # Tier 1: models.dev + ZenMux promotion per canonical slug.
-        md_matches = md_by_slug.get(key, [])
-        zm_matches = zenmux_by_slug.get(key, [])
+        md_matches = md_by_slug.get(ent["tail"], [])
+        zm_matches = zenmux_by_slug.get(ent["tail"], [])
         md_efforts_union = sorted({e for r in md_matches for e in (r.get("reasoning_efforts") or [])})
         md_reasoning_any = any(bool(r.get("reasoning")) for r in md_matches)
         md_has = bool(md_matches)
@@ -397,14 +397,23 @@ def main(input_path=None, output_dir=None, websites_path=None, registry_path=Non
                        "modality_status": modality_status,
                        "modelsdev_count": len(md_matches), "modelsdev_efforts": md_efforts_union,
                        "zenmux_reasoning": zm_reason_flag, "zenmux_output": zm_out,
-                       "fallback_id": fallback_id, "fallback_provider": fallback_provider})
+                       "fallback_id": fallback_id, "fallback_provider": fallback_provider,
+                       "routes": [{"provider": prov, "id": rid,
+                                   "free_evidence": (["or:strict-free"] if prov == "openrouter" and rid in or_free
+                                                     else ["zen:free-route"] if prov == "zen" and rid.endswith("-free")
+                                                     else [])}
+                                  for prov in ("openrouter", "openai", "anthropic", "nvidia", "zenmux", "zen")
+                                  for rid in sorted(ent["routes"].get(prov, []))],
+                       "identity": {"key": ent["key"], "basis": ent["basis"], "vendor": ent["vendor"],
+                                    "tail": ent["tail"], "conflicts": ent["conflicts"]},
+                       "canonical_id": ent["canonical_id"]})
 
     try:
         from .enrichment import enrich
     except ImportError:
         from enrichment import enrich
     with open(registry_path or os.path.join(ROOT, 'analysis', 'research.json'), encoding='utf-8') as f:
-        enrich(models, json.load(f), day, md_by_slug)
+        registry_missing = enrich(models, json.load(f), day, md_by_slug)
 
     # Backlog: effort-disambiguation + callable hints (pure local, post-enrich so derived rows group).
     CALLABLE_SET = {"openai", "anthropic", "openrouter", "nvidia", "zenmux", "zen"}
@@ -526,7 +535,8 @@ def main(input_path=None, output_dir=None, websites_path=None, registry_path=Non
                                   "provisional-l1": _fsc.get("provisional-l1", 0),
                                   "provisional-l0": _fsc.get("provisional-l0", 0),
                                   "none": _fsc.get("none", 0)},
-           "models": models, "collisions": collisions,
+           "models": models, "identity_conflicts": identity_conflicts,
+           "registry_missing_targets": registry_missing,
            "thresholds": dict(TIERS),
            "cost_method": "aa_blended_primary_or_derived_fallback_per_1M"}
     if output_dir is None:
@@ -548,5 +558,6 @@ if __name__ == "__main__":
     parser.add_argument("--websites")
     parser.add_argument("--registry")
     parser.add_argument("--as-of")
+    parser.add_argument("--identity")
     args = parser.parse_args()
-    main(args.input, args.output, args.websites, args.registry, args.as_of)
+    main(args.input, args.output, args.websites, args.registry, args.as_of, args.identity)

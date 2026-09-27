@@ -1,0 +1,33 @@
+{
+ "vendor_aliases": {
+  "_comment": "Keys are norm() of a route namespace or AA model_creator; values are the canonical vendor.",
+  "metallama": "meta",
+  "metaai": "meta",
+  "mistralai": "mistral",
+  "deepseekai": "deepseek",
+  "moonshotai": "moonshot",
+  "kimi": "moonshot",
+  "zhipuai": "zai",
+  "zhipu": "zai",
+  "alibaba": "qwen",
+  "alibabacloud": "qwen",
+  "gemini": "google",
+  "googledeepmind": "google",
+  "ibmgranite": "ibm",
+  "microsoftazure": "microsoft",
+  "ai21labs": "ai21",
+  "alleninstituteforai": "allenai",
+  "ai2": "allenai",
+  "bytedanceseed": "bytedance",
+  "minimaxai": "minimax",
+  "liquidai": "liquid",
+  "lgairesearch": "lgai",
+  "perplexityai": "perplexity",
+  "rekaai": "reka",
+  "stepfunai": "stepfun",
+  "tencenthunyuan": "tencent",
+  "motiftechnologies": "motif"
+ },
+ "joins": [],
+ "splits": []
+}

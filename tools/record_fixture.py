@@ -83,9 +83,15 @@ def select_slugs(models, report, registry):
     return {s.split("__")[0] for s in keep if s}
 
 
+def tails_of(models, keys):
+    """Raw rows are found by tail; split entities have `<tail>.<vendor>` slugs."""
+    return {(m.get("identity") or {}).get("tail") or m["slug"].split(".")[0]
+            for m in models if m["slug"].split("__")[0] in keys}
+
+
 def join_keys(models, keys):
     """Every name a benchmark row may join on for a kept model (mirrors crosswalk candidates)."""
-    out = set(keys)
+    out = set(keys) | tails_of(models, keys)
     for m in models:
         if m["slug"].split("__")[0] in keys:
             out.update(norm(x) for x in (m.get("name"), m.get("aa_id"), (m.get("or_id") or "").split("/")[-1]))
@@ -219,7 +225,7 @@ def record(bundle, out_dir, registry_path=None, secrets=None):
     joins = join_keys(analysis["models"], keys)
     fixture = {"kind": "recorded", "recorded_from": run_id, "as_of": analysis["day"],
                "registry": f"{PREFIX}_research.json"}
-    trimmed = trim_snapshot(snap, keys, joins)
+    trimmed = trim_snapshot(snap, tails_of(analysis["models"], keys), joins)
     trimmed["fixture"] = fixture
     trimmed_web = None
     if web is not None:

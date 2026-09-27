@@ -46,6 +46,9 @@ def golden_coverage(bundle, recorded=False):
         "llmstats join": any(m.get("llmstats_api") or m.get("llmstats_rank") for m in models),
         "bench-only entity": any(m.get("bench_only") for m in models),
         "router row": any(m.get("router") for m in models),
+        "identity conflict recorded": recorded or bool(a.get("identity_conflicts")),
+        "identity alias join": recorded or any((m.get("identity") or {}).get("basis") == "alias" for m in models),
+        "registry slugs all match a model": not a.get("registry_missing_targets"),
         "complete coverage": json.loads((bundle / "manifest.json").read_text(encoding="utf-8")).get("coverage") == "complete",
     }
     return [name for name, ok in want.items() if not ok]

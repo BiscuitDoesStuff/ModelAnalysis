@@ -10,9 +10,9 @@ import html as _html
 from urllib.parse import quote
 
 if __package__:
-    from .build_report import copy_id, reliability_data, reliability_html, source_summary
+    from .build_report import IDENTITY_HEADERS, copy_id, identity_rows, reliability_data, reliability_html, source_summary
 else:
-    from build_report import copy_id, reliability_data, reliability_html, source_summary
+    from build_report import IDENTITY_HEADERS, copy_id, identity_rows, reliability_data, reliability_html, source_summary
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -25,6 +25,26 @@ def copy_control(m):
     route = copy_id(m)
     return (f"<code class='copy' onclick='cp(this)'>{esc(route)}</code>"
             if route else "<span class='note'>no callable ID</span>")
+
+
+def route_copy_id(route):
+    """What a user pastes for one catalog route (OpenRouter IDs get the opencode prefix)."""
+    rid = route.get("id", "")
+    return rid if route.get("provider") != "openrouter" or rid.startswith("openrouter/") else f"openrouter/{rid}"
+
+
+def routes_html(m):
+    routes = m.get("routes") or []
+    ident = m.get("identity") or {}
+    if not routes and not ident:
+        return ""
+    rows = "".join(f"<tr><td>{esc(r.get('provider'))}</td><td><code class='copy' onclick='cp(this)'>{esc(route_copy_id(r))}</code></td>"
+                   f"<td>{esc(', '.join(r.get('free_evidence') or []) or '–')}</td></tr>" for r in routes)
+    conflicts = "".join(f"<li>{esc(c.get('kind'))}: {esc(c.get('reason'))}</li>" for c in ident.get("conflicts") or [])
+    return (f"<h2>Routes</h2><p class='note'>Identity {esc(ident.get('key', '–'))} · basis {esc(ident.get('basis', '–'))}</p>"
+            + (f"<table><tr><th>Provider</th><th>Route</th><th>Free evidence</th></tr>{rows}</table>" if rows
+               else "<p class='note'>No provider routes (benchmark or AA row only).</p>")
+            + (f"<p>Identity conflicts:</p><ul>{conflicts}</ul>" if conflicts else ""))
 
 
 def model_filename(slug):
@@ -224,7 +244,7 @@ def main(input_path=None, output_dir=None):
         prov_html = ("<h3>LLM Stats providers</h3><table>" + prov_rows + "</table>") if prov_rows else ""
         body = (f"<p><code>{esc(m['id'])}</code> · {esc(m.get('name',''))} · groups {esc(''.join(m.get('groups',[])) or '–')} · "
                 f"free {esc(m.get('free_status','none'))}</p>"
-                f"<p>Route: {copy_control(m)}</p>"
+                f"<p>Route: {copy_control(m)}</p>" + routes_html(m) +
                 f"<h2>Scores (separate scales)</h2><table><tr><th>Source</th><th>Value</th><th>Evidence</th></tr>"
                 f"<tr><td>AA Intelligence</td><td>{esc(m.get('score','unscored'))}</td><td>{esc((m.get('score_source') or {}).get('kind','unscored'))}</td></tr>"
                 f"<tr><td>BenchLM overall</td><td>{esc(b.get('overall','–'))}</td><td>{esc(b.get('evidence','–'))}</td></tr>"
@@ -297,7 +317,14 @@ def main(input_path=None, output_dir=None):
                        + copy_control(resolve(t))
                        + "</td><td>" + ("QUALIFIER — verify billing" if t.get("qualifier") else "watch") + "</td></tr>"
                        for t in tri[:20])
-    conf_body = (f"<p>BenchLM evidence: supported {conf.get('supported',0)} · estimated {conf.get('estimated',0)} · other {conf.get('other',0)}</p>"
+    ident_rows = "".join("<tr>" + "".join(f"<td>{esc(v)}</td>" for v in row) + "</tr>" for row in identity_rows(a))
+    ident_html = ("<h2>Identity conflicts</h2><p class='note'>Routes with the same model name that were kept apart "
+                  "(different vendors, or a vendor-unknown route matching several) or joined with a caveat. "
+                  "Add joins/splits with evidence in analysis/identity.json.</p><div class='twrap'><table><tr>"
+                  + "".join(f"<th>{esc(h)}</th>" for h in IDENTITY_HEADERS) + "</tr>"
+                  + (ident_rows or f"<tr><td colspan='{len(IDENTITY_HEADERS)}'>No identity conflicts.</td></tr>")
+                  + "</table></div>") if "identity_conflicts" in a else ""
+    conf_body = ident_html + (f"<p>BenchLM evidence: supported {conf.get('supported',0)} · estimated {conf.get('estimated',0)} · other {conf.get('other',0)}</p>"
                  f"<p>Website crawl: {esc(a.get('website_stats',{}))}</p>"
                  f"<h2>Provisional triage (top 20 by AA score)</h2>"
                  f"<p class='note'>Qualifier = score ≥ 40 with a callable route → verify billing for verified-free promotion. "

@@ -77,6 +77,9 @@ def snapshot():
         or_row("z-ai/glm-5.3", "Z.ai: GLM-5.3", "0.0000006", "0.0000022"),
         or_row("moonshotai/kimi-k3", "MoonshotAI: Kimi K3", "0.000001", "0.000004"),
         or_row("openrouter/auto", "Auto Router", "-1", "-1"),
+        # Identity cases: alias (meta-llama = meta), a two-vendor tail collision.
+        or_row("meta-llama/llama-4-scout", "Meta: Llama 4 Scout", "0.0000002", "0.0000006"),
+        or_row("acme/nova-1", "Acme: Nova 1", "0.000001", "0.000003"),
     ]
     openai = [{"id": "gpt-6", "object": "model", "owned_by": "openai"},
               {"id": "gpt-6-mini", "object": "model", "owned_by": "openai"},
@@ -84,12 +87,14 @@ def snapshot():
     anthropic = [{"id": "claude-opus-5", "display_name": "Claude Opus 5", "max_input_tokens": 1000000, "max_tokens": 64000},
                  {"id": "claude-haiku-5", "display_name": "Claude Haiku 5", "max_input_tokens": 200000, "max_tokens": 32000}]
     nvidia = [{"id": "deepseek-ai/deepseek-v4", "object": "model", "owned_by": "deepseek-ai"},
+              {"id": "meta/llama-4-scout", "object": "model", "owned_by": "meta"},
+              {"id": "orbit/nova-1", "object": "model", "owned_by": "orbit"},
               {"id": "nvidia/nemotron-4-ultra", "object": "model", "owned_by": "nvidia"}]
     zenmux = [{"id": "qwen/qwen3-30b-a3b", "display_name": "Qwen3 30B A3B", "owned_by": "qwen",
                "capabilities": {"reasoning": True}, "output_modalities": ["text"], "context_length": 131072,
                "pricings": {"prompt": [{"value": 0.1}], "completion": [{"value": 0.3}]}}]
     zen = [zen_row("muse-spark-1.3-contributor-free"), zen_row("muse-spark-1.2-contributor-free"),
-           zen_row("kimi-k3-free"), zen_row("big-pickle")]
+           zen_row("kimi-k3-free"), zen_row("big-pickle"), zen_row("nova-1")]
     modelsdev = [
         md_row("opencode", "muse-spark-1.3-contributor-free", 0, 0, EFFORTS5),
         md_row("opencode", "muse-spark-1.2-contributor-free", 0, 0, EFFORTS5, deprecated=True),

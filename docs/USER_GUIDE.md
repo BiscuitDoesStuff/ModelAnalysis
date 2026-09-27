@@ -131,7 +131,7 @@ Within `runs/bundles/<run_id>/`, `raw/` holds snapshots, `analysis/` holds analy
 
 MD retains nine ranking sections: All Intelligence/Cost/Ratio, OCF Intelligence/Cost/Ratio, Stack, Practical, Outliers. Markdown lists are capped; JSON and Excel retain full lists. JSON section entries reference `models_by_slug`; row fields retain variants, effort/default provenance, callable IDs, score evidence, prices, deprecation, and modality flags.
 
-New-schema Excel has **15 sheets**: `summary`, `All_Intel`, `All_Cost`, `All_Ratio`, `OCF_Intel`, `OCF_Cost`, `OCF_Ratio`, `OCF_Stack`, `OCF_Practical`, `OCF_Outliers`, `Family_Variants`, `BenchLM_Matrix`, `LLMStats_Matrix`, `Source_Health`, `Churn`. Legacy inputs without reliability fields produce 13.
+New-schema Excel sheets: `summary`, `All_Intel`, `All_Cost`, `All_Ratio`, `OCF_Intel`, `OCF_Cost`, `OCF_Ratio`, `OCF_Stack`, `OCF_Practical`, `OCF_Outliers`, `Family_Variants`, `BenchLM_Matrix`, `LLMStats_Matrix`, `Source_Health`, `Churn`, `Identity`, so **16** in total. Legacy inputs without reliability fields produce 13, and analyses from before provider identity produce 15.
 
 Cleanup runs after publication. Defaults retain current + previous bundles, detailed history for 90 days, daily rollups for 365 days, and failed or interrupted staging bundles for 7 days. The latest complete source baselines are protected even across longer outages. Legacy/user files are not pruned by bundle cleanup. SQLite is versioned and pruned, not append-only; migration backs up an existing database and leaves legacy tables untouched. Keep each state directory paired with its database when backing up or moving it.
 

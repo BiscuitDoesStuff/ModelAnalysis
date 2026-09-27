@@ -661,6 +661,16 @@
    "owned_by": "deepseek-ai"
   },
   {
+   "id": "meta/llama-4-scout",
+   "object": "model",
+   "owned_by": "meta"
+  },
+  {
+   "id": "orbit/nova-1",
+   "object": "model",
+   "owned_by": "orbit"
+  },
+  {
    "id": "nvidia/nemotron-4-ultra",
    "object": "model",
    "owned_by": "nvidia"
@@ -876,6 +886,34 @@
     "completion": "-1",
     "prompt": "-1"
    }
+  },
+  {
+   "architecture": {
+    "output_modalities": [
+     "text"
+    ]
+   },
+   "context_length": 128000,
+   "id": "meta-llama/llama-4-scout",
+   "name": "Meta: Llama 4 Scout",
+   "pricing": {
+    "completion": "0.0000006",
+    "prompt": "0.0000002"
+   }
+  },
+  {
+   "architecture": {
+    "output_modalities": [
+     "text"
+    ]
+   },
+   "context_length": 128000,
+   "id": "acme/nova-1",
+   "name": "Acme: Nova 1",
+   "pricing": {
+    "completion": "0.000003",
+    "prompt": "0.000001"
+   }
   }
  ],
  "retrieved_at": "golden-synthetic",
@@ -935,7 +973,7 @@
   "nvidia": {
    "attempted": true,
    "complete": true,
-   "count": 2,
+   "count": 4,
    "enabled": true,
    "fetched_at": "2026-09-27T00:00:00+00:00",
    "reason": "",
@@ -955,7 +993,7 @@
   "openrouter": {
    "attempted": true,
    "complete": true,
-   "count": 11,
+   "count": 13,
    "enabled": true,
    "fetched_at": "2026-09-27T00:00:00+00:00",
    "reason": "",
@@ -975,7 +1013,7 @@
   "zen": {
    "attempted": true,
    "complete": true,
-   "count": 4,
+   "count": 5,
    "enabled": true,
    "fetched_at": "2026-09-27T00:00:00+00:00",
    "reason": "",
@@ -1025,6 +1063,12 @@
   {
    "created": 1790000000,
    "id": "big-pickle",
+   "object": "model",
+   "owned_by": "opencode"
+  },
+  {
+   "created": 1790000000,
+   "id": "nova-1",
    "object": "model",
    "owned_by": "opencode"
   }

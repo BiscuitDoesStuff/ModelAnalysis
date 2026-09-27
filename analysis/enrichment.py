@@ -18,7 +18,11 @@ def finite(value):
 
 
 def enrich(models, registry, day, modelsdev_by_slug=None):
-    """Mutate base rows and append explicitly evidenced route/effort estimates."""
+    """Mutate base rows and append explicitly evidenced route/effort estimates.
+
+    Returns registry slugs that match no model (e.g. after an identity split), so a
+    slug change can never silently drop evidence.
+    """
     datetime.date.fromisoformat(day)
     cohort = registry.get('snapshot_benchmarks', {}).get(day)
     if not cohort:
@@ -38,6 +42,11 @@ def enrich(models, registry, day, modelsdev_by_slug=None):
                              if m.get('score') is not None else None)
         m['external_scores'] = []
         m['research_notes'] = []
+    missing = sorted({s for r in registry.get('scores', []) for s in [r['target_slug']] if s not in by_slug} |
+                     {s for r in registry.get('inheritance', []) for s in (r['target_slug'], r['source_slug'])
+                      if s not in by_slug})
+    if missing:
+        print(f"warn research.json slugs match no model: {missing} — renamed or split? update the registry")
     for record in registry.get('scores', []):
         m = by_slug.get(record['target_slug'])
         if m is None:
@@ -91,3 +100,4 @@ def enrich(models, registry, day, modelsdev_by_slug=None):
         score, cost = m.get('score'), m.get('cost_blended')
         m['ratio'] = round(score / cost, 4) if score is not None and cost and cost > 0 and not m.get('free') else None
         m['tier'] = tier_of(score)
+    return missing

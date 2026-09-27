@@ -239,6 +239,18 @@ class HistoryTests(unittest.TestCase):
         self.assertEqual(event["access_status"], "verified_alternative")
         self.assertFalse(event["unknown_coverage"])
 
+    def test_zen_created_timestamp_is_not_a_catalog_change(self):
+        zen = lambda created, owner="opencode": [{"id": "model-free", "object": "model", "created": created, "owned_by": owner}]
+        self.run_snapshot("first", "2026-01-01", snapshot(zen=zen(1)))
+        result = self.run_snapshot("second", "2026-01-02", snapshot(zen=zen(2)))
+        self.assertEqual(result["counts"]["catalog_changed"], 0)
+        result = self.run_snapshot("third", "2026-01-03", snapshot(zen=zen(3, "someone-else")))
+        self.assertEqual(result["counts"]["catalog_changed"], 1)
+        # Other providers keep `created` in their fingerprint.
+        self.run_snapshot("or-1", "2026-01-04", snapshot([route(created=1)]))
+        result = self.run_snapshot("or-2", "2026-01-05", snapshot([route(created=2)]))
+        self.assertEqual(result["counts"]["catalog_changed"], 1)
+
     def test_outage_alternatives_and_namespace_collisions(self):
         self.run_snapshot("before", "2026-01-01", snapshot([route()]))
         h = health()

@@ -4,6 +4,8 @@ The reliability foundation is implemented: pinned run bundles, staged publicatio
 
 ## 1. Provider identity and collision handling
 
+**Status (2026-09-27):** implemented as Phase 2 of `docs/PLAN.md` (`analysis/identity.py`, `identity.json`, churn rule 3, `tools/compare_bundles.py`); owner's replay review of splits pending.
+
 **Goal:** preserve exact provider routes while improving canonical model/family joins. Make ambiguous same-tail matches reviewable instead of silently broadening equivalence.
 
 **Dependencies:** route identity/history contracts, recorded collisions, explicit crosswalk evidence and representative multi-provider fixtures.

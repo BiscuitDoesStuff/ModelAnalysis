@@ -14,3 +14,6 @@ reports/*_site/
 analysis/store.sqlite.*
 runs/
 __pycache__/
+replay-runs/
+replay-history.sqlite*
+identity-diff.txt

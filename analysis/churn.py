@@ -4,9 +4,13 @@ import json
 import math
 import re
 
-RULE_VERSION = 2
+# 3: routes grouped by report identity (analysis/identity.py); Zen `created` ignored.
+RULE_VERSION = 3
 PROVIDERS = ("openrouter", "openai", "anthropic", "nvidia", "zenmux", "zen")
 LOSS_TYPES = frozenset(("verified_free_paid", "verified_free_removed"))
+# Fields a provider rewrites on every fetch; excluded from catalog fingerprints.
+# Zen rows are {id, object, created, owned_by} and `created` moves forward each fetch.
+VOLATILE_FIELDS = {"zen": frozenset({"created"})}
 EVENT_TYPES = ("verified_free_paid", "verified_free_removed", "verification_unknown",
                "free_added", "free_restored", "catalog_added", "catalog_removed", "catalog_changed")
 
@@ -115,7 +119,8 @@ def build_routes(snapshot, models):
                 "canonical_explicit": bool(mapped),
                 "namespace": mid.rsplit("/", 1)[0].lower() if "/" in mid else "",
                 "state": state, "verified_free": state == "verified_free",
-                "evidence": evidence, "catalog_hash": digest(row),
+                "evidence": evidence,
+                "catalog_hash": digest({k: v for k, v in row.items() if k not in VOLATILE_FIELDS.get(provider, ())}),
             }
     return routes, malformed
 

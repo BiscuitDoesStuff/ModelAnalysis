@@ -43,7 +43,7 @@ Each bundle is `runs/bundles/<run_id>/`, with a unique UTC timestamp plus random
 | `reports/<run_id>_site/` | Source leaderboards, all-model directory, every non-router model page, Compare, Methodology, Confidence, `data.json` |
 | `reports/<run_id>_report.html` | Start here, Best value, Stack, Variants, Free, Graph, Explore |
 | `reports/<run_id>_summary.md` | Nine ranking sections plus reliability details |
-| `reports/<run_id>_models.xlsx` | 15 sheets for new-schema output; 13 for legacy input |
+| `reports/<run_id>_models.xlsx` | 16 sheets for new-schema output (incl. `Identity`); 13 for legacy input |
 | `reports/<run_id>_models.json` | Slug-indexed rankings, model table, source health and structured churn |
 | `reports/<run_id>_churn_alert.md` | Only when a verified-free route becomes paid or is removed |
 

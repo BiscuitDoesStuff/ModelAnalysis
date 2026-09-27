@@ -151,6 +151,22 @@ def reliability_html(a):
     return "".join(body) + "</section>"
 
 
+IDENTITY_HEADERS = ["Kind", "Tail", "Entities", "Routes", "Reason"]
+
+
+def identity_rows(a):
+    """One row per identity conflict: which routes sit on each side, and why."""
+    for c in a.get("identity_conflicts") or []:
+        if c.get("routes"):
+            routes = "; ".join(f"{slug}: {', '.join(ids)}" for slug, ids in c["routes"].items())
+        else:
+            routes = ", ".join(filter(None, [c.get("route"), c.get("aa_slug") and f"aa:{c['aa_slug']}"]
+                                      + [f"aa:{x}" for x in c.get("aa_slugs", [])]))
+            if c.get("candidates"):
+                routes += " vs " + ", ".join(c["candidates"])
+        yield [c.get("kind", ""), c.get("tail", ""), ", ".join(c.get("entities", [])), routes, c.get("reason", "")]
+
+
 def metadata_rows(value, path=""):
     """Lossless leaf paths for nested metadata in the spreadsheet."""
     if isinstance(value, dict) and value:
@@ -838,7 +854,9 @@ def main(input_path=None, output_dir=None):
          f"F? provisional L1/L0 "
          f"{sum(1 for m in a.get('models', []) if free_status_of(m) == 'provisional-l1')}/"
          f"{sum(1 for m in a.get('models', []) if free_status_of(m) == 'provisional-l0')} | "
-         f"Routers {len(s['routers'])} excluded\n",
+         f"Routers {len(s['routers'])} excluded"
+         + (f" | Identity conflicts {len(a['identity_conflicts'])} (XLSX Identity sheet, site Confidence page)"
+            if "identity_conflicts" in a else "") + "\n",
          "\n## 1. All Data — Intelligence\n"]
     L += [row_md(m) for m in s["all_intel"][:MD_CAP]]
     if len(s["all_intel"]) > MD_CAP:
@@ -926,7 +944,7 @@ def main(input_path=None, output_dir=None):
     full = {"stamp": stamp, "day": a.get("day", stamp[:10]), "thresholds": th,
             "cost_method": a.get("cost_method", ""), "quartiles": s["quartiles"],
             "score_dist": dist, "routers_excluded": s["routers"],
-            "collisions": a.get("collisions", []),
+            "identity_conflicts": a.get("identity_conflicts", []),
             "free_status_counts": a.get("free_status_counts", {}),
             "models_by_slug": {m["slug"]: m for m in s["all_intel"]},
             "all_intel": [m["slug"] for m in s["all_intel"]],
@@ -1046,6 +1064,11 @@ def main(input_path=None, output_dir=None):
                 if key == "source_health" and "website_health" in a:
                     for row in metadata_rows(a["website_health"], "website_health"):
                         w.append(row)
+        if "identity_conflicts" in a:
+            w = wb.create_sheet("Identity")
+            w.append(IDENTITY_HEADERS)
+            for row in identity_rows(a):
+                w.append(row)
         wb.save(os.path.join(rep, f"{stamp}_models.xlsx"))
     write_workbook()
     with open(os.path.join(rep, f"{stamp}_report.html"), "w", encoding="utf-8") as f:

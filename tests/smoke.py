@@ -154,6 +154,17 @@ if w_files:
         check(isinstance(v, list) or (isinstance(v, dict) and ("skipped" in v or "error" in v)),
               "snapshot modelsdev list-or-error")
 
+# Phase 2 identity: every model says which routes it owns and how they were joined.
+if "identity_conflicts" in a:
+    check(all(isinstance(m.get("routes"), list) and (m.get("identity") or {}).get("basis") in
+              ("exact", "alias", "unique-tail", "explicit") for m in models),
+          f"models carry routes + identity ({len(a['identity_conflicts'])} conflicts)")
+    _owned = [(x["provider"], x["id"]) for m in models if not m.get("history_excluded") for x in m.get("routes", [])]
+    check(len(_owned) == len(set(_owned)), "each route belongs to one model")
+    check("collisions" not in a, "identity_conflicts replaces collisions")
+else:
+    print("warn no identity_conflicts (pre-Phase-2 analysis); identity checks skipped")
+
 # Legacy day-level free_churn was removed; schema-3 route churn is checked below.
 if "free_churn" in a or "free_churn" in r:
     print("warn legacy free_churn present (bundle predates its removal); ignored")
@@ -358,6 +369,8 @@ try:
             "BenchLM_Matrix", "LLMStats_Matrix"}
     if a.get("schema_version", 0) >= 3:
         want |= {"Source_Health", "Churn"}
+    if "identity_conflicts" in a:
+        want.add("Identity")
     check(set(wb.sheetnames) == want, f"xlsx has expected tabs ({len(wb.sheetnames)})")
     hdr = [c.value for c in wb["All_Ratio"][1]]
     check("free_status" in hdr, "xlsx All_Ratio has free_status column")
