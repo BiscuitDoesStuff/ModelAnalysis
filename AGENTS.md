@@ -2,14 +2,16 @@
 
 ## Project identity
 
-Owned by this project, never overwritten by SuperWorkspace. Replace this with
-one paragraph: what ModelAnalysis is, where its implemented state is recorded,
-and what work is currently authorized.
+ModelAnalysis takes local, on-use snapshots of LLM catalogs, free routes, prices and benchmark evidence into Markdown, Excel, JSON, an offline dashboard and a static site. Implemented state lives in `docs/PLAN.md` (handoff section first, then phase Status notes), dated evidence in `docs/run-notes.md`, execution history in the latest events under `.sw/comms/tasks/<task-id>/`, and published truth in Git (`main` baseline, owner's `biscuit-worktree`). Currently authorized: the Phase 6 post-quota-window live pair plus fixture recording (owner-approved, procedure in the latest `phase6-measure-first` event and PLAN steps 4/7), and the standing owner items in the PLAN handoff (steps 4, R, 8). Phase 7 and anything beyond are roadmap order, not approval.
 
 ## Architecture invariants
 
-Owned by this project. List the rules an agent must never break: single state
-owners, one path per concern, and boundaries between layers.
+Owned by this project. Rules an agent must never break:
+- `source_health`/`website_health` flow analyze → history overlay → pipeline → reports untouched; renderers never reinterpret missing evidence (unknown is not zero) and replay never touches the network.
+- One shared report renderer (`build_report.reliability_tables` + `reports/ui.py`) feeds the dashboard and the site; new tables/pages must use `ui.*` or `validate_bundle` fails the run.
+- Retrieval measures without changing behaviour: same requests, retries, completeness and cached `fetched_at`; quota readings come only from existing account calls, never invented.
+- No mutable module state in retrieval; explicit per-invocation contexts. Offline experiments use fixtures, `tools/golden_bundle.py` or temp state dirs — never the real `runs/` or history database.
+- Agents never commit, push, or run `run.ps1` (quota spend + real history writes); the owner approves and publishes.
 
 <!-- sw:begin core -->
 ## Required startup
