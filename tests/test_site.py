@@ -299,7 +299,9 @@ class SiteTests(unittest.TestCase):
             doc = Document(path.read_text(encoding="utf-8"))
             section = doc.by_id("reliability")
             tables = [n for n in doc.nodes if n.tag == "table" and self.is_descendant(n, section)]
-            self.assertEqual(len(tables), 3)
+            captions = [n.text for n in doc.nodes if n.tag == "caption" and self.is_descendant(n, section)]
+            self.assertEqual(captions[:3], ["Source health", "Churn events", "Daily summary"])
+            self.assertTrue(any(c.startswith("Retrieval") and "retained on replay" in c for c in captions))
             for value in ("Source", "Status", "Count", "Fetched at", "Reason", "Baseline", "Coverage",
                           "2026-09-26T12:01:00Z", "prior-run", "<offline> & unavailable", "pages: attempted: 3; failed: 1"):
                 self.assertIn(value, tables[0].text)

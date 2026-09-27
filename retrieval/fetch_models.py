@@ -2,135 +2,207 @@
 Benchmark sources: AA (keyed API) + BenchLM (keyless JSON) + LLM Stats (keyed API,
 public website fallback via fetch_websites.py) + Vals (public website, best-effort).
 """
-import json, os, sys, time, urllib.request, urllib.error
+import os, sys
+import datetime
+import hashlib
+import json
+import math
+import threading
+import urllib.error
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+# Direct scripts must not put retrieval/http.py on the stdlib import path.
+if __package__ in (None, ""):
+    sys.path[0] = str(Path(__file__).resolve().parents[1])
 from pipeline_common import (apply_credentials, atomic_json, new_run_id, utc_now, safe_error,
                              source_status, load_config, SOURCES, PROVIDERS, SCHEMA_VERSION)
 from analysis.common import norm
+from retrieval.http import SourceClient
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-RAW = os.path.join(ROOT, "raw")  # default only; pipeline.py passes the staging dir
-ERRLOG = os.path.join(RAW, "_errors.log")
-FETCH_HEALTH = {}
-CONFIG = load_config()
+# Independent sources share one bounded pool; llmstats runs after its inputs, in main.
+MAX_FETCH_THREADS = 4
+# One shared _errors.log: concurrent sources must never interleave their lines.
+_ERROR_LOG_LOCK = threading.Lock()
 
-def log_err(msg):
-    os.makedirs(os.path.dirname(ERRLOG), exist_ok=True)
-    with open(ERRLOG, "a", encoding="utf-8") as f:
-        f.write(f"{utc_now()} {safe_error(msg)}\n")
+class FetchContext:
+    def __init__(self, source, config, error_log, client=None, cache_dir=None):
+        self.source = source
+        self.config, self.error_log = config, Path(error_log)
+        self.cache_dir = Path(cache_dir) if cache_dir is not None else None
+        self.health = None
+        self.pending, self.reused_at = [], None
+        self.client = client or SourceClient(source, "api", log=self.log_err)
 
-def get(url, headers=None, timeout=60, retries=3):
-    last = None
-    for i in range(retries):
+    def log_err(self, msg):
+        line = f"{utc_now()} {safe_error(msg)}\n"
+        with _ERROR_LOG_LOCK:
+            self.error_log.parent.mkdir(parents=True, exist_ok=True)
+            with self.error_log.open("a", encoding="utf-8") as f:
+                f.write(line)
+
+    def get_json(self, url, headers=None, timeout=60, parse=None):
+        """GET that revalidates a stored body (ETag/Last-Modified) when a cache dir exists.
+
+        Without a cache dir this is exactly the plain GET. A 304 reuses the stored
+        body and records its original fetch time for the source's fetched_at;
+        storing waits for the source's final health (see main) so partial fetches
+        never become validator state, and network failures never fall back to
+        stale data.
+        """
+        if self.cache_dir is None:
+            data = self.client.get(url, headers, timeout=timeout)
+            return parse(data) if parse is not None else data
+        stored = _validator_get(self, url)
+        request_headers = dict(headers or {})
+        if stored is not None:
+            if stored.get("etag"):
+                request_headers["If-None-Match"] = stored["etag"]
+            if stored.get("last_modified"):
+                request_headers["If-Modified-Since"] = stored["last_modified"]
         try:
-            req = urllib.request.Request(url, headers={"User-Agent": "model-watch/1", **(headers or {})})
-            with urllib.request.urlopen(req, timeout=timeout) as r:
-                return json.loads(r.read().decode("utf-8", "replace"))
-        except urllib.error.HTTPError as e:
-            if 400 <= e.code < 500:
-                log_err(f"FAILED {url}: {e}")
-                raise
-            last = e
-        except (urllib.error.URLError, TimeoutError, ConnectionError, ValueError) as e:
-            last = e
-        log_err(f"retry {i+1}/{retries} {url}: {last}")
-        if i < retries - 1:
-            time.sleep(2 ** i)
-    log_err(f"FAILED {url}: {last}")
-    raise last
+            data = self.client.get(url, request_headers or None, timeout=timeout)
+        except urllib.error.HTTPError as exc:
+            if exc.code == 304 and stored is not None:
+                data = stored["data"] if parse is None else parse(stored["data"])
+                when = stored["fetched_at"]
+                if self.reused_at is None or when < self.reused_at:
+                    self.reused_at = when
+                return data
+            raise
+        if parse is not None:
+            data = parse(data)
+        sent = getattr(self.client, "last_response_headers", None)
+        if isinstance(sent, dict):
+            _validator_stage(self, url, data, sent)
+        return data
 
-def get_text(url, headers=None, timeout=60, retries=3):
-    last = None
-    for i in range(retries):
+
+def _validator_path(ctx, url):
+    digest = hashlib.sha256(url.encode("utf-8")).hexdigest()[:32]
+    return Path(ctx.cache_dir) / "validators" / f"{ctx.source}_{digest}.json"
+
+
+def _validator_get(ctx, url):
+    """Stored body plus validators for url; anything unusable means a plain fetch."""
+    try:
+        entry = json.loads(_validator_path(ctx, url).read_text(encoding="utf-8"))
+        if not isinstance(entry, dict) or entry.get("url") != url:
+            return None
+        if not entry.get("etag") and not entry.get("last_modified"):
+            return None
+        if not isinstance(entry.get("body"), str) or not isinstance(entry.get("fetched_at"), str):
+            return None
+        if datetime.datetime.fromisoformat(entry["fetched_at"]).tzinfo is None:
+            return None
+        entry["data"] = json.loads(entry["body"])
+        return entry
+    except Exception:
+        return None
+
+
+def _validator_stage(ctx, url, data, headers):
+    """Remember a validated body until the source's health confirms the fetch."""
+    etag, modified = headers.get("etag"), headers.get("last-modified")
+    if not etag and not modified:
+        return
+    ctx.pending.append({"url": url, "data": data, "etag": str(etag or ""),
+                        "last_modified": str(modified or "")})
+
+
+def _validator_flush(ctx, fetched_at):
+    """Write staged bodies with the source's fetched_at so reuse keeps that time."""
+    for item in ctx.pending:
         try:
-            req = urllib.request.Request(url, headers={"User-Agent": "model-watch/1", **(headers or {})})
-            with urllib.request.urlopen(req, timeout=timeout) as r:
-                return r.read().decode("utf-8", "replace")
-        except urllib.error.HTTPError as e:
-            if 400 <= e.code < 500:
-                log_err(f"FAILED {url}: {e}")
-                raise
-            last = e
-        except (urllib.error.URLError, TimeoutError, ConnectionError, ValueError) as e:
-            last = e
-        log_err(f"retry {i+1}/{retries} {url}: {last}")
-        if i < retries - 1:
-            time.sleep(2 ** i)
-    log_err(f"FAILED {url}: {last}")
-    raise last
+            atomic_json(_validator_path(ctx, item["url"]),
+                        {"url": item["url"], "etag": item["etag"],
+                         "last_modified": item["last_modified"], "fetched_at": fetched_at,
+                         "body": json.dumps(item["data"], ensure_ascii=False, allow_nan=False)})
+        except Exception as exc:
+            ctx.log_err(f"validator cache write failed {ctx.source}: {safe_error(exc)}")
+    ctx.pending = []
 
 
-def catalog(source, url, headers=None, paginate=False):
+def catalog(ctx, url, headers=None, paginate=False):
     from urllib.parse import urlencode
     rows, seen = [], set()
+
+    def page(data):
+        batch = data.get("data") if isinstance(data, dict) else None
+        if not isinstance(batch, list) or any(not isinstance(m, dict) or not m.get("id") for m in batch):
+            raise ValueError(f"{ctx.client.source}: malformed catalog data")
+        return data
+
     while True:
         try:
-            data = get(url, headers)
-            batch = data.get("data") if isinstance(data, dict) else None
-            if not isinstance(batch, list) or any(not isinstance(m, dict) or not m.get("id") for m in batch):
-                raise ValueError(f"{source}: malformed catalog data")
+            data = ctx.get_json(url, headers, parse=page)
+            batch = data["data"]
             rows.extend(batch)
             if not data.get("has_more"):
-                FETCH_HEALTH[source] = source_status("complete", len(rows))
+                ctx.health = source_status("complete", len(rows))
                 return rows
             cursor = data.get("last_id") or (batch[-1]["id"] if batch else None)
             if not paginate or not cursor or cursor in seen:
-                raise ValueError(f"{source}: unresolved pagination")
+                raise ValueError(f"{ctx.client.source}: unresolved pagination")
             seen.add(cursor)
             url = url.split("?", 1)[0] + "?" + urlencode({"after_id": cursor, "limit": 1000})
         except Exception as exc:
-            FETCH_HEALTH[source] = source_status("partial" if rows else "failed", len(rows), reason=safe_error(exc))
+            ctx.health = source_status("partial" if rows else "failed", len(rows), reason=safe_error(exc))
             if rows:
                 return rows
             raise
 
 
-def fetch_openrouter():
+def fetch_openrouter(ctx):
     key = os.getenv("OPENROUTER_API_KEY")
-    return catalog("openrouter", "https://openrouter.ai/api/v1/models",
+    return catalog(ctx, "https://openrouter.ai/api/v1/models",
                    {"Authorization": f"Bearer {key}"} if key else None)
 
-def fetch_openai():
+def fetch_openai(ctx):
     key = os.getenv("OPENAI_API_KEY")
     if not key:
         return {"skipped": "no OPENAI_API_KEY"}
-    return catalog("openai", "https://api.openai.com/v1/models", {"Authorization": f"Bearer {key}"})
+    return catalog(ctx, "https://api.openai.com/v1/models", {"Authorization": f"Bearer {key}"})
 
-def fetch_anthropic():
+def fetch_anthropic(ctx):
     key = os.getenv("ANTHROPIC_API_KEY")
     if not key:
         return {"skipped": "no ANTHROPIC_API_KEY"}
-    return catalog("anthropic", "https://api.anthropic.com/v1/models?limit=1000", {
+    return catalog(ctx, "https://api.anthropic.com/v1/models?limit=1000", {
         "x-api-key": key, "anthropic-version": "2023-06-01"}, paginate=True)
 
-def fetch_aa():
+def fetch_aa(ctx):
     key = os.getenv("AA_API_KEY")
     if not key:
         return {"skipped": "no AA_API_KEY"}
-    data = get("https://artificialanalysis.ai/api/v2/data/llms/models", {"x-api-key": key})
-    if not isinstance(data, dict) or not isinstance(data.get("data"), list):
-        raise ValueError("AA: malformed data")
-    return data
 
-def fetch_nvidia():
-    return catalog("nvidia", "https://integrate.api.nvidia.com/v1/models")
+    def check(data):
+        if not isinstance(data, dict) or not isinstance(data.get("data"), list):
+            raise ValueError("AA: malformed data")
+        return data
+    return ctx.get_json("https://artificialanalysis.ai/api/v2/data/llms/models",
+                        {"x-api-key": key}, parse=check)
 
-def fetch_zenmux():
-    return catalog("zenmux", "https://zenmux.ai/api/v1/models")
+def fetch_nvidia(ctx):
+    return catalog(ctx, "https://integrate.api.nvidia.com/v1/models")
 
-def fetch_zen():
-    return catalog("zen", "https://opencode.ai/zen/v1/models")
+def fetch_zenmux(ctx):
+    return catalog(ctx, "https://zenmux.ai/api/v1/models")
+
+def fetch_zen(ctx):
+    return catalog(ctx, "https://opencode.ai/zen/v1/models")
 
 
-def fetch_benchlm():
+def fetch_benchlm(ctx):
     """BenchLM benchmark aggregator (public, keyless). Leaderboard + pricing JSON."""
     components = {}
     def component(name, url, cap):
         try:
-            data = get(url, timeout=60)
-            if not isinstance(data, dict) or not isinstance(data.get("models"), list):
-                raise ValueError("missing models list")
+            def check(data):
+                if not isinstance(data, dict) or not isinstance(data.get("models"), list):
+                    raise ValueError("missing models list")
+                return data
+            data = ctx.get_json(url, timeout=60, parse=check)
             limited = len(data["models"]) >= cap or bool(data.get("next_cursor") or data.get("has_more"))
             components[name] = source_status("partial" if limited else "complete", len(data["models"]), scope="bounded-reference")
             return data
@@ -139,7 +211,7 @@ def fetch_benchlm():
             return {}
     lb = component("leaderboard", "https://benchlm.ai/api/data/leaderboard?limit=1000", 1000)
     pr = component("pricing", "https://benchlm.ai/api/data/pricing?limit=5000", 5000)
-    FETCH_HEALTH["benchlm"] = source_status("complete" if all(c["complete"] for c in components.values()) else "partial",
+    ctx.health = source_status("complete" if all(c["complete"] for c in components.values()) else "partial",
                                             len(lb.get("models", [])), scope="bounded-reference", components=components)
     lb_models = lb.get("models", []) if isinstance(lb, dict) else []
     pr_models = pr.get("models", []) if isinstance(pr, dict) else []
@@ -178,7 +250,26 @@ def _llmstats_project_model(m):
             "url": m.get("url"), "updated": m.get("updated_at")}
 
 
-def fetch_llmstats(snap_so_far=None):
+class _DailyBudget(Exception):
+    """The configured llmstats_daily_budget is spent for this run."""
+
+
+def quota_sample(account):
+    """Only finite numeric remaining and an ISO calendar day may leave /account."""
+    usage = account.get("usage") if isinstance(account, dict) else None
+    usage = usage if isinstance(usage, dict) else {}
+    remaining = usage.get("remaining")
+    if type(remaining) not in (int, float) or (type(remaining) is float and not math.isfinite(remaining)):
+        remaining = None
+    day = usage.get("quota_day")
+    try:
+        day = datetime.date.fromisoformat(day).isoformat() if isinstance(day, str) and len(day) == 10 else None
+    except ValueError:
+        day = None
+    return {"remaining": remaining, "day": day}
+
+
+def fetch_llmstats(ctx, snap_so_far=None):
     """LLM Stats / ZeroEval API (keyed). Skipped gracefully when no key.
 
     Quota budget ~19 data responses/run (Community: 250/day): models p1-2,
@@ -187,7 +278,10 @@ def fetch_llmstats(snap_so_far=None):
     retrieval/fetch_websites.py so a keyless run still gains pricing/context
     hints. Community plan requires 'Data by LLM Stats' attribution (see site
     footer/methodology) and forbids bulk redistribution — snapshots stay local.
+    `llmstats_daily_budget` (0 = unlimited) caps data responses for the run and
+    cuts the detail budget first; the two /account quota checks are free.
     """
+    ctx.client.quota = {"before": quota_sample(None), "after": quota_sample(None)}
     key = os.getenv("LLM_STATS_API_KEY")
     if not key:
         return {"skipped": "no LLM_STATS_API_KEY"}
@@ -196,21 +290,34 @@ def fetch_llmstats(snap_so_far=None):
 
     # Quota pre-check (free call): fit details budget to remaining balance.
     try:
-        _detail_max = int(os.getenv("LLM_STATS_DETAIL_MAX") or CONFIG["llmstats_detail_max"])
+        _detail_max = int(os.getenv("LLM_STATS_DETAIL_MAX") or ctx.config["llmstats_detail_max"])
     except Exception:
         _detail_max = 12
     try:
-        _acct = get("https://api.zeroeval.com/stats/v1/account", headers, timeout=30)
-        _remaining = ((_acct.get("usage", {}) or {}).get("remaining") if isinstance(_acct, dict) else None)
+        daily_budget = max(0, int(ctx.config.get("llmstats_daily_budget", 0)))
+    except Exception:
+        daily_budget = 0
+    calls = {"data": 0}
+
+    def data_get(url, timeout=60):
+        """One budgeted data response; /account quota checks never go through here."""
+        if daily_budget and calls["data"] >= daily_budget:
+            raise _DailyBudget()
+        calls["data"] += 1
+        return ctx.client.get(url, headers, timeout=timeout)
+    try:
+        _acct = ctx.client.get("https://api.zeroeval.com/stats/v1/account", headers, timeout=30)
+        ctx.client.quota["before"] = quota_sample(_acct)
+        _remaining = ctx.client.quota["before"]["remaining"]
     except Exception as e:
-        log_err(f"llmstats account pre-check failed (continuing blind): {e}")
+        ctx.log_err(f"llmstats account pre-check failed (continuing blind): {e}")
         _remaining = None
     if isinstance(_remaining, (int, float)) and _remaining < 8:
         return {"error": f"quota too low ({_remaining} remaining), need ~8 for base calls; wait for UTC reset"}
     if isinstance(_remaining, (int, float)):
         _detail_max = max(0, min(_detail_max, int(_remaining) - 8))
         if _detail_max < 12:
-            log_err(f"llmstats details capped to {_detail_max} (quota remaining {_remaining})")
+            ctx.log_err(f"llmstats details capped to {_detail_max} (quota remaining {_remaining})")
 
     components = {}
     def pages(name, path, field, cap):
@@ -221,7 +328,7 @@ def fetch_llmstats(snap_so_far=None):
                 url = "https://api.zeroeval.com/stats/v1/" + path
                 if cursor:
                     url += "&cursor=" + quote(str(cursor), safe="")
-                data = get(url, headers, timeout=60)
+                data = data_get(url)
                 batch = data.get(field) if isinstance(data, dict) else None
                 if not isinstance(batch, list) or any(not isinstance(x, dict) for x in batch):
                     raise ValueError(f"{name}: malformed {field}")
@@ -234,6 +341,10 @@ def fetch_llmstats(snap_so_far=None):
                     raise ValueError("repeated pagination cursor")
                 seen.add(cursor)
             components[name] = source_status("partial", len(rows), scope="reference", reason="page budget reached")
+        except _DailyBudget:
+            components[name] = source_status("partial" if rows else "skipped", len(rows), scope="reference",
+                                             reason=f"llmstats_daily_budget exhausted ({calls['data']} of "
+                                                    f"{daily_budget} data responses used)")
         except Exception as exc:
             components[name] = source_status("partial" if rows else "failed", len(rows), scope="reference", reason=safe_error(exc))
         return rows
@@ -254,6 +365,16 @@ def fetch_llmstats(snap_so_far=None):
                               "evals": x.get("benchmarks_evaluated"),
                               "min_in": x.get("min_input_price"),
                               "url": x.get("url")} for x in batch]
+    # Base pages and rankings always run first; the daily budget only cuts
+    # what is left for details (min of detail cap, quota headroom, budget - used).
+    daily_binding, daily_reason = False, ""
+    if daily_budget and daily_budget - calls["data"] < _detail_max:
+        daily_binding = True
+        _detail_max = max(0, daily_budget - calls["data"])
+        daily_reason = (f"llmstats_daily_budget cut details to {_detail_max} "
+                        f"({calls['data']} of {daily_budget} data responses used by base pages)")
+        ctx.log_err(f"llmstats details capped to {_detail_max} by llmstats_daily_budget "
+                    f"({daily_budget} minus {calls['data']} data responses used)")
     # Detail priority: OR free routes, then AA-scored, then BenchLM top.
     priority, seen = [], set()
 
@@ -303,7 +424,7 @@ def fetch_llmstats(snap_so_far=None):
         if not lid or lid in details:
             continue
         try:
-            d = get(f"https://api.zeroeval.com/stats/v1/models/{lid}", headers, timeout=60)
+            d = data_get(f"https://api.zeroeval.com/stats/v1/models/{lid}")
             scores = [ {"bench": s.get("benchmark_id"), "name": s.get("benchmark_name"),
                         "cat": s.get("category"), "score": s.get("score"),
                         "norm": s.get("normalized_score"), "max": s.get("max_score"),
@@ -316,24 +437,36 @@ def fetch_llmstats(snap_so_far=None):
             fetched += 1
         except Exception as e:
             detail_failed += 1
-            log_err(f"llmstats detail {lid} failed: {e}")
+            ctx.log_err(f"llmstats detail {lid} failed: {e}")
     try:
-        acct = get("https://api.zeroeval.com/stats/v1/account", headers, timeout=30)
-        usage = (acct.get("usage", {}) if isinstance(acct, dict) else {})
+        acct = ctx.client.get("https://api.zeroeval.com/stats/v1/account", headers, timeout=30)
+        ctx.client.quota["after"] = quota_sample(acct)
     except Exception:
-        usage = {}
-    components["details"] = source_status("partial" if detail_failed else "complete", len(details),
-                                          scope="selected-details", attempted_count=fetched + detail_failed,
-                                          failed_count=detail_failed, budget=detail_max)
-    FETCH_HEALTH["llmstats"] = source_status("complete" if all(c["complete"] for c in components.values()) else "partial",
+        pass
+    daily_fields = {}
+    if daily_binding:
+        daily_fields["daily_budget"] = daily_budget
+        daily_fields["reason"] = daily_reason
+    if daily_binding and detail_max <= 0:
+        components["details"] = source_status("skipped", 0, scope="selected-details",
+                                              attempted_count=0, failed_count=0, budget=0,
+                                              daily_budget=daily_budget,
+                                              reason=f"llmstats_daily_budget exhausted ({calls['data']} of "
+                                                     f"{daily_budget} data responses used); details skipped")
+    else:
+        components["details"] = source_status("partial" if detail_failed else "complete", len(details),
+                                              scope="selected-details", attempted_count=fetched + detail_failed,
+                                              failed_count=detail_failed, budget=detail_max, **daily_fields)
+    ctx.health = source_status("complete" if all(c["complete"] for c in components.values()) else "partial",
                                              len(models), scope="reference", components=components)
     return {"models": models, "model_count": len(models),
             "benchmarks": benchmarks, "benchmark_count": len(benchmarks),
             "rankings": rankings, "details": details,
-            "meta": {"quota_remaining": usage.get("remaining"), "quota_day": usage.get("quota_day", "")}}
+            "meta": {"quota_remaining": ctx.client.quota["after"]["remaining"],
+                     "quota_day": ctx.client.quota["after"]["day"] or ""}}
 
 
-def fetch_vals_index():
+def fetch_vals_index(ctx):
     """Vals AI public index (keyless HTML, best-effort).
 
     No public JSON API exists; the website itself is the source. We fetch the
@@ -343,7 +476,7 @@ def fetch_vals_index():
     retrieval/fetch_websites.py for the free-relevant allowlist.
     """
     import re as _re
-    html = get_text("https://www.vals.ai/benchmarks/vals_index", timeout=60)
+    html = ctx.client.get_text("https://www.vals.ai/benchmarks/vals_index", timeout=60)
     rows = []
     # Best-effort: model links look like /models/<provider>_<slug>
     for m in _re.finditer(r'href="(/models/[^"]+)"[^>]*>([^<]{2,80})<', html):
@@ -358,12 +491,15 @@ def fetch_vals_index():
             uniq.append(r)
     return {"models": uniq[:200], "source": "html:vals_index"}
 
-def fetch_modelsdev():
+def fetch_modelsdev(ctx):
     """Tier 1: models.dev capabilities catalog (public, keyless). Minimal projection only."""
-    data = get("https://models.dev/api.json", timeout=90)
+
+    def check(data):
+        if not isinstance(data, dict):
+            raise ValueError("models.dev: expected provider object")
+        return data
+    data = ctx.get_json("https://models.dev/api.json", timeout=90, parse=check)
     routes = []
-    if not isinstance(data, dict):
-        raise ValueError("models.dev: expected provider object")
     for provider_id, pdata in data.items():
         if not isinstance(pdata, dict):
             continue
@@ -405,36 +541,63 @@ def safe(fn):
     except Exception as e:
         return {"error": safe_error(e)}
 
-def main(output_dir=None, run_id=None, started_at=None, config=None):
-    global RAW, ERRLOG, CONFIG
+def main(output_dir=None, run_id=None, started_at=None, config=None, cache_dir=None):
     apply_credentials()
-    CONFIG = config or load_config()
-    if output_dir is not None:
-        RAW = str(output_dir)
-    os.makedirs(RAW, exist_ok=True)
-    ERRLOG = os.path.join(RAW, "_errors.log")
-    FETCH_HEALTH.clear()
-    open(ERRLOG, "w").close()
+    cfg = config or load_config()
+    raw = Path(output_dir) if output_dir is not None else Path(ROOT) / "raw"
+    raw.mkdir(parents=True, exist_ok=True)
+    error_log = raw / "_errors.log"
+    error_log.write_text("", encoding="utf-8")
+    health = {}
     stamp = run_id or new_run_id()
     snap = {"retrieved_at": stamp, "run_id": stamp, "schema_version": SCHEMA_VERSION,
             "started_at": started_at or utc_now()}
     fetchers = {"openrouter": fetch_openrouter, "openai": fetch_openai, "anthropic": fetch_anthropic,
                 "nvidia": fetch_nvidia, "zenmux": fetch_zenmux, "zen": fetch_zen,
                 "modelsdev": fetch_modelsdev, "aa": fetch_aa, "benchlm": fetch_benchlm,
-                "llmstats": lambda: fetch_llmstats(snap), "vals": fetch_vals_index}
-    for source in SOURCES:
-        value = {"skipped": "disabled in configuration"} if source in CONFIG["disabled_sources"] else safe(fetchers[source])
+                "llmstats": lambda ctx: fetch_llmstats(ctx, snap), "vals": fetch_vals_index}
+
+    def execute(source):
+        # The context (and its clock) starts when the source actually runs, never
+        # at dispatch, so elapsed_seconds excludes any pool queue wait.
+        ctx = FetchContext(source, cfg, error_log, cache_dir=cache_dir)
+        value = {"skipped": "disabled in configuration"} if source in cfg["disabled_sources"] \
+            else safe(lambda: fetchers[source](ctx))
+        return ctx, value
+
+    def record(source, ctx, value):
         snap[source] = value
         scope = "catalog" if source in PROVIDERS else "best-effort" if source == "vals" else "reference"
         if isinstance(value, dict) and ("error" in value or "skipped" in value):
             status = "failed" if "error" in value else "skipped"
-            FETCH_HEALTH[source] = source_status(status, scope=scope, reason=value.get("error", value.get("skipped", "")))
-        elif source not in FETCH_HEALTH:
+            ctx.health = source_status(status, scope=scope, reason=value.get("error", value.get("skipped", "")))
+        elif ctx.health is None:
             count = len(value) if isinstance(value, list) else len(value.get("data", value.get("models", [])))
-            FETCH_HEALTH[source] = source_status("complete", count, scope=scope, complete=source != "vals")
-        print(f"source {source}: {FETCH_HEALTH[source]['status']} ({FETCH_HEALTH[source]['count']})")
-    snap["source_health"] = dict(FETCH_HEALTH)
-    out = os.path.join(RAW, f"{stamp}_models.json")
+            ctx.health = source_status("complete", count, scope=scope, complete=source != "vals")
+        if ctx.health.get("status") in ("complete", "partial"):
+            # A 304 reuse keeps the stored fetch time; fresh bodies adopt it too
+            # so the next revalidation reports the same original time.
+            if ctx.reused_at is not None:
+                ctx.health["fetched_at"] = ctx.reused_at
+            if ctx.pending:
+                _validator_flush(ctx, ctx.health["fetched_at"])
+        ctx.health["retrieval"] = ctx.client.snapshot()
+        health[source] = ctx.health
+        print(f"source {source}: {ctx.health['status']} ({ctx.health['count']})")
+
+    with ThreadPoolExecutor(max_workers=MAX_FETCH_THREADS) as pool:
+        futures = {source: pool.submit(execute, source)
+                   for source in SOURCES if source != "llmstats"}
+        for source in SOURCES:
+            # Main thread only, in SOURCES order: snap keys, health keys and
+            # stdout match the sequential run. llmstats (phase 2) runs here,
+            # after openrouter/aa/benchlm values are assembled into snap.
+            if source == "llmstats":
+                record(source, *execute(source))
+            else:
+                record(source, *futures[source].result())
+    snap["source_health"] = health
+    out = str(raw / f"{stamp}_models.json")
     atomic_json(out, snap)
     print(f"wrote {out}")
     return out

@@ -6,7 +6,6 @@ import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "analysis"))
-sys.path.insert(0, os.path.join(ROOT, "retrieval"))
 
 fails = []
 
@@ -70,8 +69,7 @@ check("qwen38max" in lb, "llmstats model index by norm")
 check(rk.get("qwen38max", {}).get("general", {}).get("rank") == 12, "llmstats rank index")
 
 import copy
-sys.path.insert(0, os.path.join(ROOT, "retrieval"))
-from fetch_models import _llmstats_project_model
+from retrieval.fetch_models import _llmstats_project_model
 proj = _llmstats_project_model({"id": "m", "name": "M", "description": "LONG " * 500,
                                 "organization": {"id": "o"}, "license": {"id": "mit"},
                                 "providers": [{"provider_id": "p", "input_price_per_m": 1}],

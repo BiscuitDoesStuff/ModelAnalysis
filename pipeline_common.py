@@ -15,7 +15,7 @@ KEYS = ("OPENAI_API_KEY", "ANTHROPIC_API_KEY", "OPENROUTER_API_KEY", "AA_API_KEY
         "LLM_STATS_API_KEY", "LLM_STATS_DETAIL_MAX")
 DEFAULTS = {"disabled_sources": [], "run_days": 90, "daily_days": 365,
             "artifact_bundles": 2, "failed_days": 7, "website_max_pages": 40,
-            "cache_days": 7, "llmstats_detail_max": 12}
+            "cache_days": 7, "llmstats_detail_max": 12, "llmstats_daily_budget": 0}
 
 
 def utc_now():
