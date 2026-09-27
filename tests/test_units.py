@@ -28,6 +28,12 @@ check(kebab("Muse Spark 1.3") == "muse-spark-1-3", "kebab model name")
 check(base_slug("openai/gpt-5:free") == "gpt5", "base_slug strips provider+tag")
 check(base_slug("x/y/z") == "z", "base_slug tail segment")
 
+from common import TIERS, tier_of
+check(norm(None) == "" and kebab(None) == "", "norm/kebab treat None as empty")
+check((tier_of(50), tier_of(49.9), tier_of(40), tier_of(30), tier_of(29.9), tier_of(None)) ==
+      ("max", "high", "high", "medium", "below", ""), "tier_of boundaries")
+check(TIERS == {"max": 50, "high": 40, "medium": 30}, "tier floors 50/40/30")
+
 sys.path.insert(0, ROOT)
 import importlib.util
 spec = importlib.util.spec_from_file_location("analyze_mod", os.path.join(ROOT, "analysis", "analyze.py"))

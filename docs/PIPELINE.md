@@ -102,7 +102,7 @@ Top-level artifact `schema_version` is **3**. The history payload/schema and chu
 - Analysis: `models[]`, `observations_count`, `views`, counts, thresholds, source/website health, `churn`, and compatibility fields.
 - Report JSON: `models_by_slug` stores full model rows once. `all_*`, `ocf_*`, practical, stack and family sections refer to slugs. `source_health`, `website_health`, and `churn` pass through to consumers.
 - `churn`: `run_id`, `rule_version`, `trusted_route_history`, `events`, `alert_events`, `counts`, `source_health`, `coverage`, and `daily.sources`. Event readers can use `kind`/`source`/`route_id`/`model` aliases; original fields remain `type`/`provider`/`id`/`canonical_id`. Detailed events carry stable event IDs and baseline/run references.
-- `free_churn` and broad historical diff fields remain compatibility data. They are not authoritative v3 route-loss semantics and must not drive new alerts. Prefer a present `churn` even when its event list is empty.
+- The legacy day-level `free_churn`, `new_ids_vs_history`, `removed_ids_vs_history` and `history_days` fields were removed: they were computed against a throwaway in-memory database and never had a baseline. `alerts/check_churn.py` still reads `free_churn` from pre-removal reports, and prefers a present `churn` even when its event list is empty.
 
 Report readers should tolerate legacy inputs without reliability fields and label missing coverage/baselines unknown. `reports.build_report.reliability_data` passes supported fields through; `health_entries` merges source comparison evidence; `reliability_tables` renders source health, route events, and daily summaries without reinterpreting missing evidence as zero loss.
 

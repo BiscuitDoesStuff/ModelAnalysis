@@ -123,7 +123,7 @@ The schema-3 `churn` object contains route-level events and daily summaries:
 - `free_added`, `free_restored`, and `catalog_added` / `catalog_removed` / `catalog_changed`: informational changes.
 - Daily **net events** compare the latest complete catalog that day against the previous complete day. **Observed events** retain intraday changes, so a loss followed by restoration can remain visible even when net change is zero.
 
-No alert file is produced for provisional candidates or ordinary catalog removals. “No events” does not mean every source was checked; read compared/unknown coverage. `free_churn` is legacy compatibility data, not authoritative schema-3 history.
+No alert file is produced for provisional candidates or ordinary catalog removals. “No events” does not mean every source was checked; read compared/unknown coverage. The old day-level `free_churn` summary was removed; route churn is the only change history.
 
 ## Export formats and retention
 

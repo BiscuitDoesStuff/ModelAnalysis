@@ -56,9 +56,9 @@
   <!-- stage 3 -->
   <rect class="box" x="270" y="350" width="600" height="150"/>
   <text class="title" x="286" y="377">3 · reports/build_report.py</text>
-  <text class="sub" x="286" y="397">reads newest analysis (models[] canonical rows + score evidence + Tier1 badges) → writes one &lt;stamp&gt; set:</text>
+  <text class="sub" x="286" y="397">reads this run's analysis (models[] canonical rows + score evidence + Tier1 badges) → writes one &lt;stamp&gt; set:</text>
   <text class="sub" x="286" y="417">summary.md (9 sections) + report.html (7 pages: Start · Value · Stack · Variants · Free · Graph · Explore)</text>
-  <text class="sub" x="286" y="437">models.json (9 keys uncapped + free_churn) · models.xlsx (10 tabs incl. OCF_Stack/Practical/Outliers)</text>
+  <text class="sub" x="286" y="437">models.json (slug-indexed sections + route churn) · models.xlsx (15 tabs incl. Source_Health/Churn)</text>
   <text class="sub" x="286" y="457">needs openpyxl or xlsx skipped · prune older stamps</text>
   <text class="sub" x="286" y="477">Route IDs: selector else openrouter/&lt;or_id&gt; else fallback · cost/ambiguity/deprecated badges · verify limits</text>
 
@@ -74,7 +74,7 @@
   <!-- stage 4 -->
   <rect class="box" x="30" y="515" width="840" height="120"/>
   <text class="title" x="46" y="542">4 · alerts/check_churn.py (always exit 0)</text>
-  <text class="sub" x="46" y="562">reads newest report free_churn → console summary vs previous day</text>
+  <text class="sub" x="46" y="562">reads this run's route churn → alert file only on verified-free route loss</text>
   <text class="sub" x="46" y="582">free→paid flips / disappeared listings → writes reports/&lt;stamp&gt;_churn_alert.md</text>
   <text class="sub" x="46" y="602">no baseline (first day) or no churn → writes nothing · churn diffs grow across run days</text>
 

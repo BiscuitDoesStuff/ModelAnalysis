@@ -291,7 +291,6 @@ def main(input_path=None, output_dir=None):
     with open(os.path.join(site, "methodology.html"), "w", encoding="utf-8") as f:
         f.write(page("Methodology", stamp, nav_html(), meth))
     conf = views.get("confidence", {}) or {}
-    ch = a.get("free_churn", {}) or {}
     tri = views.get("provisional_triage", []) or []
     tri_rows = "".join("<tr><td>" + model_link(t) + "</td><td>"
                        + esc(t.get("score", "–")) + "</td><td>" + esc(t.get("free_status", "")) + "</td><td>"
@@ -300,8 +299,6 @@ def main(input_path=None, output_dir=None):
                        for t in tri[:20])
     conf_body = (f"<p>BenchLM evidence: supported {conf.get('supported',0)} · estimated {conf.get('estimated',0)} · other {conf.get('other',0)}</p>"
                  f"<p>Website crawl: {esc(a.get('website_stats',{}))}</p>"
-                 f"<p>Churn vs {esc(ch.get('prev_day','—'))}: →paid {ch.get('flipped_to_paid_total',0)} · →free {ch.get('flipped_to_free_total',0)} · "
-                 f"disappeared {ch.get('disappeared_total',0)} · new {ch.get('new_total',0)}</p>"
                  f"<h2>Provisional triage (top 20 by AA score)</h2>"
                  f"<p class='note'>Qualifier = score ≥ 40 with a callable route → verify billing for verified-free promotion. "
                  f"Current pool: {len(tri)} provisional, {sum(1 for t in tri if t.get('qualifier'))} qualifiers.</p>"
@@ -311,7 +308,7 @@ def main(input_path=None, output_dir=None):
     with open(os.path.join(site, "data.json"), "w", encoding="utf-8") as f:
         json.dump({"stamp": stamp, "views": views,
                    "benchlm_meta": bench_meta, "website_stats": a.get("website_stats", {}),
-                   "free_churn": ch, **reliability_data(a)}, f, indent=1)
+                   **reliability_data(a)}, f, indent=1)
 
     print(f"site {stamp} written ({len(models)} models)")
 

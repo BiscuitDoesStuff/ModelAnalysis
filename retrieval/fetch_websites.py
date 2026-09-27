@@ -1,14 +1,13 @@
 """1b. Website-native crawl — BenchLM / LLM Stats / Vals pages themselves.
 
-Reads the newest raw/*_models.json snapshot, builds a free-relevant allowlist
+Reads the explicit snapshot it is given (--input), builds a free-relevant allowlist
 (verified-free + provisional + OCF stack candidates + BenchLM top), then fetches
 per-model website pages (best-effort, keyless HTML/MD). Never aborts the run:
 per-page failures are recorded, snapshot-level failures write {"error"}.
 
-Output: raw/<stamp>_websites.json (same stamp as snapshot, pruned keep=1).
+Output: <output>/<run_id>_websites.json, with the same run ID as the snapshot.
 """
 import json
-import glob
 import os
 import re
 import sys
@@ -19,12 +18,12 @@ import urllib.error
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from pipeline_common import atomic_json, safe_error, utc_now, source_status, load_config, SCHEMA_VERSION
+from analysis.common import TIERS, kebab, norm
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+# Defaults only; pipeline.py passes the staging and cache directories.
 RAW = os.path.join(ROOT, "raw")
 CACHE = os.path.join(RAW, "cache_websites")
-os.makedirs(RAW, exist_ok=True)
-os.makedirs(CACHE, exist_ok=True)
 ERRLOG = os.path.join(RAW, "_errors.log")
 
 MAX_PAGES_PER_SOURCE = 40
@@ -32,6 +31,7 @@ CACHE_MAX_DAYS = 7
 
 
 def log_err(msg):
+    os.makedirs(os.path.dirname(ERRLOG), exist_ok=True)
     with open(ERRLOG, "a", encoding="utf-8") as f:
         f.write(f"{utc_now()} {safe_error(msg)}\n")
 
@@ -89,20 +89,6 @@ def get_text(url, timeout=25, retries=2):
     raise last if last else RuntimeError(f"fetch failed {url}")
 
 
-def norm(s):
-    return re.sub(r"[^a-z0-9]", "", str(s or "").lower())
-
-
-def kebab(name):
-    return re.sub(r"[^a-z0-9]+", "-", str(name or "").lower()).strip("-")
-
-
-def prune(keep=1):
-    files = sorted(glob.glob(os.path.join(RAW, "*_websites.json")), key=os.path.getmtime)
-    for old in files[:-keep]:
-        os.remove(old)
-        print(f"pruned {os.path.basename(old)}")
-
 
 def build_allowlist(snap):
     """Free-relevant allowlist as (norm_slug, display_name) pairs.
@@ -130,7 +116,7 @@ def build_allowlist(snap):
             score = float(ev) if ev is not None else None
         except Exception:
             score = None
-        if score is not None and score >= 30:
+        if score is not None and score >= TIERS["medium"]:
             scored.append((score, m))
     for score, m in sorted(scored, key=lambda t: t[0], reverse=True)[:60]:
         add(m.get("slug", "") or m.get("id", ""), m.get("name", ""))

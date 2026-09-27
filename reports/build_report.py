@@ -1,7 +1,10 @@
 """Build MD/XLSX/JSON and an offline HTML dashboard from an explicit analysis artifact."""
-import json, os, html as _html
+import json, os, sys, html as _html
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if ROOT not in sys.path:
+    sys.path.insert(0, ROOT)
+from analysis.common import EFFORTS as EFFORT_TOKENS, TIERS as TIER_FLOORS
 
 MD_CAP = 20
 TIERS = ["max", "high", "medium"]
@@ -9,7 +12,6 @@ TIER_LABEL = {"max": "Max (50+)", "high": "High (40+)", "medium": "Medium/Genera
 VARIANTS = {"OCF": set(), "OF": {"C"}, "CF": {"O"}, "F": {"O", "C"}}
 OCF = {"O", "C", "F"}
 VALUE_BAND = 1.5
-EFFORT_TOKENS = ["max", "xhigh", "high", "medium", "low", "minimal", "none"]
 
 
 def opencode_ids(or_id):
@@ -407,7 +409,7 @@ def build_sections(a):
                                   if m["score"] <= q["score_q1"] and m["cost_blended"] >= q["cost_q3"]]
     outliers["free_gems"] = [m for m in ocf
                              if (free_status_of(m) in ("verified", "provisional-l1", "provisional-l0"))
-                             and (m.get("score") or 0) >= 40 and has_callable(m)]
+                             and (m.get("score") or 0) >= TIER_FLOORS["high"] and has_callable(m)]
 
     return {"all_intel": all_intel, "costed": costed, "uncosted": uncosted,
             "paid_ratio": paid_ratio, "free_block": free_block,
@@ -579,12 +581,6 @@ def build_html(a, s, stamp):
          "Select an available <code>provider/model#variant</code> in OpenCode V2 (OR efforts shown per row, *=default). " \
          "Inherited scores are estimates from a matched effort, not measurements of the destination route. External metrics retain their own scale. " \
          "L0 = AA $0 only, intel-only unless a native fallback ID is shown.</p>"
-    ch = a.get("free_churn")
-    if ch and ch.get("prev_day"):
-        ov += (f"<p class='note'>Free-status churn vs {esc(ch['prev_day'])}: "
-               f"→paid {ch.get('flipped_to_paid_total', 0)} · →free {ch.get('flipped_to_free_total', 0)} · "
-               f"level-changed {ch.get('level_changed_total', 0)} · disappeared {ch.get('disappeared_total', 0)} · "
-               f"new {ch.get('new_total', 0)}.</p>")
     # Start-here top picks: quality / value / free, all copy-ready.
     value_bands = build_value_bands(s["ocf_ratio"])
     top_quality = s["stack"]["max"]["rows"][0] if s["stack"]["max"]["rows"] else None
@@ -701,7 +697,7 @@ def build_html(a, s, stamp):
     stack_html += "<h3>Practical picks</h3>" + prac
 
     # Variant compare: top-30 at 30+ in HTML for readability; full 42-family export in JSON/XLSX.
-    fams = [f for f in s.get("family_variants", []) if (f.get("peak") or 0) >= 30.0][:30]
+    fams = [f for f in s.get("family_variants", []) if (f.get("peak") or 0) >= TIER_FLOORS["medium"]][:30]
     compare_html = ("<p>Top multi-variant families at 30+ in HTML for readability; full per-family table uncapped in "
                     "JSON <code>family_variants</code> + XLSX <code>Family_Variants</code>. "
                     "AA-only rows (no callable ID) are intel-only — "
@@ -902,13 +898,6 @@ def main(input_path=None, output_dir=None):
              "Variants are separate AA rows; OpenCode V2 uses available provider/model#variant selectors. Inherited scores are estimates, not destination measurements. " +
              "L0 = AA $0 only, intel-only unless a native fallback ID is shown (e.g. zen). Zen *-free routes count as verified free. " +
              "Per-model OpenCode compat not verified._\n")
-    ch = a.get("free_churn")
-    if ch and ch.get("prev_day"):
-        L.append(f"\n_Churn vs {ch['prev_day']}: →paid {ch.get('flipped_to_paid_total', 0)} " +
-                 (", ".join(f"`{i}`" for i in ch.get('flipped_to_paid', [])[:MD_CAP]) if ch.get('flipped_to_paid') else "—") +
-                 f" · →free {ch.get('flipped_to_free_total', 0)}" +
-                 (", ".join(f"`{i}`" for i in ch.get('flipped_to_free', [])[:MD_CAP]) if ch.get('flipped_to_free') else "") +
-                 f" · disappeared {ch.get('disappeared_total', 0)} · new {ch.get('new_total', 0)}._\n")
     L.insert(2, reliability_markdown(a))
     for key, value in reliability_data(a).items():
         L.append(f"\n## {key}\n\n```json\n{json.dumps(value, ensure_ascii=False, indent=2)}\n```\n")
@@ -939,7 +928,6 @@ def main(input_path=None, output_dir=None):
             "score_dist": dist, "routers_excluded": s["routers"],
             "collisions": a.get("collisions", []),
             "free_status_counts": a.get("free_status_counts", {}),
-            "free_churn": a.get("free_churn", {}),
             "models_by_slug": {m["slug"]: m for m in s["all_intel"]},
             "all_intel": [m["slug"] for m in s["all_intel"]],
             "all_cost": [m["slug"] for m in s["costed"]],
@@ -981,13 +969,6 @@ def main(input_path=None, output_dir=None):
         ws.append(["provisional_l1", fsc.get("provisional-l1", "")])
         ws.append(["provisional_l0", fsc.get("provisional-l0", "")])
         ws.append(["total_modelsdev", a.get("total_modelsdev", "")])
-        ch = a.get("free_churn", {})
-        if ch and ch.get("prev_day"):
-            ws.append(["churn_vs", ch.get("prev_day", "")])
-            ws.append(["churn_to_paid", ch.get("flipped_to_paid_total", 0)])
-            ws.append(["churn_to_free", ch.get("flipped_to_free_total", 0)])
-            ws.append(["churn_disappeared", ch.get("disappeared_total", 0)])
-            ws.append(["churn_new", ch.get("new_total", 0)])
         for t in TIERS:
             ws.append([f"stack_{t}", len(s["stack"][t]["rows"])])
             ws.append([f"gaps_{t}", ",".join(s["stack"][t]["gaps"])])
@@ -1073,7 +1054,5 @@ def main(input_path=None, output_dir=None):
 
 
 if __name__ == "__main__":
-    import sys
-    sys.path.insert(0, ROOT)
     from pipeline_common import stage_cli
     stage_cli(main, __doc__)

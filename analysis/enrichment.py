@@ -3,6 +3,11 @@ import copy
 import datetime
 import math
 
+try:
+    from .common import tier_of
+except ImportError:
+    from common import tier_of
+
 
 def current(record, day):
     return record['checked_at'] <= day <= record['expires_at']
@@ -85,5 +90,4 @@ def enrich(models, registry, day, modelsdev_by_slug=None):
     for m in models:
         score, cost = m.get('score'), m.get('cost_blended')
         m['ratio'] = round(score / cost, 4) if score is not None and cost and cost > 0 and not m.get('free') else None
-        m['tier'] = ('' if score is None else 'max' if score >= 50 else
-                     'high' if score >= 40 else 'medium' if score >= 30 else 'below')
+        m['tier'] = tier_of(score)

@@ -7,15 +7,16 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from pipeline_common import (apply_credentials, atomic_json, new_run_id, utc_now, safe_error,
                              source_status, load_config, SOURCES, PROVIDERS, SCHEMA_VERSION)
+from analysis.common import norm
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-RAW = os.path.join(ROOT, "raw")
-os.makedirs(RAW, exist_ok=True)
+RAW = os.path.join(ROOT, "raw")  # default only; pipeline.py passes the staging dir
 ERRLOG = os.path.join(RAW, "_errors.log")
 FETCH_HEALTH = {}
 CONFIG = load_config()
 
 def log_err(msg):
+    os.makedirs(os.path.dirname(ERRLOG), exist_ok=True)
     with open(ERRLOG, "a", encoding="utf-8") as f:
         f.write(f"{utc_now()} {safe_error(msg)}\n")
 
@@ -187,15 +188,11 @@ def fetch_llmstats(snap_so_far=None):
     hints. Community plan requires 'Data by LLM Stats' attribution (see site
     footer/methodology) and forbids bulk redistribution — snapshots stay local.
     """
-    import re as _re
     key = os.getenv("LLM_STATS_API_KEY")
     if not key:
         return {"skipped": "no LLM_STATS_API_KEY"}
     headers = {"Authorization": f"Bearer {key}"}
     snap_so_far = snap_so_far or {}
-
-    def norm(s):
-        return _re.sub(r"[^a-z0-9]", "", str(s or "").lower())
 
     # Quota pre-check (free call): fit details budget to remaining balance.
     try:
@@ -401,13 +398,6 @@ def fetch_modelsdev():
                 "last_updated": m.get("last_updated", ""),
             })
     return routes
-
-def prune(keep=1):
-    import glob as g
-    files = sorted(g.glob(os.path.join(RAW, "*_models.json")), key=os.path.getmtime)
-    for old in files[:-keep]:
-        os.remove(old)
-        print(f"pruned {os.path.basename(old)}")
 
 def safe(fn):
     try:

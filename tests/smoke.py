@@ -154,21 +154,9 @@ if w_files:
         check(isinstance(v, list) or (isinstance(v, dict) and ("skipped" in v or "error" in v)),
               "snapshot modelsdev list-or-error")
 
-# Phase-3: free-status churn tracking.
-ch = a.get("free_churn") or {}
-check(isinstance(a.get("free_churn"), dict), "analysis free_churn present")
-for key in ["flipped_to_paid", "flipped_to_paid_total", "flipped_to_free", "flipped_to_free_total",
-            "disappeared", "disappeared_total", "new_slugs", "new_total",
-            "or_flipped_to_paid", "or_flipped_to_paid_total",
-            "or_flipped_to_free", "or_flipped_to_free_total"]:
-    check(key in ch, f"churn key {key}")
-check(all(isinstance(ch.get(k), int) for k in
-          ["flipped_to_paid_total", "flipped_to_free_total", "disappeared_total", "new_total"]),
-      "churn totals are ints")
-check(all(len(ch.get(k, [])) <= 50 for k in
-          ["flipped_to_paid", "flipped_to_free", "disappeared", "new_slugs"]),
-      "churn lists capped at 50")
-check("free_churn" in r, "report carries free_churn")
+# Legacy day-level free_churn was removed; schema-3 route churn is checked below.
+if "free_churn" in a or "free_churn" in r:
+    print("warn legacy free_churn present (bundle predates its removal); ignored")
 
 # Phase-4: churn alerts stage.
 check(os.path.exists(os.path.join(ROOT, "alerts", "check_churn.py")), "alerts script exists")

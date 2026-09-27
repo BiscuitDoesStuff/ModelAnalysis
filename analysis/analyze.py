@@ -1,14 +1,11 @@
-"""2. Data Analysis — normalize all providers, free-classify, diff vs sqlite, combined rank."""
-import json, os, glob, sqlite3, datetime, re
+"""2. Data Analysis — normalize all providers, free-classify, rank. Route churn lives in history.py."""
+import json, os, datetime
 import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from pipeline_common import atomic_json, check_identity, SCHEMA_VERSION
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-RAW = os.path.join(ROOT, "raw")
-DB = os.path.join(ROOT, "analysis", "store.sqlite")
-os.makedirs(os.path.dirname(DB), exist_ok=True)
 
 def is_free_or(pricing):
     try:
@@ -29,11 +26,10 @@ def aa_creator(m):
     c = m.get("model_creator", "")
     return c.get("name", "") if isinstance(c, dict) else str(c)
 
-def norm(s):
-    return re.sub(r"[^a-z0-9]", "", str(s).lower())
-
-
-EFFORTS_ORDERED = ["max", "xhigh", "high", "medium", "low", "minimal", "none"]
+try:
+    from .common import EFFORTS as EFFORTS_ORDERED, TIERS, base_slug, norm, tier_of
+except ImportError:
+    from common import EFFORTS as EFFORTS_ORDERED, TIERS, base_slug, norm, tier_of
 
 
 def parse_variant(aa_name="", aa_slug=""):
@@ -108,19 +104,6 @@ def main(input_path=None, output_dir=None, websites_path=None):
     aa_by_slug = {norm(r["id"]): r for r in aa_rows}
 
     # Canonical deduped models (reports-layer union; raw snapshots untouched).
-    TIER_MAX, TIER_HIGH, TIER_MED = 50, 40, 30
-
-    def tier_of(score):
-        if score is None:
-            return ""
-        if score >= TIER_MAX:
-            return "max"
-        if score >= TIER_HIGH:
-            return "high"
-        if score >= TIER_MED:
-            return "medium"
-        return "below"
-
     def or_cost_per_1m(pricing):
         try:
             p = float((pricing or {}).get("prompt", -1))
@@ -136,9 +119,6 @@ def main(input_path=None, output_dir=None, websites_path=None):
             return None if value is None else round(float(value), 4)
         except Exception:
             return None
-
-    def base_slug(mid):
-        return norm(str(mid).split(":")[0].split("/")[-1])
 
     def family_of(slug, variant):
         s = str(slug or "")
@@ -490,9 +470,7 @@ def main(input_path=None, output_dir=None, websites_path=None):
             m.setdefault("zenmux_reasoning", None)
             m.setdefault("zenmux_output", [])
 
-    # Legacy compatibility counts are computed in isolation. Persistent route
-    # history is prepared/published by the coordinator, never by report builds.
-    con = sqlite3.connect(":memory:")
+    # Route history (churn) is prepared/published by pipeline.py, never here.
     # v2 entity/observation layer (additive — legacy models[] output preserved).
     try:
         from .crosswalk import attach_crosswalk
@@ -513,111 +491,6 @@ def main(input_path=None, output_dir=None, websites_path=None):
                  "benchlm_md": len((websites or {}).get("benchlm_md", {})),
                  "llmstats": len((websites or {}).get("llmstats", {})),
                  "vals": len((websites or {}).get("vals", {}))} if websites else {}
-    cols = [r[1] for r in con.execute("PRAGMA table_info(models)")]
-    if cols and "source" not in cols:
-        con.execute(f"ALTER TABLE models RENAME TO models_old_{stamp.replace('-', '')}")
-    con.execute("CREATE TABLE IF NOT EXISTS models(id TEXT, source TEXT, day TEXT, free INT, PRIMARY KEY(id, source, day))")
-    con.execute("CREATE TABLE IF NOT EXISTS free_history(slug TEXT, day TEXT, free_status TEXT, disp_id TEXT, PRIMARY KEY(slug, day))")
-    con.execute("CREATE TABLE IF NOT EXISTS observations(entity TEXT, source TEXT, field TEXT, value TEXT, day TEXT, PRIMARY KEY(entity, source, field, day))")
-    con.execute("CREATE TABLE IF NOT EXISTS bench_sources(source TEXT, day TEXT, count INT, status TEXT, PRIMARY KEY(source, day))")
-    con.execute("DELETE FROM observations WHERE day=?", (day,))
-    _obs_cap = 20000
-    if len(observations) > _obs_cap:
-        print(f"warn {len(observations)} observations exceed cap {_obs_cap}; oldest fields truncated")
-    for _o in observations[:_obs_cap]:
-        try:
-            con.execute("INSERT OR REPLACE INTO observations VALUES(?,?,?,?,?)",
-                        (str(_o.get("entity", ""))[:200], str(_o.get("source", ""))[:40],
-                         str(_o.get("field", ""))[:60], str(_o.get("value", ""))[:400], day))
-        except Exception:
-            break
-    # Age guard: keep a 90-day observation window (ISO day strings compare lexically).
-    _cutoff = (datetime.date.fromisoformat(day) - datetime.timedelta(days=90)).isoformat()
-    con.execute("DELETE FROM observations WHERE day<?", (_cutoff,))
-    def _bench_status(v):
-        if isinstance(v, dict) and ("skipped" in v or "error" in v):
-            return v.get("skipped", v.get("error", ""))[:200]
-        return "ok"
-    for _src, _cnt in (("benchlm_lb", len(bench_lb) if isinstance(bench_lb, list) else 0),
-                       ("benchlm_pr", len(bench_pr) if isinstance(bench_pr, list) else 0),
-                       ("websites", web_stats.get("allowlist", 0) if web_stats else 0)):
-        try:
-            con.execute("INSERT OR REPLACE INTO bench_sources VALUES(?,?,?,?)",
-                        (_src, day, int(_cnt), _bench_status(snap.get("benchlm", {})) if _src.startswith("benchlm") else "ok"))
-        except Exception:
-            pass
-    try:
-        con.execute("INSERT OR REPLACE INTO bench_sources VALUES(?,?,?,?)",
-                    ("llmstats", day, 0, _bench_status(llm_snap)))
-        con.execute("INSERT OR REPLACE INTO bench_sources VALUES(?,?,?,?)",
-                    ("vals", day, len(vals_snap.get("models", [])) if isinstance(vals_snap.get("models"), list) else 0,
-                     _bench_status(vals_snap)))
-    except Exception:
-        pass
-    prev_or_rows = con.execute(
-        "SELECT id, free FROM models WHERE source='openrouter' AND day="
-        "(SELECT MAX(day) FROM models WHERE source='openrouter' AND day<?)", (day,)).fetchall()
-    prev_or_free = {r[0]: r[1] for r in prev_or_rows}
-    prev_or = set(prev_or_free)
-    for r in or_rows:
-        con.execute("INSERT OR REPLACE INTO models VALUES(?,?,?,?)", (r["id"], "openrouter", day, int(r["free"])))
-    for r in oai_rows:
-        con.execute("INSERT OR REPLACE INTO models VALUES(?,?,?,?)", (r["id"], "openai", day, 0))
-    for r in ant_rows:
-        con.execute("INSERT OR REPLACE INTO models VALUES(?,?,?,?)", (r["id"], "anthropic", day, 0))
-    for r in nvidia_rows:
-        con.execute("INSERT OR REPLACE INTO models VALUES(?,?,?,?)", (r["id"], "nvidia", day, 0))
-    for r in zenmux_rows:
-        con.execute("INSERT OR REPLACE INTO models VALUES(?,?,?,?)", (r["id"], "zenmux", day, 0))
-    for r in zen_rows:
-        con.execute("INSERT OR REPLACE INTO models VALUES(?,?,?,?)", (r["id"], "zen", day, 0))
-    # Canonical free-status history (non-router rows only; reports filter routers).
-    canon = [(m.get("slug") or base_slug(m.get("id", "")), m.get("free_status", "none"), m.get("id", ""))
-             for m in models if not m.get("router") and not m.get("history_excluded") and not m.get("bench_only") and (m.get("slug") or m.get("id"))]
-    cur_free = {s: f for s, f, _ in canon}
-    cur_disp = {s: d for s, f, d in canon}
-    for s, f, d in canon:
-        con.execute("INSERT OR REPLACE INTO free_history VALUES(?,?,?,?)", (s, day, f, d))
-    con.commit()
-    cur_or = {r["id"] for r in or_rows}
-    cur_or_free = {r["id"]: int(r["free"]) for r in or_rows}
-    new_or = sorted(cur_or - prev_or) if prev_or else []
-    removed_or = sorted(prev_or - cur_or) if prev_or else []
-    both_or = cur_or & prev_or
-    or_to_paid = sorted(i for i in both_or if prev_or_free.get(i) == 1 and cur_or_free.get(i) == 0)
-    or_to_free = sorted(i for i in both_or if prev_or_free.get(i) == 0 and cur_or_free.get(i) == 1)
-    hist_days = [r[0] for r in con.execute("SELECT DISTINCT day FROM models ORDER BY day")]
-    fh_days = [r[0] for r in con.execute("SELECT DISTINCT day FROM free_history ORDER BY day")]
-    prev_fh_day = max([d for d in fh_days if d < day], default=None)
-    if prev_fh_day:
-        prev_free = {r[0]: (r[1], r[2]) for r in con.execute(
-            "SELECT slug, free_status, disp_id FROM free_history WHERE day=?", (prev_fh_day,))}
-    else:
-        prev_free = {}
-    _FREEISH = ("verified", "provisional-l1", "provisional-l0")
-    new_slugs = sorted(set(cur_free) - set(prev_free)) if prev_free else []
-    disappeared = sorted(set(prev_free) - set(cur_free)) if prev_free else []
-    to_paid, to_free, level = [], [], []
-    for s in set(cur_free) & set(prev_free):
-        pf = prev_free[s][0]
-        cf = cur_free[s]
-        if pf in _FREEISH and cf == "none":
-            to_paid.append(s)
-        elif pf == "none" and cf in _FREEISH:
-            to_free.append(s)
-        elif pf != cf:
-            level.append(s)
-    def _cur_disp(slugs):
-        return sorted(cur_disp.get(s, s) for s in slugs)
-    free_churn = {"prev_day": prev_fh_day,
-                  "new_slugs": _cur_disp(new_slugs)[:50], "new_total": len(new_slugs),
-                  "disappeared": sorted(prev_free[s][1] for s in disappeared)[:50],
-                  "disappeared_total": len(disappeared),
-                  "flipped_to_paid": _cur_disp(to_paid)[:50], "flipped_to_paid_total": len(to_paid),
-                  "flipped_to_free": _cur_disp(to_free)[:50], "flipped_to_free_total": len(to_free),
-                  "level_changed": _cur_disp(level)[:50], "level_changed_total": len(level),
-                  "or_flipped_to_paid": or_to_paid[:50], "or_flipped_to_paid_total": len(or_to_paid),
-                  "or_flipped_to_free": or_to_free[:50], "or_flipped_to_free_total": len(or_to_free)}
     from collections import Counter as _Counter
     _fsc = _Counter(m.get("free_status", "none") for m in models)
 
@@ -625,8 +498,6 @@ def main(input_path=None, output_dir=None, websites_path=None):
            "started_at": snap.get("started_at"), "source_health": snap.get("source_health", {}),
            "website_health": websites.get("source_health", {}),
            "day": day, "total_openrouter": len(or_rows), "free_count": len(free_ids),
-           "new_ids_vs_history": new_or[:50], "new_total": len(new_or),
-           "removed_ids_vs_history": removed_or[:50], "removed_total": len(removed_or), "history_days": hist_days,
            "total_openai": len(oai_rows), "openai_ids": sorted([r["id"] for r in oai_rows]),
            "openai_retired": sorted([r["id"] for r in oai_rows if r["shutdown"]])[:50],
            "total_anthropic": len(ant_rows), "anthropic_ids": sorted([r["id"] for r in ant_rows]),
@@ -650,13 +521,12 @@ def main(input_path=None, output_dir=None, websites_path=None):
            "website_stats": web_stats,
            "views": views,
            "observations_count": len(observations),
-           "free_churn": free_churn,
            "free_status_counts": {"verified": _fsc.get("verified", 0),
                                   "provisional-l1": _fsc.get("provisional-l1", 0),
                                   "provisional-l0": _fsc.get("provisional-l0", 0),
                                   "none": _fsc.get("none", 0)},
            "models": models, "collisions": collisions,
-           "thresholds": {"max": TIER_MAX, "high": TIER_HIGH, "medium": TIER_MED},
+           "thresholds": dict(TIERS),
            "cost_method": "aa_blended_primary_or_derived_fallback_per_1M"}
     if output_dir is None:
         raise ValueError("analysis requires an output directory")
@@ -666,9 +536,7 @@ def main(input_path=None, output_dir=None, websites_path=None):
           f"NV={len(nvidia_rows)} ZM={len(zenmux_rows)} ZEN={len(zen_rows)} "
           f"MD={len(modelsdev)} AA={len(aa_rows)} BENCHLM={len(bench_lb) if isinstance(bench_lb, list) else 0} "
           f"VALS={(len(vals_snap.get('models', [])) if isinstance(vals_snap, dict) and isinstance(vals_snap.get('models'), list) else vals_snap)} "
-          f"OBS={len(observations)} new={len(new_or)} removed={len(removed_or)} "
-          f"churn_vs={prev_fh_day} to_paid={len(to_paid)} to_free={len(to_free)} gone={len(disappeared)} days={len(hist_days)} -> {ap}")
-    con.close()
+          f"OBS={len(observations)} -> {ap}")
     return ap
 
 if __name__ == "__main__":

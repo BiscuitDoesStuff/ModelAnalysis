@@ -3,6 +3,10 @@
 Ranking stays AA-only. BenchLM / LLM Stats / Vals are parallel views with
 their own scales, evidence tiers, and provenance. Reports read views.
 """
+try:
+    from .common import TIERS
+except ImportError:
+    from common import TIERS
 
 
 def _score(m, key="score"):
@@ -101,7 +105,7 @@ def build_views(models):
         if m.get("free_status") != "provisional-l1" and m.get("free_status") != "provisional-l0":
             continue
         route = m.get("or_id") or m.get("fallback_id", "")
-        qualifier = (m.get("score") or 0) >= 40 and bool(route)
+        qualifier = (m.get("score") or 0) >= TIERS["high"] and bool(route)
         triage.append({"id": m["id"], "slug": m["slug"], "score": m.get("score"),
                        "free_status": m.get("free_status"), "route": route or "",
                        "provider": m.get("fallback_provider", "") if not m.get("or_id") else "openrouter",

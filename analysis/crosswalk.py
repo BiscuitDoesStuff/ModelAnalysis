@@ -4,19 +4,13 @@ Providers remain the source of truth for existence. Benchmark sources
 (BenchLM / LLM Stats / Vals / AA) join by normalized name/slug, never by guess:
 exact norm equality only. Unmapped rows stay unjoined.
 """
-import re
+try:
+    from .common import norm, kebab, base_slug
+except ImportError:
+    from common import norm, kebab, base_slug
 
-
-def norm(s):
-    return re.sub(r"[^a-z0-9]", "", str(s or "").lower())
-
-
-def kebab(name):
-    return re.sub(r"[^a-z0-9]+", "-", str(name or "").lower()).strip("-")
-
-
-def base_slug(mid):
-    return norm(str(mid).split(":")[0].split("/")[-1])
+__all__ = ["norm", "kebab", "base_slug", "benchlm_indexes", "llmstats_indexes",
+           "vals_indexes", "attach_crosswalk"]
 
 
 def benchlm_indexes(snap):
