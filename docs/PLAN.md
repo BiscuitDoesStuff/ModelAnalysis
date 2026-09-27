@@ -15,7 +15,7 @@
 - **Owner decided `record`** (accepting that a trimmed real fixture publishes some AA/BenchLM/LLM Stats data in this public repo). `tools/record_fixture.py` is built and pushed; the owner records from the next complete-coverage run (step 4). The synthetic fixture stays and CI replays both. First attempt (10:43 UTC 09-27) was correctly refused (quota); retry after 00:00 UTC.
 - **Phase 2 is pushed** (see its Status note): `analysis/identity.py` + `identity.json`, churn rule 3 (report identity + Zen `created` ignored), identity conflicts in site/XLSX/MD, `tools/compare_bundles.py`, registry-slug warning. Offline only so far; the owner's step 5 replay review decides any joins/splits.
 
-**Next action: wait for the owner's step 6 live run** (first run after churn rule 3 sets baselines only; expect 0 identity conflicts), then start Phase 3 (provenance). Step 4 (record fixture) is independent: when that push lands, check its CI run includes `== recorded replay` and is green. Phase 3 starts after step 5 is settled. The evidence entries now expire on **2026-10-04**; the next refresh is due before then (repeat step 2, then the 0a pattern).
+**Next action: Phase 3 (provenance).** Step 4 (record fixture) still waits for a complete-coverage run after 00:00 UTC; when its push lands, check CI shows `== recorded replay` green. Step 4 (record fixture) is independent: when that push lands, check its CI run includes `== recorded replay` and is green. Phase 3 starts after step 5 is settled. The evidence entries now expire on **2026-10-04**; the next refresh is due before then (repeat step 2, then the 0a pattern).
 
 **Constraints that aren't obvious from the code:**
 - **Cloud sessions can't reach the provider APIs** (a proxy returns 403). Live runs happen only on the owner's Windows machine, so validate offline and ask the owner for a live run at the plan's checkpoints.
@@ -46,7 +46,8 @@
 | LLM Stats failure | **Closed**: daily quota spent | `quota too low (4 remaining), need ~8 for base calls; wait for UTC reset`. The guard worked as designed |
 | Phase 1: CI | **Done**: [run #1](https://github.com/BiscuitDoesStuff/ModelAnalysis/actions/runs/36312905540) green on Windows + Linux × 3.11 + 3.13, and lint | `python -B tools/ci.py` passes in clean Python 3.11 and 3.13 venvs from `requirements.lock`: 59 tests, golden replay, smoke 0 failures, golden coverage OK |
 | Your step 5: identity review | **Done** | Replay `2026-09-27_105813_e741d6e03a9d` vs `104304`: 1,129 → 1,129 entities, 0 splits/merges/renames, 0 rank/score/free/pick changes. 6 `aa-creator-unaliased` (grok420/43/45/46/47, longcat20) resolved by aliases `spacexai`→`xai`, `longcat`→`meituan` |
-| Phase 2: identity | **Done** offline; step 6 live run next | 77 tests incl. `test_identity.py` (all plan fixtures), `test_compare_bundles.py`, Zen fingerprint test; CI green |
+| Phase 2: identity | **Done**, live-verified in step 6 |
+| Your step 6: live run | **Done** | Run `2026-09-27_110352_9cb7c4c6bb66`: 0 identity conflicts, each route owned once, XLSX 16 tabs, churn 0 events (rule-3 baseline run), smoke 0 failures. Partial coverage only from LLM Stats quota | 77 tests incl. `test_identity.py` (all plan fixtures), `test_compare_bundles.py`, Zen fingerprint test; CI green |
 | Fixture source | **Decided: record** | `tools/record_fixture.py` pushed; synthetic fixture kept alongside. Your step 4 records the real one |
 
 ## Context
@@ -162,7 +163,7 @@ Changes to `analysis/research.json`:
 
 ## Phase 2: Provider identity and collisions (roadmap item 1)
 
-**Status (2026-09-27): done offline; step 5 review clean (0 splits); step 6 live run pending.** Built as described below, with these specifics:
+**Status (2026-09-27): done.** Step 5 review clean (0 splits, 2 aliases added); step 6 live run: 0 conflicts, smoke 0 failures. Built as described below, with these specifics:
 - **AA creator not in the alias table:** the AA row still joins when it's the only AA row for its tail and exactly one entity has that tail. It's recorded as an `aa-creator-unaliased` conflict, so an unaliased creator can't silently lose a model's score; add the alias to confirm it. With two AA rows for a tail, the strict rule applies.
 - **Zen `-free` routes stay separate report entities,** as before. The `research.json` inheritance rules decide their scores. For churn, a free-only Zen entity gets its paid counterpart's `canonical_id` when exactly one entity has that tail, so loss alerts still list it as an alternative.
 - **Benchmark-only rows** (BenchLM, LLM Stats rankings) attach to the one entity with their tail. They're skipped if several share it, and become reference-only rows if none do.
@@ -384,9 +385,10 @@ Run every command in PowerShell from `C:\DevProjects\ModelAnalysis`. Unless a st
 | 3 | — | — | ✅ Done: live run `095157_f0e75f9fb295`, smoke 0 failures |
 | 3b | — | — | Live run checkpoint: expect no "no AA benchmark pinned" warning, 2 inherited estimates, `ok research registry current` |
 | 3c | — | — | ✅ Done: LLM Stats failure was the daily quota |
-| 4 | After 00:00 UTC (LLM Stats quota reset) | ~15 min | Record and commit the real fixture. First try at 10:43 UTC on 09-27 was correctly refused: `llmstats=failed` (quota) |
+| 4 | **After 00:00 UTC** (LLM Stats quota reset) | ~15 min | `run.ps1`, then record and commit the real fixture. Tries at 10:43 and 11:03 UTC on 09-27 were correctly refused (quota) |
 | 5 | — | — | ✅ Done: 0 splits; 2 aliases added |
-| 6 | **Now** | ~10 min | Live run checkpoint (first run after rule 3 sets baselines only) |
+| 6 | — | — | ✅ Done: run `110352_9cb7c4c6bb66`, 0 conflicts, smoke 0 failures |
+| 6b | Any run after 00:00 UTC | — | Informational: Zen `catalog_changed` noise should be gone (0 events vs ~82) | Live run checkpoint (first run after rule 3 sets baselines only) |
 | 7 | After Phases 3 and 6 | ~10 min each | Live run checkpoints (Phase 6 needs two runs) |
 | 8 | During Phase 5 | ~10 min | Review screenshots and try the site by keyboard |
 
