@@ -45,7 +45,8 @@
 | Your step 3b: live run | **Done** | Run `2026-09-27_102010_2272b1477638`: no AA pin warning, 2 inherited estimates, `ok research registry current`, smoke 0 failures, 82 churn events / 0 alerts. But **partial coverage**: `llmstats: failed (0)`, and canonical models dropped to 1,131 from 1,136 |
 | LLM Stats failure | **Closed**: daily quota spent | `quota too low (4 remaining), need ~8 for base calls; wait for UTC reset`. The guard worked as designed |
 | Phase 1: CI | **Done**: [run #1](https://github.com/BiscuitDoesStuff/ModelAnalysis/actions/runs/36312905540) green on Windows + Linux × 3.11 + 3.13, and lint | `python -B tools/ci.py` passes in clean Python 3.11 and 3.13 venvs from `requirements.lock`: 59 tests, golden replay, smoke 0 failures, golden coverage OK |
-| Phase 2: identity | **Pushed**; your step 5 review next | 77 tests incl. `test_identity.py` (all plan fixtures), `test_compare_bundles.py`, Zen fingerprint test; CI green |
+| Your step 5: identity review | **Done** except aliases | Replay `2026-09-27_105813_e741d6e03a9d` vs `104304`: 1,129 → 1,129 entities, 0 splits/merges/renames, 0 rank/score/free/pick changes. 6 `aa-creator-unaliased` (grok420/43/45/46/47, longcat20): vendor strings requested to add aliases |
+| Phase 2: identity | **Pushed**; aliases for step 5's 6 notes pending | 77 tests incl. `test_identity.py` (all plan fixtures), `test_compare_bundles.py`, Zen fingerprint test; CI green |
 | Fixture source | **Decided: record** | `tools/record_fixture.py` pushed; synthetic fixture kept alongside. Your step 4 records the real one |
 
 ## Context

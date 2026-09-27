@@ -124,7 +124,10 @@ def format_report(d):
     section("Merges (old entities -> new entity)", [f"{', '.join(o)} -> {n}" for n, o in sorted(d["merges"].items())])
     section("Renamed", [f"{o} -> {n}" for o, n in sorted(d["renamed"].items())])
     section("Became ambiguous", [f"{c['route']} (candidates {', '.join(c['candidates'])})" for c in d["ambiguous"]])
-    section("All identity conflicts", [f"{c['kind']}: {c.get('tail', '')} {', '.join(c.get('entities', []))}" for c in d["conflicts"]])
+    section("All identity conflicts", [f"{c['kind']}: {c.get('tail', '')} {', '.join(c.get('entities', []))}"
+                                       + (f" (AA creator '{c.get('aa_vendor')}' vs route vendor '{c.get('route_vendor')}')"
+                                          if c.get("kind") == "aa-creator-unaliased" else "")
+                                       for c in d["conflicts"]])
     section("Added entities", d["added"])
     section("Removed entities", d["removed"])
     section(f"Rank changes in the top {TOP} (AA intelligence order)",
