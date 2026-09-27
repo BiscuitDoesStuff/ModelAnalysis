@@ -9,8 +9,9 @@
 - `891efc7`: Phase 0b–d, meaning the dead in-memory history is removed, helpers are shared in `analysis/common.py`, and nothing is created on import.
 - Both are verified by the owner's live run `2026-09-27_095157_f0e75f9fb295`: smoke 0 failures, complete coverage.
 - The Context bullets below describe the code *before* `891efc7`. The first bullet (in-memory history) and the import side-effects are already fixed.
+- 0a (`research.json` refresh) is pushed: pins 4.3.2 through 2026-10-04, AA score entries retired, all entries checked 2026-09-27 / expire 2026-10-04. Validated offline only.
 
-**Next action: 0a, the `research.json` refresh. Deadline: before 2026-10-03, when the current entries expire.** The owner's inputs are all collected and the decisions are made, both listed in 0a. Don't ask again; implement them exactly. Then the owner does step 3b (a live run). After that comes Phase 1 (CI).
+**Next action: wait for the owner's step 3b live run** (checks 0a live), then start Phase 1 (CI). The evidence entries now expire on **2026-10-04**; the next refresh is due before then (repeat step 2, then the 0a pattern).
 
 **Constraints that aren't obvious from the code:**
 - **Cloud sessions can't reach the provider APIs** (a proxy returns 403). Live runs happen only on the owner's Windows machine, so validate offline and ask the owner for a live run at the plan's checkpoints.
@@ -40,7 +41,8 @@
 | Your step 1: Python version | **Done** | You run 3.13.14 |
 | Your step 2: evidence check | **Done** | Results and decisions are in 0a below |
 | Your step 3: live run | **Done** | Route churn ran for the first time: 82 events, 0 alerts. You diagnosed all 82 as Zen noise (see Phase 2) |
-| 0a: `research.json` refresh | **Next, due before Oct 3** | Edits listed in 0a. Clears the "no AA benchmark pinned" warning your run printed |
+| 0a: `research.json` refresh | **Done**, pushed; live check pending (step 3b) | Offline: registry check (current 09-27 and 10-04, expired 10-05), 57 tests OK, fixture replay smoke shows `ok research registry current` and only the known variant-label failure. Entries now expire 2026-10-04 |
+| Your step 3b: live run | **Next** | Expect no "no AA benchmark pinned" warning, 2 inherited estimates, `ok research registry current` |
 | Phase 1: CI | After 0a | CI tests 3.11 and 3.13 (3.13 is what you run locally) |
 
 ## Context
@@ -352,7 +354,7 @@ Run every command in PowerShell from `C:\DevProjects\ModelAnalysis`. Unless a st
 | 1 | — | — | ✅ Done: Python 3.13.14 |
 | 2 | — | — | ✅ Done: evidence check (results in 0a) |
 | 3 | — | — | ✅ Done: live run `095157_f0e75f9fb295`, smoke 0 failures |
-| 3b | After I push the 0a `research.json` refresh | ~10 min | Live run checkpoint: expect no "no AA benchmark pinned" warning, 2 inherited estimates, `ok research registry current` |
+| 3b | **Now** (0a is pushed) | ~10 min | Live run checkpoint: expect no "no AA benchmark pinned" warning, 2 inherited estimates, `ok research registry current` |
 | 4 | After I push the fixture tool (Phase 1) | ~5 min | Record and commit a test fixture, then check that GitHub Actions ran |
 | 5 | After I push identity (Phase 2) | ~20 min | Replay and review the identity diff |
 | 6 | After Phase 2 merges | ~10 min | Live run checkpoint |
