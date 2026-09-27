@@ -61,6 +61,14 @@ class IdentityTests(unittest.TestCase):
         self.assertEqual(r["aa_entity"]["zeta-1"], "zeta1")
         self.assertEqual([c["kind"] for c in r["conflicts"]], ["aa-creator-unaliased"])
 
+    def test_step5_aliases_join_without_conflict(self):
+        # Owner's 2026-09-27 replay: AA credits Grok to "SpaceX AI" and LongCat to "LongCat".
+        r = resolve({"openrouter": ["x-ai/grok-4.5", "meituan/longcat-2.0"], "zen": ["grok-4.5"]},
+                    [{"slug": "grok-4-5", "creator": "SpaceX AI"}, {"slug": "longcat-2-0", "creator": "LongCat"}])
+        self.assertEqual(r["conflicts"], [])
+        self.assertEqual((r["aa_entity"]["grok-4-5"], r["entities"]["grok45"]["key"]), ("grok45", "xai/grok45"))
+        self.assertEqual(r["entities"]["longcat20"]["key"], "meituan/longcat20")
+
     def test_explicit_join_and_split(self):
         routes = {"openrouter": ["acme/nova-1"], "nvidia": ["orbit/nova-1"]}
         join = dict(EVIDENCE, routes=[{"provider": "openrouter", "id": "acme/nova-1"},

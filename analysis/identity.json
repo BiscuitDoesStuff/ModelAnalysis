@@ -26,7 +26,9 @@
   "rekaai": "reka",
   "stepfunai": "stepfun",
   "tencenthunyuan": "tencent",
-  "motiftechnologies": "motif"
+  "motiftechnologies": "motif",
+  "spacexai": "xai",
+  "longcat": "meituan"
  },
  "joins": [],
  "splits": []
