@@ -377,7 +377,7 @@ Run every command in PowerShell from `C:\DevProjects\ModelAnalysis`. Unless a st
 | 3 | — | — | ✅ Done: live run `095157_f0e75f9fb295`, smoke 0 failures |
 | 3b | — | — | Live run checkpoint: expect no "no AA benchmark pinned" warning, 2 inherited estimates, `ok research registry current` |
 | 3c | — | — | ✅ Done: LLM Stats failure was the daily quota |
-| 4 | After your next complete-coverage run (LLM Stats quota resets 00:00 UTC) | ~15 min | Record and commit the real fixture |
+| 4 | After 00:00 UTC (LLM Stats quota reset) | ~15 min | Record and commit the real fixture. First try at 10:43 UTC on 09-27 was correctly refused: `llmstats=failed` (quota) |
 | 5 | After I push identity (Phase 2) | ~20 min | Replay and review the identity diff |
 | 6 | After Phase 2 merges | ~10 min | Live run checkpoint |
 | 7 | After Phases 3 and 6 | ~10 min each | Live run checkpoints (Phase 6 needs two runs) |
