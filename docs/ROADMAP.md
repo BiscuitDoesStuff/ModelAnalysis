@@ -32,6 +32,8 @@ The reliability foundation is implemented: pinned run bundles, staged publicatio
 
 ## 4. Evidence and benchmark-version maintenance
 
+**Status (2026-09-27):** implemented as Phase 4 of `docs/PLAN.md` (`aa_index_versions` ranges, `analysis/registry.py`, `tools/refresh_evidence.py`, expiry warnings); live check pending.
+
 **Goal:** make registry refresh and version changes repeatable without treating stale evidence as newly verified.
 
 **Dependencies:** provenance audit, source timestamps, `research.json` eligibility/expiry rules.

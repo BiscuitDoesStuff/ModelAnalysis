@@ -15,7 +15,10 @@
 - **Owner decided `record`** (accepting that a trimmed real fixture publishes some AA/BenchLM/LLM Stats data in this public repo). `tools/record_fixture.py` is built and pushed; the owner records from the next complete-coverage run (step 4). The synthetic fixture stays and CI replays both. First attempt (10:43 UTC 09-27) was correctly refused (quota); retry after 00:00 UTC.
 - **Phase 2 is pushed** (see its Status note): `analysis/identity.py` + `identity.json`, churn rule 3 (report identity + Zen `created` ignored), identity conflicts in site/XLSX/MD, `tools/compare_bundles.py`, registry-slug warning. Offline only so far; the owner's step 5 replay review decides any joins/splits.
 
-**Next action: Phase 4 (evidence and version maintenance).** Phase 3 is pushed; its live checkpoint (step 7a) is folded into the owner's next run after 00:00 UTC together with step 4 (record fixture). When that fixture push lands, check CI shows `== recorded replay` and `== recorded provenance audit` green. Step 4 (record fixture) is independent: when that push lands, check its CI run includes `== recorded replay` and is green. Phase 3 starts after step 5 is settled. The evidence entries now expire on **2026-10-04**; the next refresh is due before then (repeat step 2, then the 0a pattern).
+**Next action: Phase 5 (UX and accessibility).** Phases 3 and 4 are pushed. Owner items, independent of Phase 5:
+- Step 4 + 7a after 00:00 UTC (live check of Phases 3 and 4, and recording the fixture). When that fixture push lands, check CI shows `== recorded replay` and `== recorded provenance audit` green.
+- **Step R, the evidence refresh, is due before 2026-10-04.** It now uses `tools/refresh_evidence.py`.
+ Step 4 (record fixture) is independent: when that push lands, check its CI run includes `== recorded replay` and is green. Phase 3 starts after step 5 is settled. The evidence entries expire on **2026-10-04**; refresh them with step R (`tools/refresh_evidence.py`).
 
 **Constraints that aren't obvious from the code:**
 - **Cloud sessions can't reach the provider APIs** (a proxy returns 403). Live runs happen only on the owner's Windows machine, so validate offline and ask the owner for a live run at the plan's checkpoints.
@@ -46,6 +49,7 @@
 | LLM Stats failure | **Closed**: daily quota spent | `quota too low (4 remaining), need ~8 for base calls; wait for UTC reset`. The guard worked as designed |
 | Phase 1: CI | **Done**: [run #1](https://github.com/BiscuitDoesStuff/ModelAnalysis/actions/runs/36312905540) green on Windows + Linux × 3.11 + 3.13, and lint | `python -B tools/ci.py` passes in clean Python 3.11 and 3.13 venvs from `requirements.lock`: 59 tests, golden replay, smoke 0 failures, golden coverage OK |
 | Your step 5: identity review | **Done** | Replay `2026-09-27_105813_e741d6e03a9d` vs `104304`: 1,129 → 1,129 entities, 0 splits/merges/renames, 0 rank/score/free/pick changes. 6 `aa-creator-unaliased` (grok420/43/45/46/47, longcat20) resolved by aliases `spacexai`→`xai`, `longcat`→`meituan` |
+| Phase 4: evidence maintenance | **Pushed**; live check in step 4+7a | `aa_index_versions` ranges replace per-day pins; `analysis/registry.py` validation; `tools/refresh_evidence.py`; expiry warnings in pipeline, Start page, Methodology; 90 tests incl. `test_registry.py` boundaries |
 | Phase 3: provenance | **Pushed**; live check in step 4+7a | 82 tests incl. `test_provenance.py` (contract, scale guard, audit catches orphans/mismatches); golden audit: 409 cells, 0 orphans; CI runs the audit |
 | Phase 2: identity | **Done**, live-verified in step 6 |
 | Your step 6: live run | **Done** | Run `2026-09-27_110352_9cb7c4c6bb66`: 0 identity conflicts, each route owned once, XLSX 16 tabs, churn 0 events (rule-3 baseline run), smoke 0 failures. Partial coverage only from LLM Stats quota | 77 tests incl. `test_identity.py` (all plan fixtures), `test_compare_bundles.py`, Zen fingerprint test; CI green |
@@ -255,6 +259,13 @@ You replay your latest real snapshot through the new code into `replay-runs/` an
 
 ## Phase 4: Evidence and benchmark-version maintenance (roadmap item 4)
 
+**Status (2026-09-27): pushed; live check pending (step 4+7a).** Built as below, with these specifics:
+- **Version ranges:** `research.json` has `aa_index_versions` (one open range, 4.3.2 from 2026-09-25, `source_url` = the AA release page where you read it). Old per-day `snapshot_benchmarks` still resolve, with a "migrate" warning, for older registry copies such as fixtures. Inheritance entries now carry `version`, so an AA version change retires them by rule, like score entries.
+- **AA API version field:** not implemented yet. The response keys aren't known offline; revisit once the recorded fixture shows the AA response's non-`data` keys.
+- **Validation:** `analysis/registry.py` checks required fields, ISO dates, `checked_at ≤ expires_at`, URLs, `variant ∈ supported_efforts`, benchmarks in `scales.BENCHMARKS`, non-overlapping ranges and duplicates. `enrich` raises on errors, so the current report stays. Unmatched slugs are warnings: `registry_missing_targets`, which fails the fixture coverage check. `identity.json` has its own validator (Phase 2).
+- **Warnings:** the pipeline warns when entries expire within 3 days, or when the open AA version range was last confirmed more than 7 days ago. The dashboard Start page, MD and site Methodology show "evidence expires in N days" and the AA version. The analysis carries `evidence_status`.
+- **`tools/refresh_evidence.py`:** `list`, `confirm`, `retire`, `version-confirm` and `version-new`. It validates before writing, keeps the file's layout byte-for-byte, and logs each change to run-notes.
+
 - **Replace per-day pins.** `snapshot_benchmarks` becomes `aa_index_versions: [{version, valid_from, valid_to|null, source_url, checked_at}]`, and a day resolves to the version whose range contains it. If the AA API response includes an index version field (check against a recorded fixture), prefer it and warn when it disagrees with the registry. A version change then invalidates, by rule, any `scores`/`inheritance` entries on the old version.
 - **Registry validation** (`analysis/registry.py`), run by `enrich` and by a unit test:
   - required fields and ISO dates;
@@ -400,6 +411,7 @@ Run every command in PowerShell from `C:\DevProjects\ModelAnalysis`. Unless a st
 | 5 | — | — | ✅ Done: 0 splits; 2 aliases added |
 | 6 | — | — | ✅ Done: run `110352_9cb7c4c6bb66`, 0 conflicts, smoke 0 failures |
 | 6b | Any run after 00:00 UTC | — | Informational: Zen `catalog_changed` noise should be gone (0 events vs ~82) | Live run checkpoint (first run after rule 3 sets baselines only) |
+| R | **Before 2026-10-04** | ~15 min | Evidence refresh with `tools/refresh_evidence.py` (see Step R) |
 | 7 | After Phase 6 | ~10 min | Live run checkpoint (Phase 6 needs two runs); Phase 3's is 7a above |
 | 8 | During Phase 5 | ~10 min | Review screenshots and try the site by keyboard |
 
@@ -491,6 +503,25 @@ git push origin biscuit
 Paste the `Published` line, any `warn` lines, smoke's result, the audit's output and the recorder's output.
 
 CI itself is already confirmed green ([run #1](https://github.com/BiscuitDoesStuff/ModelAnalysis/actions/runs/36312905540)). To reproduce it locally, offline and with no quota: `python -m pip install -r requirements.lock`, then `python -B tools/ci.py`, which ends with `CI checks passed`.
+
+### Step R: Evidence refresh (before entries expire; next due 2026-10-04)
+```powershell
+git pull origin biscuit
+python tools/refresh_evidence.py list
+```
+`list` prints the AA Intelligence Index version range and every entry expiring within 7 days, each with the URLs to re-check. Open them in your browser, then for each entry:
+- **Still true:** `python tools/refresh_evidence.py confirm <key> --checked <today> --note "what you saw"`. Add `--value <new>` if a score changed; it's valid for 7 days unless you pass `--expires`.
+- **No longer true:** `python tools/refresh_evidence.py retire <key> --note "why"`.
+- **AA version unchanged:** `python tools/refresh_evidence.py version-confirm --checked <today>`.
+- **AA version changed:** `python tools/refresh_evidence.py version-new <version> --from <first day> --url <page>`. Entries on the old version stop applying, and the tool lists them.
+
+Then:
+```powershell
+git add analysis/research.json docs/run-notes.md
+git commit -m "evidence refresh <today>"
+git push origin biscuit
+```
+Or paste your findings and I'll run the commands.
 
 ### Step 5: Identity review (Phase 2)
 This replays your latest real snapshot through the new matching into a **separate** state folder and database, so your real history is untouched.

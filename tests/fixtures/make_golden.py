@@ -202,11 +202,12 @@ def registry():
     urls = ["https://example.invalid/pricing", "https://example.invalid/equivalence"]
 
     def inherit(target, source, route):
-        return {"target_slug": target, "source_slug": source, "variant": "xhigh", "provider": "zen",
+        return {"target_slug": target, "source_slug": source, "variant": "xhigh", "version": "4.3.2", "provider": "zen",
                 "route_id": route, "selector": f"opencode/{route}#xhigh", "supported_efforts": EFFORTS5,
                 "cost_blended": 0, **dates, "equivalence_urls": urls,
                 "capability_url": "https://example.invalid/models.json", "rationale": rationale}
-    return {"snapshot_benchmarks": {AS_OF: "4.3.2"},
+    return {"aa_index_versions": [{"version": "4.3.2", "valid_from": "2026-09-01", "valid_to": None,
+                                   "source_url": "https://example.invalid/aa-methodology", "checked_at": "2026-09-20"}],
             "scores": [
                 {"target_slug": "nemotron4ultra", "variant": "", "benchmark": "aa-intelligence-index",
                  "version": "4.3.2", "value": 39, "source": "Synthetic release page",

@@ -410,10 +410,13 @@ def main(input_path=None, output_dir=None, websites_path=None, registry_path=Non
 
     try:
         from .enrichment import enrich
+        from .registry import evidence_status
     except ImportError:
         from enrichment import enrich
+        from registry import evidence_status
     with open(registry_path or os.path.join(ROOT, 'analysis', 'research.json'), encoding='utf-8') as f:
-        registry_missing = enrich(models, json.load(f), day, md_by_slug)
+        research = json.load(f)
+    registry_missing = enrich(models, research, day, md_by_slug)
 
     # Backlog: effort-disambiguation + callable hints (pure local, post-enrich so derived rows group).
     CALLABLE_SET = {"openai", "anthropic", "openrouter", "nvidia", "zenmux", "zen"}
@@ -542,6 +545,7 @@ def main(input_path=None, output_dir=None, websites_path=None, registry_path=Non
                                   "none": _fsc.get("none", 0)},
            "models": models, "identity_conflicts": identity_conflicts,
            "registry_missing_targets": registry_missing,
+           "evidence_status": evidence_status(research, day),
            "thresholds": dict(TIERS),
            "cost_method": "aa_blended_primary_or_derived_fallback_per_1M"}
     if output_dir is None:

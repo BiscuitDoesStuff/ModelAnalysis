@@ -39,3 +39,6 @@ def problems(observation):
     if not observation.get("observed_at"):
         out.append("missing observed_at")
     return out
+
+# Registry benchmarks and the scale each one is on.
+BENCHMARKS = {"aa-intelligence-index": "aa-index", "llm-stats-overall": "llmstats-trueskill"}

@@ -1,5 +1,7 @@
 {
-  "snapshot_benchmarks": {"2026-09-25": "4.3.2", "2026-09-26": "4.3.2", "2026-09-27": "4.3.2", "2026-09-28": "4.3.2", "2026-09-29": "4.3.2", "2026-09-30": "4.3.2", "2026-10-01": "4.3.2", "2026-10-02": "4.3.2", "2026-10-03": "4.3.2", "2026-10-04": "4.3.2"},
+  "aa_index_versions": [
+    {"version": "4.3.2", "valid_from": "2026-09-25", "valid_to": null, "source_url": "https://artificialanalysis.ai/models/releases/muse-spark-1-3", "checked_at": "2026-09-27"}
+  ],
   "scores": [
     {"target_slug": "musespark13", "variant": "unspecified", "benchmark": "llm-stats-overall", "version": "TrueSkill conservative rating; revision unspecified", "value": 53.8, "source": "LLM Stats", "url": "https://llm-stats.com/benchmarks", "checked_at": "2026-09-27", "expires_at": "2026-10-04", "note": "Different metric and unspecified effort: reference only, never an AA ranking score."}
   ],
@@ -8,6 +10,7 @@
       "target_slug": "musespark13contributorfree",
       "source_slug": "musespark13xhigh",
       "variant": "xhigh",
+      "version": "4.3.2",
       "provider": "zen",
       "route_id": "muse-spark-1.3-contributor-free",
       "selector": "opencode/muse-spark-1.3-contributor-free#xhigh",
@@ -23,6 +26,7 @@
       "target_slug": "musespark12contributorfree",
       "source_slug": "musespark12",
       "variant": "xhigh",
+      "version": "4.3.2",
       "provider": "zen",
       "route_id": "muse-spark-1.2-contributor-free",
       "selector": "opencode/muse-spark-1.2-contributor-free#xhigh",

@@ -112,7 +112,8 @@ class IdentityTests(unittest.TestCase):
         models = [{"slug": "present", "score": None, "variant": "", "providers": []}]
         registry = {"snapshot_benchmarks": {"2026-09-27": "4.3.2"},
                     "scores": [{"target_slug": "gone", "variant": "", "benchmark": "aa-intelligence-index",
-                                "version": "4.3.2", "value": 1, "checked_at": "2026-09-27", "expires_at": "2026-09-27"}],
+                                "version": "4.3.2", "value": 1, "source": "t", "url": "https://example.invalid/x",
+                                "checked_at": "2026-09-27", "expires_at": "2026-09-27"}],
                     "inheritance": []}
         out = io.StringIO()
         with contextlib.redirect_stdout(out):

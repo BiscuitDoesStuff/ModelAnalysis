@@ -1,4 +1,13 @@
 {
+ "aa_index_versions": [
+  {
+   "checked_at": "2026-09-20",
+   "source_url": "https://example.invalid/aa-methodology",
+   "valid_from": "2026-09-01",
+   "valid_to": null,
+   "version": "4.3.2"
+  }
+ ],
  "inheritance": [
   {
    "capability_url": "https://example.invalid/models.json",
@@ -22,7 +31,8 @@
     "xhigh"
    ],
    "target_slug": "musespark13contributorfree",
-   "variant": "xhigh"
+   "variant": "xhigh",
+   "version": "4.3.2"
   },
   {
    "capability_url": "https://example.invalid/models.json",
@@ -46,7 +56,8 @@
     "xhigh"
    ],
    "target_slug": "musespark12contributorfree",
-   "variant": "xhigh"
+   "variant": "xhigh",
+   "version": "4.3.2"
   }
  ],
  "scores": [
@@ -74,8 +85,5 @@
    "variant": "unspecified",
    "version": "fixture"
   }
- ],
- "snapshot_benchmarks": {
-  "2026-09-27": "4.3.2"
- }
+ ]
 }

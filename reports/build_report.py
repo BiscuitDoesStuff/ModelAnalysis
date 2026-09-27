@@ -197,6 +197,26 @@ def prov_attrs(m, field):
     return f" class='{cls}' data-obs='{esc(p['obs_id'])}' title='{esc(provenance_text(m, field))}'"
 
 
+def evidence_expiry_text(a):
+    """One line on research.json freshness (empty for analyses without evidence_status)."""
+    st = a.get("evidence_status")
+    if not st:
+        return ""
+    parts = []
+    if st.get("expired"):
+        parts.append(f"EXPIRED evidence: {', '.join(st['expired'])} (no longer applied)")
+    if st.get("days_left") is not None:
+        parts.append(f"research.json evidence expires in {st['days_left']} days ({st['soonest_expiry']})")
+    elif not st.get("expired"):
+        parts.append("no research.json evidence entries")
+    version = f"AA Intelligence Index v{st.get('aa_index_version') or 'unknown'}"
+    if st.get("aa_version_checked_at"):
+        version += f", confirmed {st['aa_version_checked_at']}"
+    if st.get("aa_version_recheck_due") or st.get("aa_version_note"):
+        version += " (re-check due)"
+    return " · ".join(parts + [version])
+
+
 def score_evidence(m):
     source = m.get('score_source') or {}
     text = evidence_label(score_evidence_type(m)) if source else 'unscored'
@@ -641,6 +661,9 @@ def build_html(a, s, stamp):
     if value_bands:
         b0 = value_bands[0]
         v_extra = (f"Band {b0['top']:.1f}–{b0['bottom']:.1f}: saves {b0['saving_pct']}% vs priciest in band.")
+    if evidence_expiry_text(a):
+        warn = a["evidence_status"].get("expiring") or a["evidence_status"].get("expired")
+        ov += f"<p class='{'gap' if warn else 'note'}'>{esc(evidence_expiry_text(a))}</p>"
     ov += "<div class='cards'>"
     ov += _pick_card("Top quality", top_quality)
     ov += _pick_card("Best value", top_value, v_extra)
@@ -944,6 +967,8 @@ def main(input_path=None, output_dir=None):
              "source, version, observation time and `obs_id` are in the XLSX `*_provenance` columns, the dashboard/site "
              "cell tooltips, and the analysis JSON `observations`. Evidence labels: "
              + ", ".join(f"{k} = {v}" for k, v in EVIDENCE.items()) + "._\n")
+    if evidence_expiry_text(a):
+        L.insert(2, f"\n_{evidence_expiry_text(a)}_\n")
     L.insert(2, reliability_markdown(a))
     for key, value in reliability_data(a).items():
         L.append(f"\n## {key}\n\n```json\n{json.dumps(value, ensure_ascii=False, indent=2)}\n```\n")

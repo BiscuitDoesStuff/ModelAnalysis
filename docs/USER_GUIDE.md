@@ -72,7 +72,7 @@ python pipeline.py --snapshot path/to/models.json --state-dir replay-runs --db r
 python pipeline.py --snapshot path/to/models.json --websites path/to/websites.json --state-dir replay-runs --db replay-history.sqlite
 ```
 
-The optional website snapshot must belong to the provider snapshot's original run. Replay assigns a new run ID, records the imported origin, and preserves source evidence timestamps. Without `--websites`, website enrichment is empty. Replay-only `--as-of YYYY-MM-DD` sets the evidence day used for registry expiry and AA pins (default: the run day), and `--registry PATH` replaces `analysis/research.json`; the golden fixture uses both so its results never depend on today's date. Legacy snapshots without completeness evidence can be displayed but cannot establish trusted absence baselines. Separate replay state/history keeps experiments apart from normal history.
+The optional website snapshot must belong to the provider snapshot's original run. Replay assigns a new run ID, records the imported origin, and preserves source evidence timestamps. Without `--websites`, website enrichment is empty. Replay-only `--as-of YYYY-MM-DD` sets the evidence day used for registry expiry and the AA index version (default: the run day), and `--registry PATH` replaces `analysis/research.json`; the golden fixture uses both so its results never depend on today's date. Legacy snapshots without completeness evidence can be displayed but cannot establish trusted absence baselines. Separate replay state/history keeps experiments apart from normal history.
 
 After interruption, use the **same state directory and database**:
 
@@ -158,6 +158,8 @@ python -B tests/smoke.py
 python -B tests/smoke.py --bundle runs/bundles/<run_id>
 # Everything CI runs (golden replay + smoke + coverage included):
 python -B tools/ci.py
+# Evidence refresh: what expires soon (with URLs to re-check), then confirm/retire/version:
+python tools/refresh_evidence.py list
 # Trace displayed scores/prices to their saved observations (0 orphans expected):
 python tools/audit_provenance.py runs/bundles/<run_id>
 # Record a trimmed, key-free fixture from the current complete-coverage bundle (verified before writing):

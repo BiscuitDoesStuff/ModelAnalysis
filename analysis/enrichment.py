@@ -5,8 +5,10 @@ import math
 
 try:
     from .common import tier_of
+    from .registry import aa_version, evidence_status, validate
 except ImportError:
     from common import tier_of
+    from registry import aa_version, evidence_status, validate
 
 
 def current(record, day):
@@ -24,15 +26,19 @@ def enrich(models, registry, day, modelsdev_by_slug=None):
     slug change can never silently drop evidence.
     """
     datetime.date.fromisoformat(day)
-    cohort = registry.get('snapshot_benchmarks', {}).get(day)
-    if not cohort:
-        known = registry.get('snapshot_benchmarks', {})
-        if known:
-            latest = max(known)
-            cohort = known[latest]
-            print(f"warn no AA benchmark pinned for day {day}; defaulting to latest known {cohort} from {latest} — pin this day in research.json")
-        else:
-            print(f"warn no AA snapshot_benchmarks at all; external AA-version scores stay reference-only")
+    errors, _ = validate(registry)
+    if errors:
+        raise ValueError("research.json invalid: " + "; ".join(errors))
+    cohort, _, note = aa_version(registry, day)
+    if note:
+        print(f"warn {note} — add or extend aa_index_versions in research.json")
+    status = evidence_status(registry, day)
+    for item in status["expiring"]:
+        print(f"warn research.json {item['key']} expires {item['expires_at']} ({item['days_left']} days) — "
+              f"re-check and run tools/refresh_evidence.py confirm")
+    if status["aa_version_recheck_due"]:
+        print(f"warn AA index version {cohort} last confirmed {status['aa_version_checked_at']} — "
+              f"re-check and run tools/refresh_evidence.py version-confirm")
     by_slug = {m['slug']: m for m in models}
     modelsdev_by_slug = modelsdev_by_slug or {}
     for m in models:
@@ -70,6 +76,7 @@ def enrich(models, registry, day, modelsdev_by_slug=None):
         if (not source or not current(record, day) or not record.get('equivalence_urls') or
                 not record.get('capability_url') or not record.get('rationale') or
                 record['variant'] not in record['supported_efforts'] or
+                not cohort or record.get('version') != cohort or
                 source.get('variant') != record['variant'] or not finite(source.get('score')) or
                 record['provider'] not in target.get('providers', []) or
                 target.get('score') is not None):

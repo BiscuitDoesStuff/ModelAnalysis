@@ -10,11 +10,11 @@ import html as _html
 from urllib.parse import quote
 
 if __package__:
-    from .build_report import (IDENTITY_HEADERS, copy_id, identity_rows, prov_attrs, reliability_data,
-                               reliability_html, score_evidence, source_summary)
+    from .build_report import (IDENTITY_HEADERS, copy_id, evidence_expiry_text, identity_rows, prov_attrs,
+                               reliability_data, reliability_html, score_evidence, source_summary)
 else:
-    from build_report import (IDENTITY_HEADERS, copy_id, identity_rows, prov_attrs, reliability_data,
-                              reliability_html, score_evidence, source_summary)
+    from build_report import (IDENTITY_HEADERS, copy_id, evidence_expiry_text, identity_rows, prov_attrs,
+                              reliability_data, reliability_html, score_evidence, source_summary)
 from analysis.common import evidence_label
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -305,8 +305,9 @@ def main(input_path=None, output_dir=None):
         f.write(page("Compare", stamp, nav_html(), "".join(comp)))
 
     # ---- methodology + confidence ----
-    meth = ("<h2>Rules</h2><ul><li>Existence from providers (OpenRouter required; others keyless/keyed with graceful skip).</li>"
-            "<li>Ranking score = AA Intelligence Index only (version-pinned per day).</li>"
+    meth = ((f"<p><strong>{esc(evidence_expiry_text(a))}</strong></p>" if evidence_expiry_text(a) else "") +
+            "<h2>Rules</h2><ul><li>Existence from providers (OpenRouter required; others keyless/keyed with graceful skip).</li>"
+            "<li>Ranking score = AA Intelligence Index only; its version comes from dated ranges in research.json (aa_index_versions).</li>"
             "<li>BenchLM / LLM Stats / Vals are parallel reference views — never averaged, never fill AA score.</li>"
             "<li>LLM Stats Community plan requires attribution: Data by <a href='https://llm-stats.com'>LLM Stats</a>; bulk redistribution is not licensed — snapshots stay local.</li>"
             "<li>Free = strict $0 at retrieval (OR $0 + text-only + no routers) or Zen *-free; AA $0 alone = provisional [F?].</li>"
