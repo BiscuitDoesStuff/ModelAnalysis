@@ -4,7 +4,6 @@ Never mixes benchmark scales. Every observation carries provenance
 (source, benchmark/version, evidence tier, url, observed_at/expires_at).
 Views (views.py) read observations; reports read views.
 """
-import copy
 
 
 def obs(entity, source, field, value, unit="", benchmark="", version="",

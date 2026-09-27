@@ -10,9 +10,11 @@
 - Both are verified by the owner's live run `2026-09-27_095157_f0e75f9fb295`: smoke 0 failures, complete coverage.
 - The Context bullets below describe the code *before* `891efc7`. The first bullet (in-memory history) and the import side-effects are already fixed.
 - 0a (`research.json` refresh) is pushed as `1330219` and verified by live run `2026-09-27_102010_2272b1477638`: no AA pin warning, 2 inherited estimates, `ok research registry current`, smoke 0 failures. Entries expire 2026-10-04.
-- That run was **partial coverage**, because `source llmstats: failed (0)`. The key was present, since a missing key reports `skipped`. The reason is in the snapshot's `source_health.llmstats.reason`; the owner has been asked for it (see "Open: LLM Stats failure" under Your steps).
+- That run was **partial coverage** only because LLM Stats' daily quota was spent (`quota too low (4 remaining)`); the fetcher's guard skipped it by design. Nothing to fix.
+- **Phase 1 is pushed** (see its Status note): `requirements.lock`, `.github/workflows/ci.yml`, `tools/ci.py`, a **synthetic** golden fixture, `--as-of`/`--registry` replay flags, cross-process lock test, ruff job. Verified locally in clean 3.11 and 3.13 venvs.
+- **Open decision for the owner:** the repo is public, so the planned real-data fixture (`tools/record_fixture.py`) would publish trimmed AA/BenchLM/LLM Stats data; LLM Stats' terms forbid redistribution. Asked whether to stay synthetic-only (recommended) or build the recorder anyway. `record_fixture.py` is not built until they answer.
 
-**Next action: diagnose the LLM Stats failure from the owner's pasted reason, then start Phase 1 (CI).** The evidence entries now expire on **2026-10-04**; the next refresh is due before then (repeat step 2, then the 0a pattern).
+**Next action: confirm the first GitHub Actions run is green, get the owner's fixture decision, then start Phase 2 (identity).** The evidence entries now expire on **2026-10-04**; the next refresh is due before then (repeat step 2, then the 0a pattern).
 
 **Constraints that aren't obvious from the code:**
 - **Cloud sessions can't reach the provider APIs** (a proxy returns 403). Live runs happen only on the owner's Windows machine, so validate offline and ask the owner for a live run at the plan's checkpoints.
@@ -44,8 +46,9 @@
 | Your step 3: live run | **Done** | Route churn ran for the first time: 82 events, 0 alerts. You diagnosed all 82 as Zen noise (see Phase 2) |
 | 0a: `research.json` refresh | **Done**, pushed as `1330219`, live-verified in step 3b | Offline: registry check (current 09-27 and 10-04, expired 10-05), 57 tests OK, fixture replay smoke shows `ok research registry current` and only the known variant-label failure. Entries now expire 2026-10-04 |
 | Your step 3b: live run | **Done** | Run `2026-09-27_102010_2272b1477638`: no AA pin warning, 2 inherited estimates, `ok research registry current`, smoke 0 failures, 82 churn events / 0 alerts. But **partial coverage**: `llmstats: failed (0)`, and canonical models dropped to 1,131 from 1,136 |
-| LLM Stats failure | **Open**, waiting on the reason | Owner runs the diagnostic under "Open: LLM Stats failure" |
-| Phase 1: CI | After 0a | CI tests 3.11 and 3.13 (3.13 is what you run locally) |
+| LLM Stats failure | **Closed**: daily quota spent | `quota too low (4 remaining), need ~8 for base calls; wait for UTC reset`. The guard worked as designed |
+| Phase 1: CI | **Pushed**; first Actions run pending | `python -B tools/ci.py` passes in clean Python 3.11 and 3.13 venvs from `requirements.lock`: 59 tests, golden replay, smoke 0 failures, golden coverage OK |
+| Fixture source | **Your decision** | Synthetic-only (recommended; public repo) or real trimmed data via `tools/record_fixture.py` |
 
 ## Context
 
@@ -127,6 +130,14 @@ Changes to `analysis/research.json`:
 ---
 
 ## Phase 1: CI and reproducible installs (roadmap item 6; before the big refactors)
+
+**Status (2026-09-27): pushed.** What landed and how it differs from the list below:
+- **Golden fixture is synthetic** (`tests/fixtures/make_golden.py` writes `golden_snapshot.json`, `golden_websites.json`, `golden_research.json`; `--check` fails CI when they're stale). Invented names, prices and scores; it covers every case listed below, and `tools/ci.py` fails if a replay stops producing any of them (`golden_coverage`). Reason: the repo is public, and a real trimmed fixture would republish AA/BenchLM/LLM Stats data (LLM Stats' terms forbid redistribution). `tools/record_fixture.py` waits for the owner's decision.
+- **Replay flags `--as-of` and `--registry`** (replay-only; analysis accepts them too). The fixture pins its evidence day and registry, so CI results don't change when `research.json` entries expire or get refreshed. A test proves the pin: 2 inherited estimates on the fixture day, 0 one day after its registry expires.
+- **`tools/ci.py`** is the single command CI runs and the one to run locally.
+- **Lock test:** `test_writer_lock_excludes_other_process` holds the lock in a child process (msvcrt on Windows runners, fcntl on Linux).
+- **ruff** job with `F401,F811,F821,F841` only; the 3 existing unused imports were removed.
+- CI sets `PYTHONIOENCODING=utf-8` because Windows pipes default to the ANSI code page. It deliberately doesn't set UTF-8 mode, which would hide file-encoding bugs you'd hit locally.
 
 - **Pinned dependencies.** Keep `requirements.txt` as the top-level list and add a pinned `requirements.lock`, generated with `pip-compile` or written by hand. Support Python **3.11–3.13**, the versions CI proves. Record that in README. Your machine runs 3.13.14, so 3.13 is the version that must stay green; 3.11 is the oldest supported.
 - **`.github/workflows/ci.yml`:**
@@ -357,8 +368,8 @@ Run every command in PowerShell from `C:\DevProjects\ModelAnalysis`. Unless a st
 | 2 | — | — | ✅ Done: evidence check (results in 0a) |
 | 3 | — | — | ✅ Done: live run `095157_f0e75f9fb295`, smoke 0 failures |
 | 3b | — | — | Live run checkpoint: expect no "no AA benchmark pinned" warning, 2 inherited estimates, `ok research registry current` |
-| 3c | Now | ~1 min | Paste the LLM Stats failure reason ("Open: LLM Stats failure" below) |
-| 4 | After I push the fixture tool (Phase 1) | ~5 min | Record and commit a test fixture, then check that GitHub Actions ran |
+| 3c | — | — | ✅ Done: LLM Stats failure was the daily quota |
+| 4 | Now (Phase 1 is pushed) | ~5 min | Check that GitHub Actions ran green, and answer the fixture question |
 | 5 | After I push identity (Phase 2) | ~20 min | Replay and review the identity diff |
 | 6 | After Phase 2 merges | ~10 min | Live run checkpoint |
 | 7 | After Phases 3 and 6 | ~10 min each | Live run checkpoints (Phase 6 needs two runs) |
@@ -427,40 +438,18 @@ Notes:
 - **After Phase 2:** expect "no trusted baseline" churn on the first run. That's the rule-version bump, not a bug.
 - **After Phase 6:** run twice, a few minutes apart, and paste the Retrieval table from the site's Confidence page for both runs. The second run shows the cache and conditional-request savings.
 
-### Open: LLM Stats failure (step 3c)
-Run `2026-09-27_102010_2272b1477638` reported `source llmstats: failed (0)`. This only reads files; it makes no API calls and uses no quota:
-```powershell
-@'
-import json
-c = json.load(open("runs/current.json", encoding="utf-8"))
-b, r = "runs/" + c["bundle"], c["run_id"]
-snap = json.load(open(f"{b}/raw/{r}_models.json", encoding="utf-8"))
-print("run:", r)
-print("llmstats health:", snap["source_health"].get("llmstats"))
-print("llmstats value:", snap.get("llmstats"))
-try:
-    for line in open(f"{b}/raw/_errors.log", encoding="utf-8"):
-        if "llmstats" in line.lower():
-            print("log:", line.rstrip())
-except FileNotFoundError:
-    print("no _errors.log")
-'@ | python -
-```
-Errors are already passed through `safe_error`, so the key is redacted. Paste the output.
+### Step 4: CI check (Phase 1)
+Open the repo's **Actions** tab on GitHub and check that the "CI" workflow's latest run on `biscuit` is green: four `test` jobs (Windows and Linux × Python 3.11 and 3.13) and `lint`. If Actions is disabled, turn it on under **Settings → Actions → General → Allow all actions**, then re-run the workflow from the Actions tab.
 
-### Step 4: Test fixture and CI (Phase 1)
+To reproduce CI locally (offline, no quota):
 ```powershell
 git pull origin biscuit
-python tools/record_fixture.py
-git status
+python -m pip install -r requirements.lock
+python -B tools/ci.py
 ```
-The tool reads your current bundle and writes a trimmed, key-free `tests/fixtures/golden_snapshot.json` and `golden_websites.json`. It prints their sizes and a secret-scan result, which must say `secret scan: clean`. If it's clean:
-```powershell
-git add tests/fixtures
-git commit -m "test: golden fixture from live run"
-git push origin biscuit
-```
-Then open the repo's **Actions** tab on GitHub and check that the "CI" workflow ran green on Windows and Linux. If Actions is disabled, turn it on under **Settings → Actions → General → Allow all actions**, then re-run the workflow from the Actions tab.
+It ends with `CI checks passed`.
+
+**Fixture question:** the golden fixture is synthetic because the repo is public. Reply **synthetic** to keep it that way (recommended), or **record** if you want `tools/record_fixture.py` built to commit a trimmed fixture from your real bundle, accepting that it publishes some AA/BenchLM/LLM Stats data.
 
 ### Step 5: Identity review (Phase 2)
 This replays your latest real snapshot through the new matching into a **separate** state folder and database, so your real history is untouched.

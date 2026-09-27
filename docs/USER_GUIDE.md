@@ -2,13 +2,13 @@
 
 ## Install and configure
 
-Use Python 3.10+ from the repository root:
+Use Python 3.11–3.13 from the repository root:
 
 ```powershell
-python -m pip install -r requirements.txt
+python -m pip install -r requirements.lock
 ```
 
-Dependencies are `openpyxl` and `python-dotenv`. PowerShell is needed only for `run.ps1` and the PowerShell examples below.
+Dependencies are `openpyxl` and `python-dotenv`, listed in `requirements.txt` and pinned in `requirements.lock`; update both together and re-run `python -B tools/ci.py`. PowerShell is needed only for `run.ps1` and the PowerShell examples below.
 
 Public retrieval covers OpenRouter, NVIDIA, ZenMux, Zen, models.dev, BenchLM, and best-effort website evidence. Optional credentials:
 
@@ -72,7 +72,7 @@ python pipeline.py --snapshot path/to/models.json --state-dir replay-runs --db r
 python pipeline.py --snapshot path/to/models.json --websites path/to/websites.json --state-dir replay-runs --db replay-history.sqlite
 ```
 
-The optional website snapshot must belong to the provider snapshot's original run. Replay assigns a new run ID, records the imported origin, and preserves source evidence timestamps. Without `--websites`, website enrichment is empty. Legacy snapshots without completeness evidence can be displayed but cannot establish trusted absence baselines. Separate replay state/history keeps experiments apart from normal history.
+The optional website snapshot must belong to the provider snapshot's original run. Replay assigns a new run ID, records the imported origin, and preserves source evidence timestamps. Without `--websites`, website enrichment is empty. Replay-only `--as-of YYYY-MM-DD` sets the evidence day used for registry expiry and AA pins (default: the run day), and `--registry PATH` replaces `analysis/research.json`; the golden fixture uses both so its results never depend on today's date. Legacy snapshots without completeness evidence can be displayed but cannot establish trusted absence baselines. Separate replay state/history keeps experiments apart from normal history.
 
 After interruption, use the **same state directory and database**:
 
@@ -156,6 +156,8 @@ python -B -m unittest discover -s tests -p "test_*.py"
 python -B tests/smoke.py
 # Select an existing bundle explicitly:
 python -B tests/smoke.py --bundle runs/bundles/<run_id>
+# Everything CI runs (golden replay + smoke + coverage included):
+python -B tools/ci.py
 ```
 
 Unit/integration checks use fixtures and temporary storage. Smoke checks existing artifacts. These commands do not automatically call live APIs.

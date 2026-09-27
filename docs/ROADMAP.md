@@ -44,6 +44,8 @@ The reliability foundation is implemented: pinned run bundles, staged publicatio
 
 ## 6. Dependency reproducibility and CI
 
+**Status (2026-09-27):** implemented as Phase 1 of `docs/PLAN.md` (`requirements.lock`, `.github/workflows/ci.yml`, `tools/ci.py`, synthetic golden fixture, cross-process writer-lock test); first GitHub Actions run pending.
+
 **Goal:** make a clean checkout reproducibly installable and validate reliability on supported platforms.
 
 **Dependencies:** explicit supported Python/platform policy, dependency version strategy, network-free test fixtures, bundle-aware smoke checks.

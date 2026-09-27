@@ -1,0 +1,81 @@
+{
+ "inheritance": [
+  {
+   "capability_url": "https://example.invalid/models.json",
+   "checked_at": "2026-09-20",
+   "cost_blended": 0,
+   "equivalence_urls": [
+    "https://example.invalid/pricing",
+    "https://example.invalid/equivalence"
+   ],
+   "expires_at": "2026-10-10",
+   "provider": "zen",
+   "rationale": "Synthetic fixture estimate: same checkpoint, pricing-tier route.",
+   "route_id": "muse-spark-1.3-contributor-free",
+   "selector": "opencode/muse-spark-1.3-contributor-free#xhigh",
+   "source_slug": "musespark13xhigh",
+   "supported_efforts": [
+    "minimal",
+    "low",
+    "medium",
+    "high",
+    "xhigh"
+   ],
+   "target_slug": "musespark13contributorfree",
+   "variant": "xhigh"
+  },
+  {
+   "capability_url": "https://example.invalid/models.json",
+   "checked_at": "2026-09-20",
+   "cost_blended": 0,
+   "equivalence_urls": [
+    "https://example.invalid/pricing",
+    "https://example.invalid/equivalence"
+   ],
+   "expires_at": "2026-10-10",
+   "provider": "zen",
+   "rationale": "Synthetic fixture estimate: same checkpoint, pricing-tier route.",
+   "route_id": "muse-spark-1.2-contributor-free",
+   "selector": "opencode/muse-spark-1.2-contributor-free#xhigh",
+   "source_slug": "musespark12",
+   "supported_efforts": [
+    "minimal",
+    "low",
+    "medium",
+    "high",
+    "xhigh"
+   ],
+   "target_slug": "musespark12contributorfree",
+   "variant": "xhigh"
+  }
+ ],
+ "scores": [
+  {
+   "benchmark": "aa-intelligence-index",
+   "checked_at": "2026-09-20",
+   "expires_at": "2026-10-10",
+   "note": "Registry score for a row the API leaves unscored.",
+   "source": "Synthetic release page",
+   "target_slug": "nemotron4ultra",
+   "url": "https://example.invalid/nemotron-4-ultra",
+   "value": 39,
+   "variant": "",
+   "version": "4.3.2"
+  },
+  {
+   "benchmark": "llm-stats-overall",
+   "checked_at": "2026-09-20",
+   "expires_at": "2026-10-10",
+   "note": "Reference only.",
+   "source": "Synthetic LLM Stats",
+   "target_slug": "musespark13",
+   "url": "https://example.invalid/llm-stats",
+   "value": 53.8,
+   "variant": "unspecified",
+   "version": "fixture"
+  }
+ ],
+ "snapshot_benchmarks": {
+  "2026-09-27": "4.3.2"
+ }
+}

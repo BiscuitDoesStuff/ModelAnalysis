@@ -187,7 +187,12 @@ def _legacy_health(snapshot):
     return result
 
 
-def run(*, state_dir=None, db_path=None, config=None, snapshot_path=None, websites_path=None, failpoint=None):
+def run(*, state_dir=None, db_path=None, config=None, snapshot_path=None, websites_path=None, failpoint=None,
+        as_of=None, registry_path=None):
+    if (as_of or registry_path) and not snapshot_path:
+        raise ValueError("as_of and registry_path are replay-only")
+    if as_of:
+        dt.date.fromisoformat(as_of)
     from analysis import analyze
     from analysis.history import prepare_run, prune_history
     from reports import build_report, build_site
@@ -249,7 +254,8 @@ def run(*, state_dir=None, db_path=None, config=None, snapshot_path=None, websit
                 stage("websites", lambda: atomic_json(web, w))
             else:
                 stage("websites", lambda: fetch_websites.main(raw, staging / "raw", state_dir / "cache", cfg))
-            analysis_path = stage("analyze", lambda: analyze.main(raw, staging / "analysis", web))
+            analysis_path = stage("analyze", lambda: analyze.main(raw, staging / "analysis", web,
+                                                                 registry_path, as_of))
             a = json.loads(Path(analysis_path).read_text(encoding="utf-8"))
             churn = prepare_run(str(db_path), snap, a["models"], run_id, started_at, snap["source_health"])
             a["churn"] = churn
@@ -292,17 +298,20 @@ def main():
     p.add_argument("--db", help="History database (default analysis/store.sqlite)")
     p.add_argument("--snapshot", help="Offline replay of an existing snapshot; performs no network calls")
     p.add_argument("--websites", help="Matching website snapshot for offline replay")
+    p.add_argument("--as-of", help="Replay only: evidence day (YYYY-MM-DD) for registry expiry and AA pins")
+    p.add_argument("--registry", help="Replay only: research registry to use instead of analysis/research.json")
     p.add_argument("--recover", action="store_true", help="Finish interrupted publication without fetching")
     args = p.parse_args()
-    if args.websites and not args.snapshot:
-        p.error("--websites requires --snapshot")
+    if (args.websites or args.as_of or args.registry) and not args.snapshot:
+        p.error("--websites, --as-of and --registry require --snapshot")
     if args.recover:
         state = Path(args.state_dir or ROOT / "runs")
         with writer_lock(state):
             recover_publication(state, args.db or ROOT / "analysis" / "store.sqlite")
         return
     run(state_dir=args.state_dir, db_path=args.db, config=load_config(args.config),
-        snapshot_path=args.snapshot, websites_path=args.websites)
+        snapshot_path=args.snapshot, websites_path=args.websites, as_of=args.as_of,
+        registry_path=args.registry)
 
 
 if __name__ == "__main__":

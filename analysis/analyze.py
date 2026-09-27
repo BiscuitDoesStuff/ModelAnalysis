@@ -52,13 +52,14 @@ def parse_variant(aa_name="", aa_slug=""):
             return v
     return ""
 
-def main(input_path=None, output_dir=None, websites_path=None):
+def main(input_path=None, output_dir=None, websites_path=None, registry_path=None, as_of=None):
+    """as_of/registry_path pin the evidence day and registry for fixture replays (default: run day, research.json)."""
     if input_path is None:
         raise ValueError("analysis requires an explicit input snapshot")
     with open(input_path, encoding="utf-8") as f:
         snap = json.load(f)
     stamp = str(snap.get("retrieved_at", datetime.datetime.now().strftime("%Y-%m-%d_%H%M")))
-    day = snap.get("started_at", stamp)[:10]
+    day = as_of or snap.get("started_at", stamp)[:10]
 
     ors = snap.get("openrouter", []) if isinstance(snap.get("openrouter"), list) else []
     oai = snap.get("openai", []) if isinstance(snap.get("openai"), list) else []
@@ -402,7 +403,7 @@ def main(input_path=None, output_dir=None, websites_path=None):
         from .enrichment import enrich
     except ImportError:
         from enrichment import enrich
-    with open(os.path.join(ROOT, 'analysis', 'research.json'), encoding='utf-8') as f:
+    with open(registry_path or os.path.join(ROOT, 'analysis', 'research.json'), encoding='utf-8') as f:
         enrich(models, json.load(f), day, md_by_slug)
 
     # Backlog: effort-disambiguation + callable hints (pure local, post-enrich so derived rows group).
@@ -545,5 +546,7 @@ if __name__ == "__main__":
     parser.add_argument("--input", required=True)
     parser.add_argument("--output", required=True)
     parser.add_argument("--websites")
+    parser.add_argument("--registry")
+    parser.add_argument("--as-of")
     args = parser.parse_args()
-    main(args.input, args.output, args.websites)
+    main(args.input, args.output, args.websites, args.registry, args.as_of)

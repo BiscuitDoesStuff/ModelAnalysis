@@ -6,12 +6,14 @@ import json
 from contextlib import closing
 from pathlib import Path
 import sqlite3
+import subprocess
+import sys
 import tempfile
 import unittest
 from unittest.mock import patch
 
 import pipeline
-from pipeline_common import atomic_json, load_config, source_status, SOURCES, PROVIDERS
+from pipeline_common import ROOT, atomic_json, source_status, SOURCES, PROVIDERS
 
 
 def snapshot(free=True):
@@ -161,6 +163,41 @@ class PipelineTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "Another pipeline"):
                 with pipeline.writer_lock(self.state):
                     pass
+
+    def test_writer_lock_excludes_other_process(self):
+        # Covers the OS lock itself (msvcrt on Windows, fcntl elsewhere) across processes.
+        holder = subprocess.Popen(
+            [sys.executable, "-c", "import sys, pipeline\n"
+             "with pipeline.writer_lock(sys.argv[1]):\n print('locked', flush=True)\n sys.stdin.read()",
+             str(self.state)],
+            cwd=ROOT, stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
+        try:
+            self.assertEqual(holder.stdout.readline().strip(), "locked")
+            with self.assertRaisesRegex(RuntimeError, "Another pipeline"):
+                with pipeline.writer_lock(self.state):
+                    pass
+        finally:
+            holder.stdin.close()
+            holder.wait(timeout=30)
+        with pipeline.writer_lock(self.state):
+            pass
+
+    def test_replay_as_of_pins_evidence_day_and_registry(self):
+        fixtures = ROOT / "tests" / "fixtures"
+        kwargs = dict(snapshot_path=fixtures / "golden_snapshot.json",
+                      websites_path=fixtures / "golden_websites.json",
+                      registry_path=fixtures / "golden_research.json")
+
+        def inherited(as_of):
+            with contextlib.redirect_stdout(io.StringIO()):
+                bundle = pipeline.run(state_dir=self.state, db_path=self.db, as_of=as_of, **kwargs)
+            a = json.loads(next((bundle / "analysis").glob("*_analysis.json")).read_text(encoding="utf-8"))
+            self.assertEqual(a["day"], as_of)
+            return sum((m.get("score_source") or {}).get("kind") == "inherited-estimate" for m in a["models"])
+        self.assertEqual(inherited("2026-09-27"), 2)
+        self.assertEqual(inherited("2026-10-11"), 0)  # one day past the fixture registry's expiry
+        with self.assertRaisesRegex(ValueError, "replay-only"):
+            pipeline.run(state_dir=self.state, db_path=self.db, as_of="2026-09-27")
 
 
 if __name__ == "__main__":

@@ -4,7 +4,7 @@ See [USER_GUIDE.md](USER_GUIDE.md) for commands and interpretation. This describ
 
 ## Run identity and stage APIs
 
-`run.ps1` forwards arguments to `pipeline.py` and propagates failure. The coordinator accepts `--config`, `--state-dir`, `--db`, `--snapshot`, `--websites` (requires `--snapshot`), and `--recover`.
+`run.ps1` forwards arguments to `pipeline.py` and propagates failure. The coordinator accepts `--config`, `--state-dir`, `--db`, `--snapshot`, `--websites`, `--as-of` and `--registry` (all three require `--snapshot`), and `--recover`.
 
 Default state is `<repository>/runs`; default history is `<repository>/analysis/store.sqlite`. A run ID combines a UTC `YYYY-MM-DD_HHMMSS` timestamp with a random suffix. All artifacts in a run share this identity; filename order/mtime never selects stage inputs.
 
@@ -17,7 +17,7 @@ Default state is `<repository>/runs`; default history is `<repository>/analysis/
 | Site | `build_site.main(input_path, output_dir)` | Analysis + matching `<run_id>_models.json` in output directory → `<run_id>_site/` |
 | Alerts | `check_churn.main(input_path, output_dir)` | Exact report JSON → optional `<run_id>_churn_alert.md` |
 
-Standalone CLIs require `--input` and `--output`, except fetch requires `--output` with optional `--config`; analysis also accepts `--websites`. They are scratch tools, with no publication or retention responsibility. Analysis uses an in-memory legacy compatibility calculation, not the persistent route database. The coordinator adds trusted history before report generation.
+Standalone CLIs require `--input` and `--output`, except fetch requires `--output` with optional `--config`; analysis also accepts `--websites`. They are scratch tools, with no publication or retention responsibility. Analysis never touches the route database; analysis also accepts `--registry` and `--as-of`. The coordinator adds trusted history before report generation.
 
 ## Publication, interruption, and concurrency
 
@@ -61,7 +61,7 @@ Partial reports publish with explicit report coverage labels when usable provide
 
 ### Offline import
 
-`--snapshot` imports a provider snapshot without any network stage, assigns a new run identity, and records `imported_from`. Optional `--websites` must match the snapshot's **original** identity before both artifacts are assigned the new identity. Without it, website evidence is empty. Original source timestamps remain evidence timestamps. Legacy snapshots lacking health metadata are labeled `legacy-unverified` and cannot establish loss baselines.
+`--snapshot` imports a provider snapshot without any network stage, assigns a new run identity, and records `imported_from`. Optional `--websites` must match the snapshot's **original** identity before both artifacts are assigned the new identity. Without it, website evidence is empty. Original source timestamps remain evidence timestamps. Legacy snapshots lacking health metadata are labeled `legacy-unverified` and cannot establish loss baselines. `--as-of` pins the evidence day (registry expiry, AA pins, observation dates; the manifest day and history keep the real run time) and `--registry` substitutes the research registry; both exist for fixture replays.
 
 ## Route history and events
 
@@ -119,7 +119,7 @@ Only the coordinator prunes, after publication:
 - Prune detailed runs older than `run_days`, protecting the last complete published source baseline per rule version, including its route/known-free evidence through outages.
 - Retain daily summaries for `daily_days`; these are independent of full artifact retention.
 
-Validation commands are `python -B tests/test_units.py`, `python -B -m unittest discover -s tests -p "test_*.py"`, and `python -B tests/smoke.py` (optionally `--bundle <bundle-directory>`). Automated tests use fixtures/temporary databases and directories; smoke reads existing artifacts. No validation command automatically performs live API retrieval. The pipeline's publication validator additionally checks the exact staged bundle before selection.
+Validation commands are `python -B tests/test_units.py`, `python -B -m unittest discover -s tests -p "test_*.py"`, and `python -B tests/smoke.py` (optionally `--bundle <bundle-directory>`); `python -B tools/ci.py` runs all of them plus the golden-fixture replay, exactly as GitHub Actions does (`.github/workflows/ci.yml`: Windows and Linux × Python 3.11 and 3.13, plus a ruff job for unused/undefined names). Automated tests use fixtures/temporary databases and directories; smoke reads existing artifacts. No validation command automatically performs live API retrieval. The pipeline's publication validator additionally checks the exact staged bundle before selection.
 
 ## Extension points
 

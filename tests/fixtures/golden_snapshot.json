@@ -1,0 +1,1058 @@
+{
+ "aa": {
+  "data": [
+   {
+    "evaluations": {
+     "artificial_analysis_intelligence_index": 64.2
+    },
+    "id": "aa-gpt-6",
+    "model_creator": {
+     "name": "OpenAI"
+    },
+    "name": "GPT-6 (xhigh)",
+    "pricing": {
+     "price_1m_blended_3_to_1": 5.0,
+     "price_1m_input_tokens": 2.5,
+     "price_1m_output_tokens": 12.5
+    },
+    "slug": "gpt-6"
+   },
+   {
+    "evaluations": {
+     "artificial_analysis_intelligence_index": 46.1
+    },
+    "id": "aa-gpt-6-mini",
+    "model_creator": {
+     "name": "OpenAI"
+    },
+    "name": "GPT-6 mini (high)",
+    "pricing": {
+     "price_1m_blended_3_to_1": 0.7,
+     "price_1m_input_tokens": 0.4,
+     "price_1m_output_tokens": 1.6
+    },
+    "slug": "gpt-6-mini"
+   },
+   {
+    "evaluations": {
+     "artificial_analysis_intelligence_index": 60.4
+    },
+    "id": "aa-claude-opus-5",
+    "model_creator": {
+     "name": "Anthropic"
+    },
+    "name": "Claude Opus 5 (max)",
+    "pricing": {
+     "price_1m_blended_3_to_1": 30.0,
+     "price_1m_input_tokens": 15,
+     "price_1m_output_tokens": 75
+    },
+    "slug": "claude-opus-5"
+   },
+   {
+    "evaluations": {
+     "artificial_analysis_intelligence_index": 47.3
+    },
+    "id": "aa-claude-opus-5-medium",
+    "model_creator": {
+     "name": "Anthropic"
+    },
+    "name": "Claude Opus 5 (medium)",
+    "pricing": {
+     "price_1m_blended_3_to_1": 30.0,
+     "price_1m_input_tokens": 15,
+     "price_1m_output_tokens": 75
+    },
+    "slug": "claude-opus-5-medium"
+   },
+   {
+    "evaluations": {
+     "artificial_analysis_intelligence_index": 36.0
+    },
+    "id": "aa-claude-haiku-5",
+    "model_creator": {
+     "name": "Anthropic"
+    },
+    "name": "Claude Haiku 5",
+    "pricing": {
+     "price_1m_blended_3_to_1": 2.0,
+     "price_1m_input_tokens": 1,
+     "price_1m_output_tokens": 5
+    },
+    "slug": "claude-haiku-5"
+   },
+   {
+    "evaluations": {
+     "artificial_analysis_intelligence_index": 48.1
+    },
+    "id": "aa-muse-spark-1-3",
+    "model_creator": {
+     "name": "Meta"
+    },
+    "name": "Muse Spark 1.3 (max)",
+    "pricing": {
+     "price_1m_blended_3_to_1": 3.5,
+     "price_1m_input_tokens": 2,
+     "price_1m_output_tokens": 8
+    },
+    "slug": "muse-spark-1-3"
+   },
+   {
+    "evaluations": {
+     "artificial_analysis_intelligence_index": 45.1
+    },
+    "id": "aa-muse-spark-1-3-xhigh",
+    "model_creator": {
+     "name": "Meta"
+    },
+    "name": "Muse Spark 1.3 (xhigh)",
+    "pricing": {
+     "price_1m_blended_3_to_1": 3.5,
+     "price_1m_input_tokens": 2,
+     "price_1m_output_tokens": 8
+    },
+    "slug": "muse-spark-1-3-xhigh"
+   },
+   {
+    "evaluations": {
+     "artificial_analysis_intelligence_index": 41.0
+    },
+    "id": "aa-muse-spark-1-2",
+    "model_creator": {
+     "name": "Meta"
+    },
+    "name": "Muse Spark 1.2 (xhigh)",
+    "pricing": {
+     "price_1m_blended_3_to_1": 3.0,
+     "price_1m_input_tokens": 2,
+     "price_1m_output_tokens": 6
+    },
+    "slug": "muse-spark-1-2"
+   },
+   {
+    "evaluations": {
+     "artificial_analysis_intelligence_index": 52.0
+    },
+    "id": "aa-deepseek-v4",
+    "model_creator": {
+     "name": "DeepSeek"
+    },
+    "name": "DeepSeek V4",
+    "pricing": {
+     "price_1m_blended_3_to_1": 0.9,
+     "price_1m_input_tokens": 0.5,
+     "price_1m_output_tokens": 2
+    },
+    "slug": "deepseek-v4"
+   },
+   {
+    "evaluations": {
+     "artificial_analysis_intelligence_index": 33.5
+    },
+    "id": "aa-qwen3-30b-a3b",
+    "model_creator": {
+     "name": "Alibaba"
+    },
+    "name": "Qwen3 30B A3B",
+    "pricing": {
+     "price_1m_blended_3_to_1": 0.15,
+     "price_1m_input_tokens": 0.1,
+     "price_1m_output_tokens": 0.3
+    },
+    "slug": "qwen3-30b-a3b"
+   },
+   {
+    "evaluations": {
+     "artificial_analysis_intelligence_index": 43.0
+    },
+    "id": "aa-glm-5-3",
+    "model_creator": {
+     "name": "Z.ai"
+    },
+    "name": "GLM-5.3",
+    "pricing": {
+     "price_1m_blended_3_to_1": 0,
+     "price_1m_input_tokens": 0,
+     "price_1m_output_tokens": 0
+    },
+    "slug": "glm-5-3"
+   },
+   {
+    "evaluations": {
+     "artificial_analysis_intelligence_index": 33.6
+    },
+    "id": "aa-motif-3",
+    "model_creator": {
+     "name": "Motif"
+    },
+    "name": "Motif 3",
+    "pricing": {
+     "price_1m_blended_3_to_1": 0,
+     "price_1m_input_tokens": 0,
+     "price_1m_output_tokens": 0
+    },
+    "slug": "motif-3"
+   },
+   {
+    "evaluations": {
+     "artificial_analysis_intelligence_index": 55.0
+    },
+    "id": "aa-kimi-k3",
+    "model_creator": {
+     "name": "Moonshot AI"
+    },
+    "name": "Kimi K3",
+    "pricing": {
+     "price_1m_blended_3_to_1": 1.8,
+     "price_1m_input_tokens": 1,
+     "price_1m_output_tokens": 4
+    },
+    "slug": "kimi-k3"
+   },
+   {
+    "evaluations": {
+     "artificial_analysis_intelligence_index": null
+    },
+    "id": "aa-nemotron-4-ultra",
+    "model_creator": {
+     "name": "NVIDIA"
+    },
+    "name": "Nemotron 4 Ultra",
+    "pricing": {
+     "price_1m_blended_3_to_1": null,
+     "price_1m_input_tokens": null,
+     "price_1m_output_tokens": null
+    },
+    "slug": "nemotron-4-ultra"
+   }
+  ],
+  "status": 200
+ },
+ "anthropic": [
+  {
+   "display_name": "Claude Opus 5",
+   "id": "claude-opus-5",
+   "max_input_tokens": 1000000,
+   "max_tokens": 64000
+  },
+  {
+   "display_name": "Claude Haiku 5",
+   "id": "claude-haiku-5",
+   "max_input_tokens": 200000,
+   "max_tokens": 32000
+  }
+ ],
+ "benchlm": {
+  "leaderboard": [
+   {
+    "categoryScores": {
+     "coding": 90,
+     "reasoning": 93
+    },
+    "creator": "OpenAI",
+    "evidenceStatus": "verified",
+    "inputPrice": 2.5,
+    "model": "GPT-6",
+    "outputPrice": 12.5,
+    "overallScore": 91
+   },
+   {
+    "categoryScores": {
+     "coding": 92,
+     "reasoning": 90
+    },
+    "creator": "Anthropic",
+    "evidenceStatus": "verified",
+    "inputPrice": 15,
+    "model": "Claude Opus 5",
+    "outputPrice": 75,
+    "overallScore": 89
+   },
+   {
+    "categoryScores": {
+     "reasoning": 81
+    },
+    "creator": "DeepSeek",
+    "evidenceStatus": "partial",
+    "inputPrice": 0.5,
+    "model": "DeepSeek V4",
+    "outputPrice": 2,
+    "overallScore": 80
+   },
+   {
+    "categoryScores": {
+     "coding": 75
+    },
+    "creator": "Orion Labs",
+    "evidenceStatus": "self-reported",
+    "inputPrice": 1,
+    "model": "Orion Pro",
+    "outputPrice": 3,
+    "overallScore": 77
+   }
+  ],
+  "meta": {
+   "lastUpdated": "2026-09-26",
+   "methodologyVersion": "fixture-1",
+   "mode": "overall"
+  },
+  "pricing": [
+   {
+    "contextWindow": 400000,
+    "inputPrice": 2.5,
+    "model": "GPT-6",
+    "outputPrice": 12.5,
+    "sourceType": "api"
+   },
+   {
+    "contextWindow": 128000,
+    "inputPrice": 0.5,
+    "model": "DeepSeek V4",
+    "outputPrice": 2,
+    "sourceType": "api"
+   }
+  ]
+ },
+ "fixture": {
+  "as_of": "2026-09-27",
+  "kind": "synthetic",
+  "registry": "tests/fixtures/golden_research.json",
+  "websites": "tests/fixtures/golden_websites.json"
+ },
+ "llmstats": {
+  "benchmark_count": 1,
+  "benchmarks": [
+   {
+    "categories": [
+     "general"
+    ],
+    "id": "fixture-bench",
+    "model_count": 3,
+    "name": "Fixture Bench",
+    "verified": true
+   }
+  ],
+  "details": {
+   "muse-spark-1.3": {
+    "n_benchmarks": 1,
+    "name": "Muse Spark 1.3",
+    "scores": [
+     {
+      "bench": "fixture-bench",
+      "cat": "general",
+      "max": 100,
+      "name": "Fixture Bench",
+      "norm": 0.71,
+      "rank": 3,
+      "score": 71.0,
+      "self_reported": false,
+      "url": "https://example.invalid/fixture-bench",
+      "verified": true
+     }
+    ]
+   }
+  },
+  "meta": {
+   "quota_day": "2026-09-27",
+   "quota_remaining": 200
+  },
+  "model_count": 2,
+  "models": [
+   {
+    "context_window": 400000,
+    "cutoff": "2026-03",
+    "family": "gpt-6",
+    "id": "gpt-6",
+    "license": "proprietary",
+    "modalities": [
+     "text"
+    ],
+    "model_type": "chat",
+    "name": "GPT-6",
+    "open_weight": false,
+    "openai_compatible": true,
+    "org": "openai",
+    "params": null,
+    "providers": [],
+    "released": "2026-06-01",
+    "supports_streaming": true,
+    "supports_tools": true,
+    "supports_vision": true,
+    "top_scores": {
+     "general": 1500
+    },
+    "updated": "2026-09-20",
+    "url": "https://example.invalid/gpt-6"
+   },
+   {
+    "context_window": 256000,
+    "cutoff": "2026-01",
+    "family": "muse-spark",
+    "id": "muse-spark-1.3",
+    "license": "proprietary",
+    "modalities": [
+     "text"
+    ],
+    "model_type": "chat",
+    "name": "Muse Spark 1.3",
+    "open_weight": false,
+    "openai_compatible": true,
+    "org": "meta",
+    "params": null,
+    "providers": [],
+    "released": "2026-08-01",
+    "supports_streaming": true,
+    "supports_tools": true,
+    "supports_vision": false,
+    "top_scores": {},
+    "updated": "2026-09-20",
+    "url": "https://example.invalid/muse-spark-1.3"
+   }
+  ],
+  "rankings": {
+   "agents": [
+    {
+     "evals": 12,
+     "min_in": 1.0,
+     "model_id": "atlas-2",
+     "model_name": "Atlas 2",
+     "org": "atlas",
+     "rank": 1,
+     "rating": 50.0,
+     "url": "https://example.invalid/atlas-2"
+    }
+   ],
+   "code": [
+    {
+     "evals": 12,
+     "min_in": 1.0,
+     "model_id": "claude-opus-5",
+     "model_name": "Claude Opus 5",
+     "org": "anthropic",
+     "rank": 1,
+     "rating": 59.0,
+     "url": "https://example.invalid/claude-opus-5"
+    }
+   ],
+   "general": [
+    {
+     "evals": 12,
+     "min_in": 1.0,
+     "model_id": "gpt-6",
+     "model_name": "GPT-6",
+     "org": "openai",
+     "rank": 1,
+     "rating": 60.1,
+     "url": "https://example.invalid/gpt-6"
+    },
+    {
+     "evals": 12,
+     "min_in": 1.0,
+     "model_id": "atlas-2",
+     "model_name": "Atlas 2",
+     "org": "atlas",
+     "rank": 2,
+     "rating": 55.0,
+     "url": "https://example.invalid/atlas-2"
+    },
+    {
+     "evals": 12,
+     "min_in": 1.0,
+     "model_id": "muse-spark-1.3",
+     "model_name": "Muse Spark 1.3",
+     "org": "meta",
+     "rank": 3,
+     "rating": 53.8,
+     "url": "https://example.invalid/muse-spark-1.3"
+    }
+   ],
+   "reasoning": [
+    {
+     "evals": 12,
+     "min_in": 1.0,
+     "model_id": "gpt-6",
+     "model_name": "GPT-6",
+     "org": "openai",
+     "rank": 1,
+     "rating": 61.0,
+     "url": "https://example.invalid/gpt-6"
+    }
+   ]
+  }
+ },
+ "modelsdev": [
+  {
+   "cost": {
+    "cache_read": null,
+    "input": 0,
+    "output": 0
+   },
+   "deprecated": false,
+   "id": "muse-spark-1.3-contributor-free",
+   "last_updated": "2026-09-01",
+   "limit": {
+    "context": 200000,
+    "output": 32000
+   },
+   "modalities": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "provider": "opencode",
+   "reasoning": true,
+   "reasoning_efforts": [
+    "minimal",
+    "low",
+    "medium",
+    "high",
+    "xhigh"
+   ]
+  },
+  {
+   "cost": {
+    "cache_read": null,
+    "input": 0,
+    "output": 0
+   },
+   "deprecated": true,
+   "id": "muse-spark-1.2-contributor-free",
+   "last_updated": "2026-09-01",
+   "limit": {
+    "context": 200000,
+    "output": 32000
+   },
+   "modalities": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "provider": "opencode",
+   "reasoning": true,
+   "reasoning_efforts": [
+    "minimal",
+    "low",
+    "medium",
+    "high",
+    "xhigh"
+   ]
+  },
+  {
+   "cost": {
+    "cache_read": null,
+    "input": 0,
+    "output": 0
+   },
+   "deprecated": false,
+   "id": "kimi-k3-free",
+   "last_updated": "2026-09-01",
+   "limit": {
+    "context": 200000,
+    "output": 32000
+   },
+   "modalities": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "provider": "opencode",
+   "reasoning": true,
+   "reasoning_efforts": [
+    "low",
+    "high"
+   ]
+  },
+  {
+   "cost": {
+    "cache_read": null,
+    "input": 0,
+    "output": 0
+   },
+   "deprecated": false,
+   "id": "big-pickle",
+   "last_updated": "2026-09-01",
+   "limit": {
+    "context": 200000,
+    "output": 32000
+   },
+   "modalities": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "provider": "opencode",
+   "reasoning": false,
+   "reasoning_efforts": []
+  },
+  {
+   "cost": {
+    "cache_read": null,
+    "input": 2.5,
+    "output": 12.5
+   },
+   "deprecated": false,
+   "id": "gpt-6",
+   "last_updated": "2026-09-01",
+   "limit": {
+    "context": 200000,
+    "output": 32000
+   },
+   "modalities": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "provider": "openai",
+   "reasoning": true,
+   "reasoning_efforts": [
+    "low",
+    "medium",
+    "high",
+    "xhigh"
+   ]
+  },
+  {
+   "cost": {
+    "cache_read": null,
+    "input": 0.1,
+    "output": 0.3
+   },
+   "deprecated": false,
+   "id": "qwen/qwen3-30b-a3b",
+   "last_updated": "2026-09-01",
+   "limit": {
+    "context": 200000,
+    "output": 32000
+   },
+   "modalities": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "provider": "zenmux",
+   "reasoning": true,
+   "reasoning_efforts": [
+    "high"
+   ]
+  }
+ ],
+ "nvidia": [
+  {
+   "id": "deepseek-ai/deepseek-v4",
+   "object": "model",
+   "owned_by": "deepseek-ai"
+  },
+  {
+   "id": "nvidia/nemotron-4-ultra",
+   "object": "model",
+   "owned_by": "nvidia"
+  }
+ ],
+ "openai": [
+  {
+   "id": "gpt-6",
+   "object": "model",
+   "owned_by": "openai"
+  },
+  {
+   "id": "gpt-6-mini",
+   "object": "model",
+   "owned_by": "openai"
+  },
+  {
+   "id": "gpt-4.1",
+   "object": "model",
+   "owned_by": "openai",
+   "shutdown_date": "2026-12-01"
+  }
+ ],
+ "openrouter": [
+  {
+   "architecture": {
+    "output_modalities": [
+     "text"
+    ]
+   },
+   "context_length": 128000,
+   "id": "openai/gpt-6",
+   "name": "OpenAI: GPT-6",
+   "pricing": {
+    "completion": "0.0000125",
+    "prompt": "0.0000025"
+   },
+   "reasoning": {
+    "default_effort": "high",
+    "supported_efforts": [
+     "low",
+     "medium",
+     "high",
+     "xhigh"
+    ]
+   }
+  },
+  {
+   "architecture": {
+    "output_modalities": [
+     "text"
+    ]
+   },
+   "context_length": 128000,
+   "id": "openai/gpt-6-mini",
+   "name": "OpenAI: GPT-6 mini",
+   "pricing": {
+    "completion": "0.0000016",
+    "prompt": "0.0000004"
+   },
+   "reasoning": {
+    "default_effort": "medium",
+    "supported_efforts": [
+     "low",
+     "medium",
+     "high"
+    ]
+   }
+  },
+  {
+   "architecture": {
+    "output_modalities": [
+     "text"
+    ]
+   },
+   "context_length": 128000,
+   "id": "anthropic/claude-opus-5",
+   "name": "Anthropic: Claude Opus 5",
+   "pricing": {
+    "completion": "0.000075",
+    "prompt": "0.000015"
+   },
+   "reasoning": {
+    "default_effort": "high",
+    "supported_efforts": [
+     "low",
+     "medium",
+     "high",
+     "max"
+    ]
+   }
+  },
+  {
+   "architecture": {
+    "output_modalities": [
+     "text"
+    ]
+   },
+   "context_length": 128000,
+   "id": "anthropic/claude-haiku-5",
+   "name": "Anthropic: Claude Haiku 5",
+   "pricing": {
+    "completion": "0.000005",
+    "prompt": "0.000001"
+   }
+  },
+  {
+   "architecture": {
+    "output_modalities": [
+     "text"
+    ]
+   },
+   "context_length": 128000,
+   "id": "meta/muse-spark-1.3",
+   "name": "Meta: Muse Spark 1.3",
+   "pricing": {
+    "completion": "0.000008",
+    "prompt": "0.000002"
+   }
+  },
+  {
+   "architecture": {
+    "output_modalities": [
+     "text"
+    ]
+   },
+   "context_length": 128000,
+   "id": "deepseek/deepseek-v4",
+   "name": "DeepSeek: DeepSeek V4",
+   "pricing": {
+    "completion": "0.000002",
+    "prompt": "0.0000005"
+   },
+   "reasoning": {
+    "default_effort": "high",
+    "supported_efforts": [
+     "high"
+    ]
+   }
+  },
+  {
+   "architecture": {
+    "output_modalities": [
+     "text"
+    ]
+   },
+   "context_length": 128000,
+   "id": "deepseek/deepseek-v4:free",
+   "name": "DeepSeek: DeepSeek V4 (free)",
+   "pricing": {
+    "completion": "0",
+    "prompt": "0"
+   },
+   "reasoning": {
+    "default_effort": "high",
+    "supported_efforts": [
+     "high"
+    ]
+   }
+  },
+  {
+   "architecture": {
+    "output_modalities": [
+     "text"
+    ]
+   },
+   "context_length": 128000,
+   "id": "qwen/qwen3-30b-a3b:free",
+   "name": "Qwen: Qwen3 30B A3B (free)",
+   "pricing": {
+    "completion": "0",
+    "prompt": "0"
+   }
+  },
+  {
+   "architecture": {
+    "output_modalities": [
+     "text"
+    ]
+   },
+   "context_length": 128000,
+   "id": "z-ai/glm-5.3",
+   "name": "Z.ai: GLM-5.3",
+   "pricing": {
+    "completion": "0.0000022",
+    "prompt": "0.0000006"
+   }
+  },
+  {
+   "architecture": {
+    "output_modalities": [
+     "text"
+    ]
+   },
+   "context_length": 128000,
+   "id": "moonshotai/kimi-k3",
+   "name": "MoonshotAI: Kimi K3",
+   "pricing": {
+    "completion": "0.000004",
+    "prompt": "0.000001"
+   }
+  },
+  {
+   "architecture": {
+    "output_modalities": [
+     "text"
+    ]
+   },
+   "context_length": 128000,
+   "id": "openrouter/auto",
+   "name": "Auto Router",
+   "pricing": {
+    "completion": "-1",
+    "prompt": "-1"
+   }
+  }
+ ],
+ "retrieved_at": "golden-synthetic",
+ "run_id": "golden-synthetic",
+ "schema_version": 3,
+ "source_health": {
+  "aa": {
+   "attempted": true,
+   "complete": true,
+   "count": 14,
+   "enabled": true,
+   "fetched_at": "2026-09-27T00:00:00+00:00",
+   "reason": "",
+   "scope": "reference",
+   "status": "complete"
+  },
+  "anthropic": {
+   "attempted": true,
+   "complete": true,
+   "count": 2,
+   "enabled": true,
+   "fetched_at": "2026-09-27T00:00:00+00:00",
+   "reason": "",
+   "scope": "catalog",
+   "status": "complete"
+  },
+  "benchlm": {
+   "attempted": true,
+   "complete": true,
+   "count": 4,
+   "enabled": true,
+   "fetched_at": "2026-09-27T00:00:00+00:00",
+   "reason": "",
+   "scope": "bounded-reference",
+   "status": "complete"
+  },
+  "llmstats": {
+   "attempted": true,
+   "complete": true,
+   "count": 2,
+   "enabled": true,
+   "fetched_at": "2026-09-27T00:00:00+00:00",
+   "reason": "",
+   "scope": "reference",
+   "status": "complete"
+  },
+  "modelsdev": {
+   "attempted": true,
+   "complete": true,
+   "count": 6,
+   "enabled": true,
+   "fetched_at": "2026-09-27T00:00:00+00:00",
+   "reason": "",
+   "scope": "reference",
+   "status": "complete"
+  },
+  "nvidia": {
+   "attempted": true,
+   "complete": true,
+   "count": 2,
+   "enabled": true,
+   "fetched_at": "2026-09-27T00:00:00+00:00",
+   "reason": "",
+   "scope": "catalog",
+   "status": "complete"
+  },
+  "openai": {
+   "attempted": true,
+   "complete": true,
+   "count": 3,
+   "enabled": true,
+   "fetched_at": "2026-09-27T00:00:00+00:00",
+   "reason": "",
+   "scope": "catalog",
+   "status": "complete"
+  },
+  "openrouter": {
+   "attempted": true,
+   "complete": true,
+   "count": 11,
+   "enabled": true,
+   "fetched_at": "2026-09-27T00:00:00+00:00",
+   "reason": "",
+   "scope": "catalog",
+   "status": "complete"
+  },
+  "vals": {
+   "attempted": true,
+   "complete": false,
+   "count": 1,
+   "enabled": true,
+   "fetched_at": "2026-09-27T00:00:00+00:00",
+   "reason": "",
+   "scope": "best-effort",
+   "status": "complete"
+  },
+  "zen": {
+   "attempted": true,
+   "complete": true,
+   "count": 4,
+   "enabled": true,
+   "fetched_at": "2026-09-27T00:00:00+00:00",
+   "reason": "",
+   "scope": "catalog",
+   "status": "complete"
+  },
+  "zenmux": {
+   "attempted": true,
+   "complete": true,
+   "count": 1,
+   "enabled": true,
+   "fetched_at": "2026-09-27T00:00:00+00:00",
+   "reason": "",
+   "scope": "catalog",
+   "status": "complete"
+  }
+ },
+ "started_at": "2026-09-27T00:00:00+00:00",
+ "vals": {
+  "models": [
+   {
+    "href": "/models/openai_gpt-6",
+    "name": "GPT-6"
+   }
+  ],
+  "source": "html:vals_index"
+ },
+ "zen": [
+  {
+   "created": 1790000000,
+   "id": "muse-spark-1.3-contributor-free",
+   "object": "model",
+   "owned_by": "opencode"
+  },
+  {
+   "created": 1790000000,
+   "id": "muse-spark-1.2-contributor-free",
+   "object": "model",
+   "owned_by": "opencode"
+  },
+  {
+   "created": 1790000000,
+   "id": "kimi-k3-free",
+   "object": "model",
+   "owned_by": "opencode"
+  },
+  {
+   "created": 1790000000,
+   "id": "big-pickle",
+   "object": "model",
+   "owned_by": "opencode"
+  }
+ ],
+ "zenmux": [
+  {
+   "capabilities": {
+    "reasoning": true
+   },
+   "context_length": 131072,
+   "display_name": "Qwen3 30B A3B",
+   "id": "qwen/qwen3-30b-a3b",
+   "output_modalities": [
+    "text"
+   ],
+   "owned_by": "qwen",
+   "pricings": {
+    "completion": [
+     {
+      "value": 0.3
+     }
+    ],
+    "prompt": [
+     {
+      "value": 0.1
+     }
+    ]
+   }
+  }
+ ]
+}
