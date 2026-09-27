@@ -10,7 +10,7 @@ retrieval/fetch_websites.py → raw/<stamp>_websites.json (allowlist website cra
 analysis/analyze.py       → analysis/<stamp>_analysis.json + analysis/store.sqlite
 reports/build_report.py   → reports/<stamp>_summary.md|.json|.xlsx
 reports/build_site.py     → reports/<stamp>_site/ (index, models, benchmarks, compare, methodology, confidence, data.json)
-alerts/check_churn.py     → console churn summary + reports/<stamp>_churn_alert.md on bad news
+alerts/check_churn.py     → console churn summary + reports/<stamp>_churn_alert.md on bad news + reports/<stamp>_triage_alert.md on L0 qualifiers
 ```
 
 `run.ps1` runs the six stages in order, exiting on first non-zero `$LASTEXITCODE`.
@@ -60,13 +60,13 @@ SQLite (`analysis/store.sqlite`, table `models`):
 (id TEXT, source TEXT, day TEXT, free INT, PRIMARY KEY(id, source, day))
 ```
 
-Plus v2 tables (additive): `observations(entity, source, field, value, day)` (capped insert per run) and `bench_sources(source, day, count, status)` (`benchlm_lb`, `benchlm_pr`, `llmstats`, `vals`, `websites`).
+Plus v2 tables (additive): `observations(entity, source, field, value, day)` (`PRIMARY KEY(entity, source, field, day)`, day-scoped delete + `INSERT OR REPLACE` per run, cap 20000 with warning, 90-day age prune each run) and `bench_sources(source, day, count, status)` (`benchlm_lb`, `benchlm_pr`, `llmstats`, `vals`, `websites`).
 
 Sources stored: openrouter (free = strict-free flag), openai / anthropic / nvidia / zenmux / zen (free = 0). Legacy tables lacking `source` are renamed to `models_old_<stamp>` and rebuilt. Diffs compare current OpenRouter IDs against the max stored `day < today`: `new_ids_vs_history`, `removed_ids_vs_history` (capped at 50 in JSON, full counts in `new_total`/`removed_total`). OR free-flag flips for IDs present on both days are reported as `free_churn.or_flipped_to_paid|or_flipped_to_free`.
 
 Churn (`free_history` table: `(slug TEXT, day TEXT, free_status TEXT, disp_id TEXT, PRIMARY KEY(slug, day))`, non-router canonical rows only): each run upserts the current day, then diffs against the max stored `day < today` → `free_churn{prev_day, flipped_to_paid (was free-ish, now none), flipped_to_free (was none, now free-ish), level_changed (free-ish → other free-ish level), disappeared (slug gone), new_slugs}`. Lists capped at 50 with `*_total` counts. Empty (`prev_day: null`) until a second distinct day exists — same convention as the OR diffs. The report passes `free_churn` through to JSON uncapped-meta, plus a one-line MD/HTML overview note when `prev_day` exists.
 
-Analysis JSON keys: legacy counts, native ID lists, retired/diff/history keys (unchanged) plus `total_nvidia` / `nvidia_ids`, `total_zenmux` / `zenmux_ids`, `total_zen` / `zen_ids`, `total_modelsdev` (8174-route minimal projection count), `total_benchlm` / `total_benchlm_pricing` / `benchlm_meta`, `llmstats_status`, `vals_status`, `website_stats`, `views{benchlm_leaderboard, llmstats_leaderboard, vals_leaderboard, capabilities, pricing, confidence}`, `observations_count`, plus `models[]` canonical rows (each with `benchlm`, `benchlm_pricing`, `llmstats_api`, `vals_index`, `website{benchlm_md, llmstats, vals}` joins)
+Analysis JSON keys: legacy counts, native ID lists, retired/diff/history keys (unchanged) plus `total_nvidia` / `nvidia_ids`, `total_zenmux` / `zenmux_ids`, `total_zen` / `zen_ids`, `total_modelsdev` (8174-route minimal projection count), `total_benchlm` / `total_benchlm_pricing` / `benchlm_meta`, `llmstats_status`, `vals_status`, `website_stats`, `views{benchlm_leaderboard, llmstats_leaderboard, vals_leaderboard, capabilities, pricing, provisional_triage, confidence}`, `observations_count`, plus `models[]` canonical rows (each with `benchlm`, `benchlm_pricing`, `llmstats_api`, `vals_index`, `website{benchlm_md, llmstats, vals}` joins)
 `{id, slug, or_id, name, groups[O/C/F], providers[openrouter/openai/anthropic/nvidia/zenmux/zen], score|null, cost_blended|null, cost_source[aa/or-derived/inherited/none], ratio|null,
 context, free, router, tier, free_status[verified/provisional-l1/provisional-l0/none], free_evidence[], variant[max/xhigh/high/medium/low/minimal/none/""],
 variant_ambiguous, variant_label, aa_variant_name, aa_id, efforts[], default_effort, efforts_source[or/inherited/""], default_effort_source[or/unspecified-upstream/""],
@@ -96,7 +96,7 @@ Input: newest `analysis/*_analysis.json` (`models[]` canonical rows). Outputs sh
 
 ## Stage 3b — site (`reports/build_site.py`)
 
-Input: newest `analysis/*_analysis.json` (views + models). Output `reports/<stamp>_site/` (pruned keep 1): `index.html` (AA/BenchLM/LLM-Stats/Vals tabbed leaderboards), `models/<slug>.html` (top 300: per-source scores on separate scales, capabilities, pricing, sources), `benchmarks.html` (catalog + version stamps), `compare.html` (practical winners + top-10 multi-variant families), `methodology.html` (ranking/free/variant/copy rules), `confidence.html` (BenchLM evidence counts, website coverage, churn), `data.json` (views + meta, machine-readable).
+Input: newest `analysis/*_analysis.json` (views + models). Output `reports/<stamp>_site/` (pruned keep 1): `index.html` (AA/BenchLM/LLM-Stats/Vals tabbed leaderboards), `models/<slug>.html` (top 300: per-source scores on separate scales, capabilities, pricing, sources), `benchmarks.html` (catalog + version stamps), `compare.html` (practical winners + top-10 multi-variant families), `methodology.html` (ranking/free/variant/copy rules), `confidence.html` (BenchLM evidence counts, website coverage, churn, provisional triage top-20 with qualifier verdicts), `data.json` (views + meta, machine-readable).
 
 ## Stage 4 — alerts (`alerts/check_churn.py`)
 
@@ -104,6 +104,7 @@ Input: newest `reports/*_models.json` (`free_churn`). Always exits 0 (never brea
 
 - No `prev_day` (single day in history) → prints "no baseline yet", writes nothing.
 - Bad news (`flipped_to_paid_total + disappeared_total + or_flipped_to_paid_total > 0`) → prints `ALERT` line and writes `reports/<stamp>_churn_alert.md` (counts + top-20 lists + verify-billing note). Pruned with the run like other reports.
+- Provisional qualifiers (`views.provisional_triage` rows with `qualifier = score ≥ 40 + callable route`, read from newest analysis JSON) → prints `TRIAGE ALERT` line and writes `reports/<stamp>_triage_alert.md` (verify-billing checklist), independently of churn. Silent when zero qualifiers.
 - Good news only or no churn → prints summary, writes nothing.
 
 ## Extension points

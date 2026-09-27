@@ -7,6 +7,21 @@ REP = os.path.join(ROOT, "reports")
 MD_CAP = 20
 
 
+def _triage_qualifiers():
+    """Latest analysis views.provisional_triage qualifiers (score>=40 + callable route)."""
+    a_files = sorted(glob.glob(os.path.join(ROOT, "analysis", "*_analysis.json")), key=os.path.getmtime)
+    if not a_files:
+        return [], "unknown"
+    try:
+        with open(a_files[-1], encoding="utf-8") as f:
+            a = json.load(f)
+    except Exception:
+        return [], "unknown"
+    tri = ((a.get("views") or {}).get("provisional_triage") or [])
+    stamp = a.get("stamp") or os.path.basename(a_files[-1]).split("_analysis")[0]
+    return [t for t in tri if t.get("qualifier")], stamp
+
+
 def main():
     r_files = sorted(glob.glob(os.path.join(REP, "*_models.json")), key=os.path.getmtime)
     if not r_files:
@@ -15,6 +30,22 @@ def main():
     with open(r_files[-1], encoding="utf-8") as f:
         r = json.load(f)
     stamp = r.get("stamp", "unknown")
+    quals, _ = _triage_qualifiers()
+    if quals:
+        print(f"alerts {stamp}: {len(quals)} provisional qualifier(s) (score>=40 + route) "
+              f"— verify billing for promotion")
+        L = [f"# Provisional triage alert — {stamp}\n",
+             f"{len(quals)} qualifier(s): score >= 40 with a callable route.\n",
+             "\n## Qualifiers (verify billing, then promote to verified-free)\n"]
+        for t in quals[:MD_CAP]:
+            L.append(f"- `{t.get('id','')}` score {t.get('score')} via `{t.get('route','')}`"
+                     f"{' (' + t.get('provider','') + ')' if t.get('provider') else ''}\n")
+        L.append("\n_Action: spot-check billing/limits on each route before flipping free_status "
+                 "to verified._\n")
+        out = os.path.join(REP, f"{stamp}_triage_alert.md")
+        with open(out, "w", encoding="utf-8") as f:
+            f.write("".join(L))
+        print(f"TRIAGE ALERT written to {out}")
     ch = r.get("free_churn") or {}
     prev = ch.get("prev_day")
     if not prev:

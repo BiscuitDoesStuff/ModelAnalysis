@@ -46,6 +46,7 @@ After a run, all dated with `YYYY-MM-DD_HHMM`:
 | Browsable site: Leaderboard (AA/BenchLM/LLM-Stats/Vals tabs) · Model pages · Benchmarks · Compare · Methodology · Confidence | `reports/<stamp>_site/` |
 | Human-readable ranking (9 sections, top 20) | `reports/<stamp>_summary.md` |
 | Churn alert (only on free→paid/disappearances) | `reports/<stamp>_churn_alert.md` |
+| Provisional triage alert (only on score≥40 + route qualifiers) | `reports/<stamp>_triage_alert.md` |
 | Spreadsheet (13 tabs: summary, All_* / OCF_* views, stack, practical, outliers, Family_Variants, BenchLM_Matrix, LLMStats_Matrix) | `reports/<stamp>_models.xlsx` |
 | Machine-readable analysis | `reports/<stamp>_models.json` |
 | Intermediate analysis (canonical rows + score evidence + observations/views) | `analysis/<stamp>_analysis.json` |
@@ -91,7 +92,7 @@ analysis/research.json     — committed evidence registry (benchmark versions, 
 reports/build_report.py    — stage 3: write MD + XLSX + JSON + HTML report with score evidence + provenance badges
 reports/build_site.py      — stage 3b: browsable static site (leaderboard tabs, model pages, benchmarks, compare, methodology, confidence)
 reports/graph.js           — offline, inlined Graph page interactions and SVG rendering
-alerts/check_churn.py      — stage 4: churn summary + alert file on free→paid/disappearances
+alerts/check_churn.py      — stage 4: churn summary + alert file on free→paid/disappearances + triage alert on provisional qualifiers
 tests/smoke.py             — verify 9-section + provisional + variants + evidence + churn + Tier 1 + combined-sources + site contract
 raw/                       — timestamped snapshots (gitignored)
 analysis/store.sqlite      — local history (gitignored)

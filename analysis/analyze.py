@@ -521,13 +521,19 @@ def main():
     con.execute("CREATE TABLE IF NOT EXISTS observations(entity TEXT, source TEXT, field TEXT, value TEXT, day TEXT, PRIMARY KEY(entity, source, field, day))")
     con.execute("CREATE TABLE IF NOT EXISTS bench_sources(source TEXT, day TEXT, count INT, status TEXT, PRIMARY KEY(source, day))")
     con.execute("DELETE FROM observations WHERE day=?", (day,))
-    for _o in observations[:8000]:
+    _obs_cap = 20000
+    if len(observations) > _obs_cap:
+        print(f"warn {len(observations)} observations exceed cap {_obs_cap}; oldest fields truncated")
+    for _o in observations[:_obs_cap]:
         try:
             con.execute("INSERT OR REPLACE INTO observations VALUES(?,?,?,?,?)",
                         (str(_o.get("entity", ""))[:200], str(_o.get("source", ""))[:40],
                          str(_o.get("field", ""))[:60], str(_o.get("value", ""))[:400], day))
         except Exception:
             break
+    # Age guard: keep a 90-day observation window (ISO day strings compare lexically).
+    _cutoff = (datetime.date.fromisoformat(day) - datetime.timedelta(days=90)).isoformat()
+    con.execute("DELETE FROM observations WHERE day<?", (_cutoff,))
     def _bench_status(v):
         if isinstance(v, dict) and ("skipped" in v or "error" in v):
             return v.get("skipped", v.get("error", ""))[:200]
