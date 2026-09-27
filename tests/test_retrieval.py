@@ -141,7 +141,7 @@ class FetchTests(unittest.TestCase):
 class CacheTests(unittest.TestCase):
     def test_cache_age_uses_observation_time_not_mtime(self):
         with tempfile.TemporaryDirectory() as tmp:
-            ctx = fw.FetchContext("fixture", load_config(), tmp, Path(tmp) / "errors")
+            ctx = fw.FetchContext("fixture", load_config(), Path(tmp) / "errors", cache_dir=tmp)
             data = {"url": "https://fixture", "value": 10}
             fw.cache_put(ctx, "one", data)
             read = fw.cache_get(ctx, "one")

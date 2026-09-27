@@ -15,6 +15,7 @@ absent historical measurements remain unknown.
 from copy import deepcopy
 import json
 import random
+import threading
 import time
 import urllib.error
 import urllib.request
@@ -24,6 +25,8 @@ from pipeline_common import safe_error
 
 RETRY_AFTER_CAP = 60  # seconds: longest server-requested pause honoured before a retry
 JITTER = 0.5  # backoff sleeps scale within [0.75, 1.25] x the base delay
+# One shared _errors.log per run: concurrent sources must never interleave their lines.
+_ERROR_LOG_LOCK = threading.Lock()
 
 
 def retry_after_seconds(error):
@@ -139,6 +142,4 @@ class SourceClient:
                     pause = base * (1 + JITTER * (self.rand() - 0.5))
                 self.sleep(pause)
         self.log(safe_error(f"FAILED {host}: {last}"))
-        if website and last is None:
-            raise RuntimeError(f"fetch failed {host}")
         raise last

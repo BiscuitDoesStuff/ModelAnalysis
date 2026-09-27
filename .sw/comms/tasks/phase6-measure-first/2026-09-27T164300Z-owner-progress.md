@@ -1,0 +1,14 @@
+# phase6-measure-first - progress - 2026-09-27T164300Z - owner
+
+- **Author / audience:** Project Leader for the owner; push verified + Phase 7 plan review delivered.
+- **Approval:** Owner pushed `c5d40aa` and requested "Send plan review" (read-only project-review of the Phase 7 plan). No code changes authorized or made.
+- **Scope / acceptance:** (1) Verify remote state after the push; (2) dispatch plan review; (3) record both. D1–D4 + S1–S3 fold into Phase 7 dispatch, not this task.
+- **Status:** in_progress; plan review complete (GO with notes). Live pair still blocked on quota window (00:00 UTC 2026-09-28). D1 fix + all task records still uncommitted — final commit+push still pending.
+- **Branch / base:** Local biscuit-worktree `c5d40aa` in sync with origin/biscuit-worktree (`git ls-remote` confirms). origin/main is now `8466483` = PR #2 merge (biscuit-worktree → main), containing `c5d40aa` over `e02fad1`/`15557b0`. Verified origin/main carries only the `.sw/comms` skeleton (README + .gitkeeps) — no task records on main; convention holds. Working tree unchanged: same 6 dirty files (+20/−17), task records untracked.
+- **Checked revision / changed:** No version-controlled changes this session. New untracked records: `2026-09-27T164300Z-project-review-plan-review.md` (review text) + this event. Planner + reviewer ran read-only in child sessions.
+- **Owners / dependencies:** Owner owns final commit+push (D1 fix + records), both 5pm run.ps1 go-aheads, step 8, step R (due before 2026-10-04). Leader owns pair execution per 145200Z once approved, and Phase 7 dispatch after verification (with D1–D4 + S1–S3 folded in, one line each).
+- **Decisions / remaining:** Review verdict GO with notes — plan approved-for-dispatch once Phase 6 live verification is recorded. 4 low defects (D1 filter×pagination semantic; D2 csv enable-flag unnamed; D3 which manifest key the 60 s gate reads; D4 index scope vs Q3 wording) fixed at dispatch. Owner action on review: none — Q1–Q5 defaults stand unless objected to.
+- **Validation:** Leader: `git fetch origin` + `git log origin/main` (PR #2 merge confirmed, exact SHAs); `git ls-tree -r origin/main -- .sw/comms` (skeleton only); `git status` (dirty set unchanged). Reviewer: static reads only (pipeline.py stage/manifest/coverage/check_html lines, ui.py checker, build_site link coupling); no builds/tests; limits recorded in the review.
+- **Not validated / risks:** Unchanged — live pair + recorder, a11y, ruff-0.15.8 parity (CI arbiter). A run now would repeat the llmstats refusal; do not run until window + go-ahead.
+- **Publication:** Owner-published: PR #2 merged to main; `c5d40aa` pushed to origin/biscuit-worktree. Agents published nothing. Owner's final push still to cover D1 fix + records (now incl. 4 new files).
+- **Next action:** Owner commits+pushes at will; pings at ~5pm owner-local for run 1 (Leader ASKS, then 145200Z steps 1–5).
