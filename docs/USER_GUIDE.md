@@ -1,142 +1,177 @@
-# User Guide
+# User guide
 
-Everything a user needs to install, run, and read ModelAnalysis output. Maintainer internals live in `PIPELINE.md`.
+## Install and configure
 
-## 1. Install
-
-1. Install Python 3.
-2. From the repo root:
-   ```powershell
-   pip install -r requirements.txt
-   ```
-   Dependencies: `openpyxl` (Excel output), `python-dotenv` (optional `.env` loading).
-
-## 2. Configure keys (optional)
-
-Public-only run needs no keys and covers the OpenRouter, NVIDIA, ZenMux, OpenCode Zen, and models.dev capability catalogs.
-
-For more coverage, set any of these in OS / `User` environment variables or a local `.env` file (gitignored — never committed):
-
-```
-OPENAI_API_KEY=
-ANTHROPIC_API_KEY=
-OPENROUTER_API_KEY=      # optional, raises OpenRouter rate limits
-AA_API_KEY=              # Artificial Analysis scores/prices
-LLM_STATS_API_KEY=       # LLM Stats bulk scores (skipped when absent; website pages still crawled keyless)
-LLM_STATS_DETAIL_MAX=    # optional, per-model detail cap for keyed fetch (default 12; ~19 quota/run of 250/day)
-```
-
-Copy `.env.example` to `.env` and fill in only what you need. Missing keys are fine — that provider's section is skipped or marked `skipped`/`error` in the snapshot.
-
-## 3. Run
-
-Full refresh (recommended):
+Use Python 3.10+ from the repository root:
 
 ```powershell
-powershell -File run.ps1
+python -m pip install -r requirements.txt
 ```
 
-Stages run in order and stop on first failure (`$LASTEXITCODE` checked after each step):
+Dependencies are `openpyxl` and `python-dotenv`. PowerShell is needed only for `run.ps1` and the PowerShell examples below.
 
-```powershell
-python retrieval/fetch_models.py   # stage 1: snapshot (providers + BenchLM/LLM-Stats/Vals)
-python retrieval/fetch_websites.py # stage 1b: website crawl (BenchLM md + LLM-Stats/Vals pages)
-python analysis/analyze.py         # stage 2: analyze + diff (+ crosswalk/observations/views)
-python reports/build_report.py     # stage 3: report
-python reports/build_site.py       # stage 3b: browsable site
-python alerts/check_churn.py       # stage 4: churn summary + alert file
-```
+Public retrieval covers OpenRouter, NVIDIA, ZenMux, Zen, models.dev, BenchLM, and best-effort website evidence. Optional credentials:
 
-Re-run any time to refresh. Each run prunes older outputs so only the latest stamp remains. The last stage prints a churn summary vs the previous day; on free→paid flips or disappearances it also writes `reports/<stamp>_churn_alert.md`.
-
-## 4. Read the report
-
-Open `reports/<stamp>_site/index.html` in a browser for the reference-site view: Leaderboard with AA/BenchLM/LLM-Stats/Vals tabs, per-model pages (scores on separate scales, capabilities, pricing, sources), Benchmarks catalog, Compare (practical winners + top families), Methodology, Confidence. Open `reports/<stamp>_report.html` for the 7-page dashboard (Start here · Best value · Stack · Variants · Free · Graph · Explore) with search, Explore filters, and click-to-copy OpenCode IDs. `reports/<stamp>_summary.md` holds the 9 sections as text (top 20 rows each; full lists in XLSX, uncapped in JSON):
-
-1. **Start here**: copy-ready Top quality / Best value / Free cards + tier cards + practical winners + churn/freshness notes.
-2. **Best value**: paid OCF rows in score bands (±1.5, 30+ floor), cheapest-first in band with saving vs priciest. Answers close-score/big-cost choices.
-3. **Stack**: Max (50+) / High (40+) / Medium (30+) tiers, score desc with ratio tiebreak + per-tier value note. Callable ID required (`or_id`/native); AA-only rows intel-only. Gaps flagged per O/C/F. Below 30 excluded.
-4. **Variants**: per-family side-by-side (e.g. 5.5 max/xhigh/high/medium/low). AA-only rows show `nearest display-only` + `provider/model#variant` guidance.
-5. **Free**: verified free by score + provisional `[F?]` + unscored note, with `deprecated-upstream` / `modality-unverified` flags.
-6. **Graph**: search all non-router models, select up to 12 (effort variants individually), and compare AA Intelligence Index against blended $/1M price in a scatter plot plus score/price bars. Choose linear or compressed price scale; selected rows show actual route IDs, evidence flags and verified/provisional free status. Unscored or cost-unknown choices remain in the selected table and bars where possible, but cannot appear in the scatter plot. No network/chart library required.
-7. **Explore**: one filterable All-models table (groups / cost-source / free-status + text) replacing the old All/OCF Intel/Cost/Ratio duplicates.
-
-Graph prices are token rates, **not measured per-task costs**. AA pricing can be identical across effort variants despite different token usage. Free $0 is plotted at zero; `[F?]` means billing is unverified, not verified free. Score estimates are marked; AA-only rows have no copyable route. Selection is local to the open page and resets on reload.
-
-MD/JSON/XLSX keep the 9-section contract (All Intel/Cost/Ratio, OCF Intel/Cost/Ratio, Stack, Practical, Outliers) for scripting; HTML is the user view.
-
-MD sections (unchanged, top 20 each):
-
-1. **All Data — Intelligence**: every model by score desc, `unscored` tail.
-2. **All Data — Cost**: cheapest first in blended $/1M, `cost-unknown` tail.
-3. **All Data — Ratio**: paid models by score/cost; then verified-free ranked by score; then provisional-free `[F?]` by score; then `unratable` tail. Free never enters the ratio (infinite).
-4–6. **OCF — Intelligence / Cost / Ratio**: same views filtered to OpenAI + Claude + strict-free rows plus provisional-free `[F?]` (AA $0, billing unverified; exact level in JSON/XLSX). AA-only OpenAI/Anthropic variant rows (creator-mapped O/C) are included here as separate ranked rows even with no callable ID.
-7. **OCF — Optimized stack**: Max (50+) / High (40+) / Medium (30+) tiers, score desc with ratio tiebreak. Callable ID required (`or_id`/native); AA-only rows stay in Intel/Cost/Ratio. Each tier flags `gaps:` for any of O/C/F with no verified qualifier (tier filled only by provisional still flags `F`). Below 30 excluded from stack only.
-8. **OCF — Practical picks**: winner + runner-up per tier for each access variant (OCF, OF, CF, F-only). `— (gap)` where a tier/variant has nothing.
-9. **OCF — Outliers**: bargains, overpriced, free gems (verified/provisional free + score 40+, callable only).
-
-Variants: reasoning-effort rows (`max`/`xhigh`/`high`/`medium`/`low`/`minimal`) are separate ranked rows from AA (e.g. `Claude Opus 5 (medium)` 44.8 vs `(max)` 50.8; `Muse Spark 1.3 (max)` 48.1 vs `(xhigh)` 45.1). Meta variants live in All views (no O/C group); O/C variants live in both All and OCF. To use a variant, set `reasoning_effort` locally — OR `supported_efforts` per row shown as `efforts a/b/c *default`, or `(default unspecified)` when OR lists efforts but no default, or `(hint, sibling)` when an AA-only row borrows efforts from a callable sibling (source `sibling`, display-only). Scored rows without a variant in a multi-effort family flag `(ambiguous-effort)`; singletons show `(base, unspecified effort)`. OR rows without reasoning split into `[non-reasoning]` (upstream confirms no reasoning) vs `[metadata-missing]` (no capability info or upstream says reasoning but OR omits it).
-
-Row format: `` `id` (variant) [groups] — score — $/1M [cost-source] — ratio — efforts a/b/c *default → `selector|openrouter/id` — evidence [source] ``. Cost source is `[aa]` (AA blended primary), `[or-derived]` (OpenRouter fallback), `[inherited]` (derived $0 estimate), or `cost-unknown`. `→ opencode/<route>#<variant>` for inherited estimates, `→ openrouter/...` when OR ID exists; `→ <native> (zen/...) (native, no OR)` for L0/zen-only fallback; `AA-only, no callable ID` otherwise (+ `nearest <id> display-only` hint when a callable sibling exists — never copy it). `[deprecated-upstream]` means models.dev flags the route deprecated (e.g. 1.2 Contributor-free); `[modality-unverified]` means a Zen route lacks text-out confirmation. Scores show `(estimate)` when inherited. Evidence is `aa-api / <version>`, `inherited-estimate from <slug>`, or `unscored`, with links to equivalence/capability/upstream sources. External metrics (e.g. llm-stats) appear as reference-only and never replace AA ranking scores. Groups: O = OpenAI, C = Claude, F = strict-free (OR $0 or Zen `*-free`), `F?` = provisional-free (AA $0, unverified). Router listings (`openrouter/*`) are excluded from ranked views; the header shows the excluded count.
-
-Excel (`reports/<stamp>_models.xlsx`) sheets (data sheets carry `free_status`: `verified` / `provisional-l1` / `provisional-l0` / `none`, plus `variant`, `variant_ambiguous`, `efforts`, `default_effort`, `efforts_hint`, `or_reasoning_status`, `fallback_id`, `fallback_provider`, `nearest_callable` display-only, `deprecated_upstream`, `modality_status`, `cost_source`):
-
-| `summary` | Header counts + tier sizes + gaps |
-| `All_Intel`, `All_Cost`, `All_Ratio` | Full-list versions of MD sections 1–3 |
-| `OCF_Intel`, `OCF_Cost`, `OCF_Ratio` | Full-list versions of MD sections 4–6 |
-| `OCF_Stack` | Tier + full row; `GAP:` rows for missing groups |
-| `OCF_Practical` | `tier, variant, winner, winner_variant, winner_score, winner_ratio, winner_copy_id, runner_up` (12 rows) |
-| `OCF_Outliers` | Bargains + overpriced + free gems |
-| `Family_Variants` | Full per-family table: `family, peak` + full row for every multi-variant family |
-
-JSON (`reports/<stamp>_models.json`) holds the 9 sections as slug-indexed lists (`all_intel`, `all_cost`, `all_ratio_*`, `ocf_*`, `ocf_stack{max,high,medium}`, `ocf_practical[]`, `ocf_outliers`, `family_variants`, `quartiles`, `thresholds`) plus a `models_by_slug` full-row table (single copy of each model — sections reference it, ~3× smaller than duplicating rows) plus `free_churn` (free→paid flips, newly free, disappeared and new slugs vs the previous day; empty until two distinct days exist) for scripting. Each model row carries `variant`, `variant_ambiguous`, `aa_variant_name`, `efforts[]`, `default_effort`, `efforts_hint`, `or_reasoning_status`, `fallback_id`, `fallback_provider`, `nearest_callable` (display-only), `cost_source`, `deprecated_upstream`, `modality_status`.
-
-Verify with `python tests/smoke.py` (MD/JSON 9-section + HTML 7-page/Graph contract + provisional-free + variants + Zen-free + churn + Tier 1 models.dev + cost/ambiguity/capability badges; warns when research registry is past `expires_at`).
-
-## 5. Retention and storage
-
-- `raw/<stamp>_models.json` — latest raw snapshot only; previous pruned. `_errors.log` records retries/failures for the run.
-- `raw/<stamp>_websites.json` — latest website crawl only (allowlist + per-page best-effort).
-- `analysis/<stamp>_analysis.json` — latest analysis only (models + observations/views).
-- `reports/<stamp>_*.md|.json|.xlsx` — latest stamp only. `reports/<stamp>_site/` — latest site only.
-- `analysis/store.sqlite` — append-only local history used for diffs. Safe to delete to reset history (diffs then show empty until the second run).
-
-None of the above are committed (see `.gitignore`).
-
-## 6. Troubleshooting
-
-| Symptom | Cause / fix |
+| Variable | Use |
 |---|---|
-| `openrouter failed, keeping previous snapshot` + exit 1 | Network or OpenRouter down; retry. No new snapshot written. |
-| `no snapshots in raw/` | Run stage 1 first; `raw/` was empty or pruned. |
-| `run analysis first` | No `analysis/*_analysis.json`; run stage 2 first. |
-| `xlsx skipped: ...` | `openpyxl` missing — `pip install -r requirements.txt` and re-run stage 3. |
-| A provider shows `{"error": ...}` in the snapshot | Keyless public catalogs (NVIDIA/ZenMux/Zen/models.dev) degrade gracefully — that catalog is skipped for the run, everything else proceeds. Retry on next run. |
-| Mostly `unscored` / `cost-unknown` / empty stack | No AA / OpenAI / Anthropic keys — expected for public runs. Add keys and re-run. |
-| Key set but run still `skipped` it | Stale terminal env: User vars load only in terminals opened *after* the key was set. Close the terminal completely, open a fresh one, verify with `$env:LLM_STATS_API_KEY.Length`, then re-run. |
-| BenchLM shows fewer models than the site | Leaderboard API is top-N; `?limit=1000` fetches 194 ranked. Unranked models stay unscored. |
-| LLM Stats leaderboard empty | No `LLM_STATS_API_KEY` and scores are JS-rendered (not in static HTML). Pricing/context hints still crawl keyless; add key for bulk scores. |
-| `llmstats ... 422` in `_errors.log` | Rankings `limit` above endpoint max — fetcher uses `limit=50`; if ZeroEval changes caps, lower the limit in `fetch_llmstats()`. |
-| LLM Stats quota exhausted (429) | ~19 data responses/run on Community 250/day. Wait for UTC reset; set `LLM_STATS_DETAIL_MAX=0` to skip per-model details (~12/run) on refresh-only runs. |
-| Vals coverage thin (top-8) | Vals board is JS-rendered; static fetch captures top links only. Per-model pages still enrich the allowlist. |
-| AA shows $0 prices but no free gems | AA $0 pricing alone lands in provisional `[F?]` (L1 with an OR listing, L0 AA-only; billing not checked); gem status needs score 40+ plus a callable ID. |
-| Diff always empty on first run | No previous day in `store.sqlite` yet; diffs populate from the second distinct day onward. |
-| `warn research expired` / `warn snapshot modelsdev missing` | Evidence registry past `expires_at` (manual refresh needed) or snapshot pre-dates Tier 1 — re-run retrieval to repopulate models.dev, then refresh `research.json` dates. |
+| `OPENAI_API_KEY` | OpenAI model catalog |
+| `ANTHROPIC_API_KEY` | Anthropic model catalog |
+| `OPENROUTER_API_KEY` | Optional authentication for the public catalog |
+| `AA_API_KEY` | Artificial Analysis scores and prices |
+| `LLM_STATS_API_KEY` | LLM Stats API; public website evidence remains available without it |
+| `LLM_STATS_DETAIL_MAX` | Override the keyed per-model detail cap; default 12 |
 
-## 7. FAQ
+Copy `.env.example` to `.env` if useful. Resolution takes the first **nonempty process value, repository `.env` value, then Windows User value**. Windows User fallback works even when an automation shell inherited an older environment. An existing nonempty process value still wins. Do not print credentials while diagnosing configuration.
 
-**Do I need billing anywhere?** No. The free rule is strict $0 at retrieval time.
+Copy `config.example.json` to `config.json` for non-secret settings:
 
-**Which free list do I trust?** The F-tagged rows and free-gems block (OR strict-$0 or Zen `*-free` + text-only + no routers). `[F?]` rows are provisional (AA $0, account/billing not checked): L1 has a second OR listing and a callable ID, L0 has no OR listing (it may carry a native `fallback_id` from NVIDIA/ZenMux/Zen or AA-only with no callable ID — intel-only until verified).
+| Field | Default | Meaning |
+|---|---:|---|
+| `disabled_sources` | `[]` | Explicitly skip named sources, including their website retrieval where applicable |
+| `run_days` | 90 | Detailed history retention, with latest complete source baselines protected |
+| `daily_days` | 365 | Daily rollup retention |
+| `artifact_bundles` | 2 | Number of recent published bundles to keep; minimum 2, current protected |
+| `failed_days` | 7 | Failed staging bundle retention |
+| `website_max_pages` | 40 | Per-source website page budget |
+| `cache_days` | 7 | Website cache freshness window |
+| `llmstats_detail_max` | 12 | Default keyed detail-fetch cap |
 
-**Why are stack tiers empty / flagged with gaps?** No scored model from that group qualified (often: no keys yet, or no free model scores 50+). Gaps are explicit, not errors.
+Source names: `openrouter`, `openai`, `anthropic`, `nvidia`, `zenmux`, `zen`, `modelsdev`, `aa`, `benchlm`, `llmstats`, `vals`. For example, `"disabled_sources": ["llmstats", "vals"]`. Empty environment values are not an opt-out because credential fallback still applies. Unknown config fields and invalid integer limits fail early.
 
-**How do I use a model in OpenCode?** Copy the ID shown: `opencode/<route>#<variant>` for estimates, `openrouter/<or_id>` when present, else the native `fallback_id` (e.g. Zen `muse-spark-1.3-contributor-free`) with provider noted. AA-only rows show `AA-only, no callable ID` — use for comparison only (the `nearest <id> display-only` hint is not copyable). Check limits in provider docs. Inherited scores are estimates from a matched effort on another route, not measurements of the destination — see the evidence links.
+## Run and locate output
 
-**What do cost-source / deprecation / modality badges mean?** `$/1M [aa]` is AA blended primary, `[or-derived]` is OpenRouter fallback, `[inherited]` is a derived $0 estimate, `cost-unknown` means no price anywhere. `[deprecated-upstream]` means models.dev flags the route deprecated (still listed, verify before use). `[modality-unverified]` means a Zen route lacks text-out confirmation — do not trust it as text-only free until checked.
+```powershell
+python pipeline.py
+python pipeline.py --config config.json --state-dir runs --db analysis/store.sqlite
+# Equivalent wrapper:
+powershell -File run.ps1 --config config.json
+```
 
-**How do I use variants (high/xhigh/max)?** Variants are separate rows with own scores. The base OR row lists `supported_efforts` (e.g. `max/xhigh/high/medium/low/minimal *medium`, `*` = default). In OpenCode V2 select an available `provider/model#variant` (e.g. `opencode/muse-spark-1.3-contributor-free#xhigh`); variant names come from catalog metadata and unknown variants error. Example: `meta/muse-spark-1.3 (max)` 48.1 vs `(xhigh)` 45.1; `Claude Opus 5 (medium)` 44.8 vs `(max)` 50.8 — compare in All Intel, O/C variants also in OCF Intel. The free Contributor estimate uses `xhigh` because models.dev lists only up to `xhigh` for that route — `max` is not advertised there.
+Defaults are repository-root `runs/` and `analysis/store.sqlite`. Explicit relative paths resolve from your working directory. Each run fetches catalogs, retrieves selected website evidence, analyzes, builds reports/site, generates any loss alert, and validates before publication. It prints stage timing and the final bundle path.
 
-**How fresh is the data?** Point-in-time per run. Re-run on use.
+Read `runs/current.json`, then resolve its relative `bundle` path:
 
-**How are AA / BenchLM / LLM-Stats / Vals scores combined?** They aren't averaged — each keeps its own scale in parallel views (AA Intelligence Index for ranking; BenchLM overall + supported/estimated tiers; LLM-Stats TrueSkill + eval counts; Vals task % ±SE with cost/test/latency). Per-cell provenance (source, version, URL, expiry) is in `data.json` observations.
+```powershell
+$current = Get-Content runs/current.json -Raw | ConvertFrom-Json
+$bundle = Join-Path runs $current.bundle
+Start-Process (Join-Path $bundle "reports/$($current.run_id)_site/index.html")
+# Or open the single-file dashboard:
+Start-Process (Join-Path $bundle "reports/$($current.run_id)_report.html")
+```
+
+For custom state directories, substitute that directory for `runs`. A missing pointer means no bundle has published there yet. Old `raw/`, `analysis/`, or `reports/` timestamped outputs are not the current-run selector.
+
+Partial retrieval can still publish a report with explicit coverage labels. An OpenRouter outage alone does not block other usable providers. If no provider has usable catalog rows, or a required report/validation step fails, the command fails; before pointer publication the previous current bundle remains selected. Cleanup trouble after successful publication is reported separately.
+
+## Replay and recovery
+
+Offline replay reads saved artifacts and makes **no network calls**:
+
+```powershell
+python pipeline.py --snapshot path/to/models.json --state-dir replay-runs --db replay-history.sqlite
+python pipeline.py --snapshot path/to/models.json --websites path/to/websites.json --state-dir replay-runs --db replay-history.sqlite
+```
+
+The optional website snapshot must belong to the provider snapshot's original run. Replay assigns a new run ID, records the imported origin, and preserves source evidence timestamps. Without `--websites`, website enrichment is empty. Legacy snapshots without completeness evidence can be displayed but cannot establish trusted absence baselines. Separate replay state/history keeps experiments apart from normal history.
+
+After interruption, use the **same state directory and database**:
+
+```powershell
+python pipeline.py --recover --state-dir runs --db analysis/store.sqlite
+```
+
+Recovery finishes validated, commit-requested bundles already finalized under `bundles/`, revalidates their artifacts, and reconciles the pointer with prepared SQLite history. It does not fetch or rerun incomplete stages. A normal run also performs recovery first. Do not manually promote failed staging directories or edit `current.json` to bypass validation.
+
+## Read scores, free status, and reliability
+
+The static site has independent **AA / BenchLM / LLM Stats / Vals** source tabs, a searchable **Models** directory, a page for every non-router model, Benchmarks, Compare, Methodology, and Confidence. Leaderboard slices show displayed/total counts; the directory provides full model coverage. Nested BenchLM Supported/All tabs operate within their own group.
+
+The dashboard has seven views:
+
+| View | Purpose |
+|---|---|
+| Start here | Copy-ready quality/value/free picks and reliability information |
+| Best value | Nearby AA scores grouped into price comparisons |
+| Stack | Max 50+, High 40+, Medium 30+; missing O/C/F groups explicitly flagged |
+| Variants | Effort-specific family rows; estimates and ambiguous effort labeled |
+| Free | Verified and provisional candidates kept distinct |
+| Graph | Up to 12 non-router models/efforts, AA score versus blended token price |
+| Explore | Filterable model table with group, price-source, and free-status filters |
+
+AA is the ranking scale. Other benchmarks retain their own scales and provenance; scores are never averaged across them. An inherited score is an estimate, not a measurement of that destination route. Expired/version-incompatible external evidence is reference-only.
+
+`cost_source` is `aa`, `or-derived`, `inherited`, or `none`; prices are blended dollars per million tokens, **not measured per-task costs**. Unknown prices are not zero. Free rows do not enter paid score/price ratios.
+
+Free labels:
+
+- **F / verified:** OpenRouter text-only non-router routes with zero prompt and completion prices or a `:free` ID; Zen `*-free` route evidence also qualifies. Zen text-output confirmation is separately shown; `modality-unverified` means it is missing.
+- **F? / provisional-l1:** AA zero pricing plus an OpenRouter listing, without strict free verification.
+- **F? / provisional-l0:** AA zero pricing without an OpenRouter listing. A native fallback may be shown; otherwise it is reference-only.
+
+Copy only the displayed callable selector/route. `nearest_callable` and sibling effort hints are display-only. AA-only or benchmark-only rows may have no callable ID. A free label reflects captured evidence; account conditions and limits still belong to the provider.
+
+### Source health and churn
+
+Reliability sections expose `complete`, `partial`, `failed`, and `skipped` source statuses, counts, timestamps, reasons, and baseline references. A successful selected-page crawl can have status `complete` but `complete: false` for catalog coverage: it is not a full catalog. Cached page `fetched_at` values remain the original source-fetch times; a fresh report does not make cached evidence fresh.
+
+Only two comparable complete provider catalogs can establish absence. Failed, skipped, partial, malformed, or bounded-reference data cannot prove removal. The first trusted complete fetch for a source seeds its baseline; another complete run can compare on the **same UTC day**.
+
+The schema-3 `churn` object contains route-level events and daily summaries:
+
+- `verified_free_paid` / `verified_free_removed`: the only alert types; the alert file includes evidence times, verified alternatives, and unknown coverage.
+- `verification_unknown`: previous free verification can no longer be established; not proof of payment or removal.
+- `free_added`, `free_restored`, and `catalog_added` / `catalog_removed` / `catalog_changed`: informational changes.
+- Daily **net events** compare the latest complete catalog that day against the previous complete day. **Observed events** retain intraday changes, so a loss followed by restoration can remain visible even when net change is zero.
+
+No alert file is produced for provisional candidates or ordinary catalog removals. “No events” does not mean every source was checked; read compared/unknown coverage. `free_churn` is legacy compatibility data, not authoritative schema-3 history.
+
+## Export formats and retention
+
+Within `runs/bundles/<run_id>/`, `raw/` holds snapshots, `analysis/` holds analysis JSON, and `reports/` holds `<run_id>_summary.md`, `_models.json`, `_models.xlsx`, `_report.html`, `_site/`, and the optional `_churn_alert.md`. `manifest.json` records state, stage timings, and validation. Retrieval diagnostics are in `raw/_errors.log` when created.
+
+MD retains nine ranking sections: All Intelligence/Cost/Ratio, OCF Intelligence/Cost/Ratio, Stack, Practical, Outliers. Markdown lists are capped; JSON and Excel retain full lists. JSON section entries reference `models_by_slug`; row fields retain variants, effort/default provenance, callable IDs, score evidence, prices, deprecation, and modality flags.
+
+New-schema Excel has **15 sheets**: `summary`, `All_Intel`, `All_Cost`, `All_Ratio`, `OCF_Intel`, `OCF_Cost`, `OCF_Ratio`, `OCF_Stack`, `OCF_Practical`, `OCF_Outliers`, `Family_Variants`, `BenchLM_Matrix`, `LLMStats_Matrix`, `Source_Health`, `Churn`. Legacy inputs without reliability fields produce 13.
+
+Cleanup runs after publication. Defaults retain current + previous bundles, detailed history for 90 days, daily rollups for 365 days, and failed staging bundles for 7 days. The latest complete source baselines are protected even across longer outages. Legacy/user files are not pruned by bundle cleanup. SQLite is versioned and pruned, not append-only; migration backs up an existing database and leaves legacy tables untouched. Keep each state directory paired with its database when backing up or moving it.
+
+## Standalone stages and validation
+
+Standalone commands write scratch artifacts; they do not publish, update persistent route history, or prune bundles. Replace `<run_id>` with the ID printed by retrieval, and use a new scratch directory for each experiment:
+
+```powershell
+python retrieval/fetch_models.py --output scratch/raw --config config.json
+python retrieval/fetch_websites.py --input scratch/raw/<run_id>_models.json --output scratch/raw
+python analysis/analyze.py --input scratch/raw/<run_id>_models.json --websites scratch/raw/<run_id>_websites.json --output scratch/analysis
+python reports/build_report.py --input scratch/analysis/<run_id>_analysis.json --output scratch/reports
+python reports/build_site.py --input scratch/analysis/<run_id>_analysis.json --output scratch/reports
+python alerts/check_churn.py --input scratch/reports/<run_id>_models.json --output scratch/reports
+```
+
+Website retrieval is a network stage. Omit it and omit analysis `--websites` for local analysis without enrichment. The site needs the matching report JSON already in the same scratch report directory. For persistent route comparisons and atomic publication, use `pipeline.py`.
+
+```powershell
+python -B tests/test_units.py
+python -B -m unittest discover -s tests -p "test_*.py"
+python -B tests/smoke.py
+# Select an existing bundle explicitly:
+python -B tests/smoke.py --bundle runs/bundles/<run_id>
+```
+
+Unit/integration checks use fixtures and temporary storage. Smoke checks existing artifacts. These commands do not automatically call live APIs.
+
+## Troubleshooting
+
+| Symptom | Action |
+|---|---|
+| No usable provider catalog | Inspect failed staging `manifest.json` and `raw/_errors.log`; check source settings/connectivity, then rerun. Current remains selected. |
+| Another pipeline writer is running | Let the other writer finish; the OS releases the lock after a crash. Use one writer per paired state directory/database. |
+| Mixed-run input error | Pass provider, website, analysis, and report artifacts from the same original run. |
+| Publication interrupted | Run `--recover` with the original state directory/database; inspect manifest state if it cannot complete. |
+| Missing `openpyxl` or workbook failure | Install requirements and rerun; Excel is a required publication artifact. |
+| Source skipped despite a key | Check `disabled_sources` and credential precedence without displaying the value. |
+| Mostly unscored or empty tiers | AA coverage or qualified callable rows may be absent; inspect source health and gap labels. |
+| LLM Stats quota/rate error | Lower the detail cap or disable the source; retry when quota permits. A public website is not a replacement for its keyed score API. |
+| First run has no churn | Expected: a complete new-schema source fetch seeds a baseline. Legacy SQLite rows do not count. |
+| Thin website/benchmark coverage | Read scope, component health, page limits, and cache times; reference coverage is intentionally bounded. |
+| Research expiry warning | Review the underlying evidence/version and update the registry after verification. |

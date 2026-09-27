@@ -1,0 +1,10 @@
+{
+  "disabled_sources": [],
+  "run_days": 90,
+  "daily_days": 365,
+  "artifact_bundles": 2,
+  "failed_days": 7,
+  "website_max_pages": 40,
+  "cache_days": 7,
+  "llmstats_detail_max": 12
+}

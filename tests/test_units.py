@@ -86,8 +86,10 @@ models = [{"id": "Qwen3.8 Max", "slug": "qwen38max", "or_id": "", "name": "Qwen3
            "llmstats_detail": {"scores": []}, "vals_index": None,
            "website": {}}]
 from crosswalk import attach_crosswalk
-attach_crosswalk(copy.deepcopy(models), snap, {})
-check(models[0].get("benchlm", {}).get("overall") == 71.8, "crosswalk preserves benchlm join")
+joined = copy.deepcopy(models)
+joined[0].pop("benchlm")
+attach_crosswalk(joined, snap, {})
+check(joined[0].get("benchlm", {}).get("overall") == 71.8, "crosswalk attaches benchlm join")
 obsv = build_observations(models, "2026-09-27")
 check(any(x["field"] == "score" and x["source"] == "benchlm" for x in obsv), "benchlm score observation")
 check(any(x["field"] == "rating.general" for x in obsv), "llmstats rating observation")
@@ -100,4 +102,5 @@ check(views["confidence"] == {"supported": 1, "estimated": 0, "other": 0}, "conf
 check(all(v is None or isinstance(v, (int, float)) for v in [views["benchlm_leaderboard"][0]["overall"]]), "no mixed scales")
 
 print(f"{len(fails)} failures")
-sys.exit(1 if fails else 0)
+if __name__ == "__main__":
+    sys.exit(1 if fails else 0)

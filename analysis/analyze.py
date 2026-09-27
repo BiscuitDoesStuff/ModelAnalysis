@@ -1,5 +1,9 @@
 """2. Data Analysis — normalize all providers, free-classify, diff vs sqlite, combined rank."""
 import json, os, glob, sqlite3, datetime, re
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from pipeline_common import atomic_json, check_identity, SCHEMA_VERSION
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 RAW = os.path.join(ROOT, "raw")
@@ -52,16 +56,13 @@ def parse_variant(aa_name="", aa_slug=""):
             return v
     return ""
 
-def main():
-    raw_files = glob.glob(os.path.join(RAW, "*_models.json"))
-    if not raw_files:
-        print("no snapshots in raw/")
-        return
-    files = sorted(raw_files, key=os.path.getmtime)
-    with open(files[-1], encoding="utf-8") as f:
+def main(input_path=None, output_dir=None, websites_path=None):
+    if input_path is None:
+        raise ValueError("analysis requires an explicit input snapshot")
+    with open(input_path, encoding="utf-8") as f:
         snap = json.load(f)
     stamp = str(snap.get("retrieved_at", datetime.datetime.now().strftime("%Y-%m-%d_%H%M")))
-    day = stamp[:10]
+    day = snap.get("started_at", stamp)[:10]
 
     ors = snap.get("openrouter", []) if isinstance(snap.get("openrouter"), list) else []
     oai = snap.get("openai", []) if isinstance(snap.get("openai"), list) else []
@@ -73,15 +74,12 @@ def main():
     modelsdev = modelsdev_raw if isinstance(modelsdev_raw, list) else []
     aa_raw = snap.get("aa", {})
     aa = aa_raw.get("data", []) if isinstance(aa_raw, dict) else []
-    # Website-native crawl (raw/*_websites.json, same stamp family). Optional.
+    # Optional enrichment must belong to this exact run.
     websites = {}
-    try:
-        w_files = sorted(glob.glob(os.path.join(RAW, "*_websites.json")), key=os.path.getmtime)
-        if w_files:
-            with open(w_files[-1], encoding="utf-8") as _wf:
-                websites = json.load(_wf)
-    except Exception:
-        websites = {}
+    if websites_path is not None:
+        with open(websites_path, encoding="utf-8") as _wf:
+            websites = json.load(_wf)
+        check_identity(websites, snap.get("run_id", stamp), "website snapshot")
 
     or_rows = [{"id": m.get("id", ""), "name": m.get("name", ""), "context": m.get("context_length"),
                 "free": (is_free_or(m.get("pricing", {})) or str(m.get("id", "")).endswith(":free"))
@@ -492,7 +490,9 @@ def main():
             m.setdefault("zenmux_reasoning", None)
             m.setdefault("zenmux_output", [])
 
-    con = sqlite3.connect(DB)
+    # Legacy compatibility counts are computed in isolation. Persistent route
+    # history is prepared/published by the coordinator, never by report builds.
+    con = sqlite3.connect(":memory:")
     # v2 entity/observation layer (additive — legacy models[] output preserved).
     try:
         from .crosswalk import attach_crosswalk
@@ -621,7 +621,10 @@ def main():
     from collections import Counter as _Counter
     _fsc = _Counter(m.get("free_status", "none") for m in models)
 
-    out = {"stamp": stamp, "day": day, "total_openrouter": len(or_rows), "free_count": len(free_ids),
+    out = {"stamp": stamp, "run_id": snap.get("run_id", stamp), "schema_version": SCHEMA_VERSION,
+           "started_at": snap.get("started_at"), "source_health": snap.get("source_health", {}),
+           "website_health": websites.get("source_health", {}),
+           "day": day, "total_openrouter": len(or_rows), "free_count": len(free_ids),
            "new_ids_vs_history": new_or[:50], "new_total": len(new_or),
            "removed_ids_vs_history": removed_or[:50], "removed_total": len(removed_or), "history_days": hist_days,
            "total_openai": len(oai_rows), "openai_ids": sorted([r["id"] for r in oai_rows]),
@@ -655,13 +658,10 @@ def main():
            "models": models, "collisions": collisions,
            "thresholds": {"max": TIER_MAX, "high": TIER_HIGH, "medium": TIER_MED},
            "cost_method": "aa_blended_primary_or_derived_fallback_per_1M"}
-    ap = os.path.join(ROOT, "analysis", f"{stamp}_analysis.json")
-    with open(ap, "w", encoding="utf-8") as f:
-        json.dump(out, f, indent=1)
-    afiles = sorted(glob.glob(os.path.join(ROOT, "analysis", "*_analysis.json")), key=os.path.getmtime)
-    for old in afiles[:-1]:
-        os.remove(old)
-        print(f"pruned analysis {os.path.basename(old)}")
+    if output_dir is None:
+        raise ValueError("analysis requires an output directory")
+    ap = os.path.join(output_dir, f"{stamp}_analysis.json")
+    atomic_json(ap, out)
     print(f"{stamp}: OR={len(or_rows)} free={len(free_ids)} OAI={len(oai_rows)} ANT={len(ant_rows)} "
           f"NV={len(nvidia_rows)} ZM={len(zenmux_rows)} ZEN={len(zen_rows)} "
           f"MD={len(modelsdev)} AA={len(aa_rows)} BENCHLM={len(bench_lb) if isinstance(bench_lb, list) else 0} "
@@ -669,6 +669,13 @@ def main():
           f"OBS={len(observations)} new={len(new_or)} removed={len(removed_or)} "
           f"churn_vs={prev_fh_day} to_paid={len(to_paid)} to_free={len(to_free)} gone={len(disappeared)} days={len(hist_days)} -> {ap}")
     con.close()
+    return ap
 
 if __name__ == "__main__":
-    main()
+    import argparse
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--input", required=True)
+    parser.add_argument("--output", required=True)
+    parser.add_argument("--websites")
+    args = parser.parse_args()
+    main(args.input, args.output, args.websites)

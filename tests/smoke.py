@@ -2,6 +2,15 @@
 import json, glob, os, sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+import argparse
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument("--bundle", help="Exact published bundle to check")
+args = parser.parse_args()
+DATA_ROOT = args.bundle or ROOT
+if not args.bundle and os.path.exists(os.path.join(ROOT, "runs", "current.json")):
+    with open(os.path.join(ROOT, "runs", "current.json"), encoding="utf-8") as f:
+        _current = json.load(f)
+    DATA_ROOT = os.path.join(ROOT, "runs", _current["bundle"])
 fails = []
 
 
@@ -11,10 +20,10 @@ def check(cond, msg):
         fails.append(msg)
 
 
-a_files = sorted(glob.glob(os.path.join(ROOT, "analysis", "*_analysis.json")), key=os.path.getmtime)
-r_files = sorted(glob.glob(os.path.join(ROOT, "reports", "*_models.json")), key=os.path.getmtime)
-h_files = sorted(glob.glob(os.path.join(ROOT, "reports", "*_report.html")), key=os.path.getmtime)
-m_files = sorted(glob.glob(os.path.join(ROOT, "reports", "*_summary.md")), key=os.path.getmtime)
+a_files = sorted(glob.glob(os.path.join(DATA_ROOT, "analysis", "*_analysis.json")), key=os.path.getmtime)
+r_files = sorted(glob.glob(os.path.join(DATA_ROOT, "reports", "*_models.json")), key=os.path.getmtime)
+h_files = sorted(glob.glob(os.path.join(DATA_ROOT, "reports", "*_report.html")), key=os.path.getmtime)
+m_files = sorted(glob.glob(os.path.join(DATA_ROOT, "reports", "*_summary.md")), key=os.path.getmtime)
 check(a_files and r_files, "analysis + report files exist")
 check(bool(h_files), "html dashboard exists")
 if not (a_files and r_files):
@@ -130,7 +139,7 @@ check(all(set(m.get("providers", [])) <= CALLABLE_PROVIDERS | {"openrouter"}
           for m in models),
       "providers tags valid")
 check(all(m.get("slug") for m in models), "canonical slugs present")
-w_files = sorted(glob.glob(os.path.join(ROOT, "raw", "*_models.json")), key=os.path.getmtime)
+w_files = sorted(glob.glob(os.path.join(DATA_ROOT, "raw", "*_models.json")), key=os.path.getmtime)
 if w_files:
     snap = json.load(open(w_files[-1], encoding="utf-8"))
     for src in ("nvidia", "zenmux", "zen"):
@@ -325,7 +334,9 @@ try:
     want = {"summary", "All_Intel", "All_Cost", "All_Ratio", "OCF_Intel",
             "OCF_Cost", "OCF_Ratio", "OCF_Outliers", "OCF_Stack", "OCF_Practical", "Family_Variants",
             "BenchLM_Matrix", "LLMStats_Matrix"}
-    check(set(wb.sheetnames) == want, f"xlsx has 13 tabs ({len(wb.sheetnames)})")
+    if a.get("schema_version", 0) >= 3:
+        want |= {"Source_Health", "Churn"}
+    check(set(wb.sheetnames) == want, f"xlsx has expected tabs ({len(wb.sheetnames)})")
     hdr = [c.value for c in wb["All_Ratio"][1]]
     check("free_status" in hdr, "xlsx All_Ratio has free_status column")
     for col in ("variant", "efforts", "fallback_id", "cost_source", "variant_ambiguous",
@@ -351,8 +362,8 @@ if w_files:
         check(isinstance(_v, (list, dict)), f"snapshot {_src} present")
     check("benchlm" in _snap2 and isinstance(_snap2["benchlm"], dict), "snapshot benchlm dict present")
     _llm = _snap2.get("llmstats", {})
-    if isinstance(_llm, dict) and "skipped" not in _llm:
-        check(isinstance(_llm.get("models"), list) and len(_llm["models"]) > 100,
+    if isinstance(_llm, dict) and isinstance(_llm.get("models"), list):
+        check(len(_llm["models"]) == _llm.get("model_count"),
               f"llmstats keyed models bulk present ({len(_llm.get('models', []))})")
         check(isinstance(_llm.get("rankings"), dict) and "general" in _llm["rankings"],
               "llmstats rankings present")
@@ -365,7 +376,7 @@ check(all(m.get("score_source") is None or m["score_source"].get("benchmark") in
           for m in models), "AA score_source benchmark unmixed")
 # Site report (reference-site style) exists when build_site ran.
 import glob as _g
-_sites = sorted(_g.glob(os.path.join(ROOT, "reports", "*_site")), key=os.path.getmtime)
+_sites = sorted(_g.glob(os.path.join(DATA_ROOT, "reports", "*_site")), key=os.path.getmtime)
 if _sites:
     _s = _sites[-1]
     for _p in ("index.html", "benchmarks.html", "compare.html", "methodology.html", "confidence.html", "data.json"):

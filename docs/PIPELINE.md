@@ -1,116 +1,131 @@
-# Pipeline Internals (maintainer reference)
+# Pipeline contracts
 
-User-facing usage lives in `USER_GUIDE.md`. This file documents exact stage contracts, schemas, and extension points.
+See [USER_GUIDE.md](USER_GUIDE.md) for commands and interpretation. This describes the publication and history contracts implemented by `pipeline.py`, `pipeline_common.py`, `analysis/history.py`, and `analysis/churn.py`.
 
-## Stages
+## Run identity and stage APIs
 
-```
-retrieval/fetch_models.py → raw/<stamp>_models.json
-retrieval/fetch_websites.py → raw/<stamp>_websites.json (allowlist website crawl)
-analysis/analyze.py       → analysis/<stamp>_analysis.json + analysis/store.sqlite
-reports/build_report.py   → reports/<stamp>_summary.md|.json|.xlsx
-reports/build_site.py     → reports/<stamp>_site/ (index, models, benchmarks, compare, methodology, confidence, data.json)
-alerts/check_churn.py     → console churn summary + reports/<stamp>_churn_alert.md on bad news + reports/<stamp>_triage_alert.md on L0 qualifiers
-```
+`run.ps1` forwards arguments to `pipeline.py` and propagates failure. The coordinator accepts `--config`, `--state-dir`, `--db`, `--snapshot`, `--websites` (requires `--snapshot`), and `--recover`.
 
-`run.ps1` runs the six stages in order, exiting on first non-zero `$LASTEXITCODE`.
+Default state is `<repository>/runs`; default history is `<repository>/analysis/store.sqlite`. A run ID combines a UTC `YYYY-MM-DD_HHMMSS` timestamp with a random suffix. All artifacts in a run share this identity; filename order/mtime never selects stage inputs.
 
-## Stage 1 — retrieval (`retrieval/fetch_models.py`)
+| Stage | Python API | File contract |
+|---|---|---|
+| Fetch | `fetch_models.main(output_dir, run_id, started_at, config)` | Writes `raw/<run_id>_models.json` |
+| Websites | `fetch_websites.main(input_path, output_dir, cache_dir, config)` | Exact provider snapshot → matching `raw/<run_id>_websites.json` |
+| Analyze | `analyze.main(input_path, output_dir, websites_path=None)` | Exact snapshot + optional matching websites → `analysis/<run_id>_analysis.json` |
+| Report | `build_report.main(input_path, output_dir)` | Analysis → summary MD, model JSON/XLSX, dashboard HTML |
+| Site | `build_site.main(input_path, output_dir)` | Analysis + matching `<run_id>_models.json` in output directory → `<run_id>_site/` |
+| Alerts | `check_churn.main(input_path, output_dir)` | Exact report JSON → optional `<run_id>_churn_alert.md` |
 
-- Hybrid: public catalogs first (OpenRouter required; NVIDIA/ZenMux/Zen/models.dev keyless), authed sources only when keys exist.
-- `get()` retries 3x with backoff on 5xx/network errors; 4xx fails fast. All retries/failures append to `raw/_errors.log` (truncated at run start).
-- Endpoints: OpenRouter `GET /api/v1/models`; OpenAI `GET /v1/models` (`Authorization: Bearer`); Anthropic `GET /v1/models` (`x-api-key` + `anthropic-version: 2023-06-01`); NVIDIA `GET /v1/models` on `integrate.api.nvidia.com` (public, keyless); ZenMux `GET /api/v1/models` (public, keyless; richest schema: display names, modalities, context, per-MToken pricings); OpenCode Zen `GET /zen/v1/models` on `opencode.ai` (public, keyless; bare-slug IDs, `-free` suffixed free routes); models.dev `GET /api.json` (public, keyless, ~8k routes; minimal projection only: provider, id, cost input/output, modalities in/out, reasoning bool + effort values, deprecated flag, context/output limits, last_updated); AA `GET /api/v2/data/llms/models` (`x-api-key`); BenchLM `GET /api/data/leaderboard?limit=1000` + `GET /api/data/pricing?limit=5000` (public, keyless; overall + category scores, evidence tiers, pricing, methodology version); LLM Stats `GET /stats/v1/models?limit=200` (cursor-paged, minimal projection, no descriptions) + `GET /stats/v1/benchmarks?limit=500` + `GET /stats/v1/rankings?category={general,reasoning,code,agents}&limit=50` + `GET /stats/v1/models/{id}` details for the free-relevant priority list (cap `LLM_STATS_DETAIL_MAX`, default 12) on `api.zeroeval.com` (`Authorization: Bearer $LLM_STATS_API_KEY`, skipped when absent; budget ~19 data responses/run of the Community 250/day; `/account` checked quota-free for remaining balance); Vals Index page HTML `GET /benchmarks/vals_index` on `www.vals.ai` (public, keyless, best-effort top-8 static links; full 65-board is JS-rendered).
-- Missing keys return `{"skipped": "no <KEY>"}`; exceptions return `{"error": ...}` via `safe()`. OpenRouter failure exits 1 with no snapshot.
-- Snapshot schema: `{retrieved_at, openrouter: [...], openai: [...]|{...}, anthropic: [...]|{...}, nvidia: [...]|{...}, zenmux: [...]|{...}, zen: [...]|{...}, modelsdev: [...]|{error}, aa: {...}, benchlm: {leaderboard, pricing, meta}, llmstats: {models, model_count, benchmarks, benchmark_count, rankings, details, meta}|{skipped}, vals: {models, source}}`. Keyless public sources (OpenRouter, NVIDIA, ZenMux, Zen, models.dev, BenchLM, Vals) always fetch; a failure there returns `{"error": ...}` and analysis proceeds without that catalog (only OpenRouter failure aborts the run). LLM Stats snapshots stay local (gitignored); Community plan forbids bulk redistribution, display attribution ("Data by LLM Stats") lives in the site footer/methodology.
-- Retention: `prune(keep=1)` — only the newest `raw/*_models.json` survives.
+Standalone CLIs require `--input` and `--output`, except fetch requires `--output` with optional `--config`; analysis also accepts `--websites`. They are scratch tools, with no publication or retention responsibility. Analysis uses an in-memory legacy compatibility calculation, not the persistent route database. The coordinator adds trusted history before report generation.
 
-## Stage 1b — website crawl (`retrieval/fetch_websites.py`)
+## Publication, interruption, and concurrency
 
-Reads the newest snapshot, builds a frontier-first allowlist (BenchLM top 40 + AA-scored 30+ + OR free routes, ~100-150), then fetches per-model website pages (best-effort, keyless): BenchLM `/md/models/<slug>.md` (static, per-benchmark breakdown), LLM Stats `/models/<slug>` HTML (pricing/context/license hints; scores are JS-rendered so API key is needed for bulk scores), Vals `/models/<href>` pages matched from the index (accuracy/cost-per-test/latency hints). Output `raw/<stamp>_websites.json` (same stamp, prune keep 1). Per-page failures recorded, never abort. Fetched pages are cached slug-keyed in `raw/cache_websites/` (gitignored, 7-day refresh) so re-runs skip unchanged BenchLM/LLM-Stats/Vals pages.
+1. Acquire the OS-owned, nonblocking `state_dir/writer.lock`. A crashed process releases the OS lock; file existence alone does not mean a writer is active.
+2. Reconcile interrupted finalized publications before choosing any baseline.
+3. Create `staging/<run_id>/{raw,analysis,reports}` and a `pending` manifest. Record stage completion and elapsed seconds.
+4. Fetch/import pinned inputs and analyze. Reject a run with no nonempty usable provider catalog. `prepare_run` writes **prepared**, baseline-ineligible SQLite history and returns structured churn to embed in analysis.
+5. Build all required outputs, including XLSX. Validate run identities, required nonempty reports, exact non-router model-page coverage, internal site links/fragments, and duplicate HTML IDs.
+6. Write a `validated`, `commit_requested: true` manifest; rename staging to `bundles/<run_id>`. Atomically replace `current.json` with a pointer whose `bundle` is relative to the state directory, e.g. `bundles/<run_id>`.
+7. Call `publish_run` to make history baseline-eligible and update daily rollups; mark the bundle manifest `published`.
+8. Prune history and generated bundles. A cleanup failure is reported without undoing publication.
 
-## Stage 2 — analysis (`analysis/analyze.py`)
+The filesystem pointer is the publication commit record. **Filesystem rename and SQLite commit are separate operations**, not one cross-store transaction. Interruption after finalization can leave a validated bundle or a pointer whose DB row remains prepared. Recovery revalidates finalized, commit-requested bundles, advances the pointer when appropriate, idempotently publishes history, and finishes manifests. It never promotes arbitrary pending/failed stages. Failure while staging still exists records a failed manifest and propagates the error.
 
-Input: newest `raw/*_models.json`. Output: `analysis/<stamp>_analysis.json` (newest only) + upsert into `store.sqlite`.
+`--recover` performs only this reconciliation under the writer lock. Normal runs do it too. Keep the same state/database pairing: locking is scoped to the state directory, so different state directories must not be used to coordinate competing writers to one database.
 
-Free classification (`or_rows[].free` plus Zen free routes), all must hold for OR strict-free:
+## Configuration, retrieval, and source health
 
-1. `float(pricing.prompt) == 0 and float(pricing.completion) == 0`, OR id ends with `:free`; AND
-2. `(architecture.output_modalities) == ["text"]`; AND
-3. id does not start with `openrouter/`.
+`pipeline_common.load_config` rejects unknown settings. `config.example.json` documents all fields: `disabled_sources`, `run_days=90`, `daily_days=365`, `artifact_bundles=2` (minimum 2), `failed_days=7`, `website_max_pages=40`, `cache_days=7`, `llmstats_detail_max=12`.
 
-Zen `*-free` IDs (OpenCode Zen free routes) count as verified free with evidence `zen:free-route`. Modality is confirmed via models.dev (`modalities.output == ["text"]` on the matching opencode route → `modality_status: confirmed-text`); Zen rows with no text confirmation stay `modality-unverified` (e.g. no models.dev entry).
+Credentials resolve nonempty process environment → repository `.env` → Windows User environment. `disabled_sources` is the explicit opt-out. Diagnostics sanitize credential/query values; resolved credential mappings must never be logged.
 
-AA rows: `{id: slug|id, name, creator, score: evaluations.artificial_analysis_intelligence_index|null when missing, cost_blended: pricing.price_1m_blended_3_to_1, zero_price: input==0 and output==0}`. Zero-price IDs are billing/account-unverified by definition.
+Provider sources are `openrouter`, `openai`, `anthropic`, `nvidia`, `zenmux`, `zen`. Reference sources are `modelsdev`, `aa`, `benchlm`, `llmstats`, `vals`. Public retrieval is available without credentials; OpenAI, Anthropic, AA, and LLM Stats API require their corresponding keys. Anthropic catalog pagination must complete before absence can be inferred. Failed pagination retains usable rows as partial. Benchmark components record their own bounded/paged health rather than masquerading as provider catalogs.
 
-Cost provenance (per-row `cost_source`): `aa` when AA blended price present (primary), else `or-derived` when OpenRouter pricing fills (blended `(3*prompt+completion)/4*1e6`), else `inherited` for derived estimates (destination-route $0), else `none` (cost-unknown). `cost null iff cost_source none`.
+Source health records include:
 
-Tier 1 capabilities (models.dev + ZenMux promotion): models.dev routes indexed by tail slug (`md_by_slug`) provide `modelsdev_count`, `modelsdev_efforts` (union of `reasoning_options[type==effort].values`), `deprecated_upstream` + `deprecated_sources` (`status == deprecated`, e.g. `opencode/muse-spark-1.2-contributor-free`), and modality confirmation. ZenMux entries (previously id-only) now contribute `zenmux_reasoning` (True/False/None from `capabilities.reasoning`), `zenmux_output` (output modalities), plus pricings/context for reference (ranking still uses AA/OR costs only). OR rows without `reasoning` split into `or_reasoning_status`: `listed` (efforts present), `non-reasoning` (upstream confirms no reasoning), `metadata-missing` (no upstream info or upstream says reasoning but OR omits it), `no-or-listing` (no OR ids). Default effort without OR default marks `default_effort_source: unspecified-upstream` (models.dev lists values but no default); display shows `(default unspecified)`.
-
-Enrichment (`analysis/enrichment.py` + `analysis/research.json`, committed source): every model gets `score_source` (`aa-api` with `benchmark: aa-intelligence-index`, `version` from `snapshot_benchmarks[day]`, else null when unscored), `external_scores[]` (registry entries for that slug, each with `eligible` flag), and `research_notes[]`. External AA-version-matched entries may fill a missing score (`kind: external`); different-metric entries (e.g. `llm-stats-overall`) stay reference-only and never enter ranking. Cross-benchmark comparison is forbidden — `eligible` requires same `variant`, same `benchmark`, and same `version` as the snapshot cohort. Registry entries carry `checked_at`/`expires_at` (7-day default); expired entries stay visible as references but lose eligibility. Smoke warns (not fails) when analysis `day > expires_at` — manual refresh needed. Derived route/effort estimates are new rows (never silent overwrites): e.g. `musespark13contributorfree__xhigh` inherits `musespark13xhigh` 45.1 as `kind: inherited-estimate` with `upstream`, `equivalence_urls`, `capability_url` (models.dev), and `rationale`, `selector: opencode/<route>#<variant>`, destination-route pricing, `cost_source: inherited`, `efforts_source: inherited`, and `history_excluded: true` (excluded from `free_history` churn to avoid noise; included in `free_status_counts`). Inheritance requires same effort in `supported_efforts`, finite source score, provider present on target, and documented equivalence — plus Tier 1 validation that `supported_efforts` is a subset of models.dev `reasoning_efforts` for the target when models.dev knows the route — otherwise the base stays unscored.
-
-Provisional-free (Phase 1, fully automatic, no human registry): per canonical row `free_status` ∈ `verified` (OR strict-free or Zen `*-free`) / `provisional-l1` (AA $0 + OR listing exists) / `provisional-l0` (AA $0 only) / `none`, plus `free_evidence[]` (`or:strict-free`, `zen:free-route`, `aa:zero-price`, `or:listed`). `free` bool and `F` group stay verified-only. Output adds `free_status_counts{verified, provisional-l1, provisional-l0, none}`.
-
-Variants (reasoning efforts, separate ranked rows): OR `reasoning.supported_efforts[]` + `default_effort` preserved per OR ID into `efforts[]` / `default_effort` (`efforts_source: or`, `default_effort_source: or` or `unspecified-upstream` when default missing). AA variant suffix parsed from AA name/slug (`(max)` / `Max Effort` / `-xhigh`) into `variant` + `aa_variant_name`. Canonical slugs stay separate (`musespark13` vs `musespark13xhigh`); merged OR+AA rows keep OR display ID but carry AA variant label. Effort-disambiguation (post-enrich family pass, `family = slug stripped of variant suffix + __suffix`): scored rows with `variant == ""` in a family that already has scored effort-specific rows get `variant_ambiguous: true` (`ambiguous-effort` label); singletons get `variant_label: base (unspecified effort)`. Rows with empty `efforts` inherit `efforts_hint[]` + `efforts_hint_source: sibling` + `efforts_hint_from` from the highest-scored OR-listed sibling in the same family. AA-only rows (no `or_id`, no callable provider) get `nearest_callable` + `nearest_callable_slug` from the best callable sibling — display-only, never copyable (report `copy_id` never uses it). AA-only OpenAI/Anthropic rows gain O/C groups via `model_creator` so variant scores stay visible in OCF Intel/Cost/Ratio with `fallback_id` = AA slug (`fallback_provider: aa`). L0/zen-only rows with no `or_id` carry `fallback_id`/`fallback_provider` = first native `openai/anthropic/nvidia/zenmux/zen` ID (report copy uses `or_id` else fallback; AA-only shows no callable ID + nearest hint).
-
-Canonical dedupe (reports-layer union; raw snapshots untouched): all providers merge by normalized tail slug — `norm(id) = re.sub(r"[^a-z0-9]", "", lower(id))` applied to `id.split(":")[0].split("/")[-1]` — into `models[]` rows with `providers[]` tags. Same-slug merges from distinct OR listings are recorded in `collisions[]` (kept merged). Benchmark-only rows (`bench_only: true`, no provider listing, no AA score): unjoined BenchLM leaderboard entries and LLM Stats ranked models enter as reference-only entities — no callable ID, no OCF groups, excluded from stack/practical and from `free_history` churn.
-
-SQLite (`analysis/store.sqlite`, table `models`):
-
-```
-(id TEXT, source TEXT, day TEXT, free INT, PRIMARY KEY(id, source, day))
+```text
+status: complete | partial | failed | skipped
+complete: boolean
+scope: catalog | reference | bounded-reference | selected-pages | ...
+count, fetched_at, reason, enabled, attempted
+optional components, attempted_count, failed_count, cache_hits, oldest_data_at
+history additions: baseline, compared
 ```
 
-Plus v2 tables (additive): `observations(entity, source, field, value, day)` (`PRIMARY KEY(entity, source, field, day)`, day-scoped delete + `INSERT OR REPLACE` per run, cap 20000 with warning, 90-day age prune each run) and `bench_sources(source, day, count, status)` (`benchlm_lb`, `benchlm_pr`, `llmstats`, `vals`, `websites`).
+`status=complete` means the requested operation completed, not necessarily that an entire provider catalog was observed. Absence comparison requires **status complete + complete true + scope catalog + valid route rows**, and a comparable published baseline. Duplicate/malformed catalog routes prevent trusted comparison. Skipped/partial/failed catalogs and selected reference pages never imply removal.
 
-Sources stored: openrouter (free = strict-free flag), openai / anthropic / nvidia / zenmux / zen (free = 0). Legacy tables lacking `source` are renamed to `models_old_<stamp>` and rebuilt. Diffs compare current OpenRouter IDs against the max stored `day < today`: `new_ids_vs_history`, `removed_ids_vs_history` (capped at 50 in JSON, full counts in `new_total`/`removed_total`). OR free-flag flips for IDs present on both days are reported as `free_churn.or_flipped_to_paid|or_flipped_to_free`.
+Website retrieval uses a free/frontier-relevant allowlist, per-source page budgets, and `state_dir/cache`. Cache hits retain each page's original `fetched_at`; cache eligibility uses that timestamp, not file mtime. Legacy cache entries without a trustworthy timestamp refresh. Website health uses `selected-pages`, reports cache/failure counts and oldest evidence time, and remains catalog-incomplete even when every selected page succeeded. Analysis exposes it separately as `website_health`.
 
-Churn (`free_history` table: `(slug TEXT, day TEXT, free_status TEXT, disp_id TEXT, PRIMARY KEY(slug, day))`, non-router canonical rows only): each run upserts the current day, then diffs against the max stored `day < today` → `free_churn{prev_day, flipped_to_paid (was free-ish, now none), flipped_to_free (was none, now free-ish), level_changed (free-ish → other free-ish level), disappeared (slug gone), new_slugs}`. Lists capped at 50 with `*_total` counts. Empty (`prev_day: null`) until a second distinct day exists — same convention as the OR diffs. The report passes `free_churn` through to JSON uncapped-meta, plus a one-line MD/HTML overview note when `prev_day` exists.
+Partial reports publish with explicit report coverage labels when usable provider data exists. No usable provider data, mismatched identities, report errors, or validation errors block publication. There is no blanket “all failures exit 0” contract.
 
-Analysis JSON keys: legacy counts, native ID lists, retired/diff/history keys (unchanged) plus `total_nvidia` / `nvidia_ids`, `total_zenmux` / `zenmux_ids`, `total_zen` / `zen_ids`, `total_modelsdev` (8174-route minimal projection count), `total_benchlm` / `total_benchlm_pricing` / `benchlm_meta`, `llmstats_status`, `vals_status`, `website_stats`, `views{benchlm_leaderboard, llmstats_leaderboard, vals_leaderboard, capabilities, pricing, provisional_triage, confidence}`, `observations_count`, plus `models[]` canonical rows (each with `benchlm`, `benchlm_pricing`, `llmstats_api`, `vals_index`, `website{benchlm_md, llmstats, vals}` joins)
-`{id, slug, or_id, name, groups[O/C/F], providers[openrouter/openai/anthropic/nvidia/zenmux/zen], score|null, cost_blended|null, cost_source[aa/or-derived/inherited/none], ratio|null,
-context, free, router, tier, free_status[verified/provisional-l1/provisional-l0/none], free_evidence[], variant[max/xhigh/high/medium/low/minimal/none/""],
-variant_ambiguous, variant_label, aa_variant_name, aa_id, efforts[], default_effort, efforts_source[or/inherited/""], default_effort_source[or/unspecified-upstream/""],
-efforts_hint[], efforts_hint_source[sibling/""], efforts_hint_from, or_reasoning_status[listed/non-reasoning/metadata-missing/no-or-listing],
-deprecated_upstream, deprecated_sources[], modality_status[confirmed-text/modality-unverified/""],
-modelsdev_count, modelsdev_efforts[], zenmux_reasoning, zenmux_output[],
-fallback_id, fallback_provider, nearest_callable (display-only), nearest_callable_slug, selector, score_source{kind: aa-api/external/inherited-estimate, benchmark, version, url, upstream}, external_scores[], research_notes[], history_excluded}`, `collisions[]` (same tail slug merged from distinct listings),
-`thresholds{max:50, high:40, medium:30}`, `free_status_counts`, `free_churn{prev_day, flipped_to_paid[_total], flipped_to_free[_total], level_changed[_total], disappeared[_total], new_slugs[new_total], or_flipped_to_paid[_total], or_flipped_to_free[_total]}` (lists capped at 50), `cost_method: aa_blended_primary_or_derived_fallback_per_1M`.
+### Offline import
 
-NVIDIA/ZenMux/Zen normalize like OAI/ANT (OpenAI-compatible `{id, owned_by}`; ZenMux additionally supplies `display_name`, used for names). Union merges them by tail slug; `providers[]` gains `nvidia`/`zenmux`/`zen` tags (no new `groups`; OCF stays O/C/F + provisional). Display priority: oai/ant native → OR → nvidia → zenmux → zen → AA. `has_callable` (stack/practical/outliers gate) counts `or_id` or any listed provider.
-Dead keys (`free_ids`, `aa_top15`, `aa_free_unverified`, `combined_free_rank`) were removed; the report no longer consumes them.
+`--snapshot` imports a provider snapshot without any network stage, assigns a new run identity, and records `imported_from`. Optional `--websites` must match the snapshot's **original** identity before both artifacts are assigned the new identity. Without it, website evidence is empty. Original source timestamps remain evidence timestamps. Legacy snapshots lacking health metadata are labeled `legacy-unverified` and cannot establish loss baselines.
 
-## Stage 3 — report (`reports/build_report.py`)
+## Route history and events
 
-Input: newest `analysis/*_analysis.json` (`models[]` canonical rows). Outputs share one `<stamp>`; older stamps pruned. MD/JSON/XLSX keep 9 sections; HTML is a 7-page user view over the same data:
+`analysis/churn.py` uses exact `(provider, id)` catalog identity. Canonical display/model grouping is separate; merging display rows cannot itself create a free-route loss. Pure route evidence recognizes strict OpenRouter free routes and Zen `*-free` routes; missing prices/modality are not paid evidence. Display-only, provisional, benchmark-only, and inherited score rows cannot manufacture verified free access.
 
-1–3. All Intel / Cost / Ratio (ratio = paid only + verified-free-by-score + provisional-free-by-score `[F?]` + unratable tail).
-4–6. OCF-gated versions of the same (rows with any O/C/F tag OR provisional `free_status`; `[F?]` marker in MD/HTML, exact level in JSON/XLSX `free_status`).
-7. Stack: tiers by `thresholds`, hierarchy = score desc + ratio tiebreak, `gaps[]` per tier. Callable ID required (`or_id` or native provider); AA-only rows stay in Intel/Cost/Ratio only. Tier filled only by provisional still flags `gap: F(verified)` (provisional carries no `F` group).
-8. Practical: 3 tiers × 4 variants (OCF/OF/CF/F) = 12 `{tier, variant, winner, runner_up}` — winner is first hierarchy row after removing toggled-off groups.
-9. Outliers: bargains / overpriced via quartiles over OCF paid scored+costed set (provisional excluded from quartiles); free gems = verified/provisional free + score ≥ 40, callable only.
+`analysis/history.py` public APIs:
 
-- `.md`: header counts + 9 sections, top 20 per list, gap flags inline. Provisional rows show `[F?]` in the groups bracket. Variant rows show `(max/xhigh/…)` or `(ambiguous-effort)` / `(base, unspecified effort)` + `[deprecated-upstream]` / `[modality-unverified]` badges; `efforts a/b/c *default` or `(default unspecified)` or `(hint, sibling)` or `[non-reasoning]`/`[metadata-missing]`; cost shows `$/1M [aa|or-derived|inherited]`; copy ID is `selector` when present else `openrouter/<or_id>` else native `fallback_id (provider)` else `AA-only, no callable ID` (+ `nearest <id> display-only` hint when a callable sibling exists). Every row ends with score evidence (`aa-api / <version>`, `inherited-estimate from <slug>`, or `unscored`) plus `[source]` links (equivalence + capability + upstream).
-- `.json`: 9 section keys uncapped + `quartiles` + `score_dist` (p10/p50/p90/max for threshold calibration) + `thresholds` + `routers_excluded` + `collisions` + `free_status_counts` + `*_verified_free_by_score` / `*_provisional_free_by_score` ratio splits + `free_churn` (same object as analysis) + `family_variants` (full per-family table). Model rows carry `variant`, `variant_ambiguous`, `efforts`, `efforts_hint`, `nearest_callable` (display-only), `cost_source`, `deprecated_upstream`, `modality_status`, `fallback_id`, `selector`, `score_source`, `external_scores`.
-- `.html`: 7-page dashboard (Start here · Best value · Stack · Variants · Free · Graph · Explore), per-table search + Explore group/cost/free filters, click-to-copy route IDs (selector else OR else fallback; AA-only shows `AA-only / no callable ID` + nearest display-only hint, never copyable), Variant/Efforts columns (ambiguous/base/deprecated/modality badges, cost-source sublabels, hint/sibling + default-unspecified labels) + Score-evidence column with source links, no dependencies. Start here shows copy-ready Top quality / Best value / Free cards + churn line (`→paid / →free / disappeared / new vs <prev_day>`) once two distinct days exist, plus variant/`provider/model#variant` usage note (OpenCode V2). Best value groups paid OCF rows into score bands (width ±1.5, 30+ floor): cheapest-first within band with saving vs priciest. Variants shows per-family side-by-side (AA-only greyed, callable sibling hinted). Free consolidates verified + provisional `[F?]` (was scattered across ratio sub-blocks). Graph embeds compact `graph_data(all_intel)` + `reports/graph.js` inline for offline use; users can select 12 rows/variants, see a score-vs-blended-price SVG scatter plot and bars with zero/unknown handled distinctly, and compare real copyable routes only. Graph's price is $/1M, not per-task spend, and does not alter JSON/XLSX schemas. Explore is one filterable All-models table replacing the old All/OCF Intel/Cost/Ratio duplicates (full lists stay in JSON/XLSX).
-- `.xlsx` (requires `openpyxl`, else `xlsx skipped`): `summary | All_Intel | All_Cost | All_Ratio | OCF_Intel | OCF_Cost | OCF_Ratio | OCF_Stack | OCF_Practical | OCF_Outliers | Family_Variants`. Data sheets carry `free_status` (`verified` / `provisional-l1` / `provisional-l0` / `none`) + `variant` / `variant_ambiguous` / `variant_label` / `efforts` / `default_effort` / `default_effort_source` / `efforts_source` / `efforts_hint` / `or_reasoning_status` / `fallback_id` / `fallback_provider` / `nearest_callable` (display-only) / `deprecated_upstream` / `modality_status` + `cost_source` + `score_source` / `score_urls` / `external_scores`; `summary` carries `free_verified` / `provisional_l1` / `provisional_l0` / `total_modelsdev` counts. `OCF_Practical` carries `winner_variant` + `winner_copy_id`. `Family_Variants` carries `family` + `peak` + full row (every multi-variant family, all rows).
+```python
+prepare_run(db_path, snapshot, models, run_id, started_at, source_health)
+publish_run(db_path, run_id)
+prune_history(db_path, now, run_days=90, daily_days=365)
+```
 
-## Stage 3b — site (`reports/build_site.py`)
+The separately versioned SQLite schema has `history_schema`, `history_runs`, `history_sources`, `history_routes`, `history_events`, and `history_daily`. `history_runs.state` is `prepared` or `published`; this is distinct from filesystem manifest states. Migration uses SQLite's backup API before changing an existing database (`<db>.backup-v<version>[-N].sqlite`), leaves legacy tables untouched, and rejects newer unsupported schemas. Legacy `models`, `free_history`, and observation tables do not become trusted route history.
 
-Input: newest `analysis/*_analysis.json` (views + models). Output `reports/<stamp>_site/` (pruned keep 1): `index.html` (AA/BenchLM/LLM-Stats/Vals tabbed leaderboards), `models/<slug>.html` (top 300: per-source scores on separate scales, capabilities, pricing, sources), `benchmarks.html` (catalog + version stamps), `compare.html` (practical winners + top-10 multi-variant families), `methodology.html` (ranking/free/variant/copy rules), `confidence.html` (BenchLM evidence counts, website coverage, churn, provisional triage top-20 with qualifier verdicts), `data.json` (views + meta, machine-readable).
+`prepare_run` atomically stages source snapshots and immutable event results. Identical repeated preparation returns the saved result; changed input cannot rewrite a published run. The baseline is each source's latest earlier **published complete catalog with the same rule version**, ordered by `started_at` and run ID. A first new comparable complete fetch seeds the source baseline; later runs may compare within the same UTC day. Incomplete runs do not replace it. `publish_run` is idempotent and updates retained daily rollups transactionally.
 
-## Stage 4 — alerts (`alerts/check_churn.py`)
+Event types:
 
-Input: newest `reports/*_models.json` (`free_churn`). Always exits 0 (never breaks `run.ps1`).
+| Type | Meaning | Alert? |
+|---|---|---|
+| `verified_free_paid` | Previously verified route now has explicit paid evidence | Yes |
+| `verified_free_removed` | Previously verified route absent from a complete catalog | Yes |
+| `verification_unknown` | Route persists but free verification is no longer established | No |
+| `free_added` / `free_restored` | Verified free access appears / returns for a known-free route | No |
+| `catalog_added` / `catalog_removed` / `catalog_changed` | General exact-route catalog differences | No |
 
-- No `prev_day` (single day in history) → prints "no baseline yet", writes nothing.
-- Bad news (`flipped_to_paid_total + disappeared_total + or_flipped_to_paid_total > 0`) → prints `ALERT` line and writes `reports/<stamp>_churn_alert.md` (counts + top-20 lists + verify-billing note). Pruned with the run like other reports.
-- Provisional qualifiers (`views.provisional_triage` rows with `qualifier = score ≥ 40 + callable route`, read from newest analysis JSON) → prints `TRIAGE ALERT` line and writes `reports/<stamp>_triage_alert.md` (verify-billing checklist), independently of churn. Silent when zero qualifiers.
-- Good news only or no churn → prints summary, writes nothing.
+A catalog event and a free-status event may describe the same route transition. Loss events include verified alternatives on other routes, `unknown_sources`, `unknown_routes`, `unknown_coverage`, and `access_status` (`verified_alternative`, `unknown`, or `no_verified_route`). Alternative matching respects canonical/namespace evidence; incomplete sources cannot prove that no alternatives exist. Alerts require a trusted baseline and previously verified evidence, not simply a disappearance count. There is no provisional-triage alert output.
+
+Daily rollups keep each source's latest complete catalog for a UTC day, its prior complete-day baseline, `net_events`, `observed_events`, and run coverage. Intraday paid→free reversals may yield zero net loss while remaining visible in observed events. Runs with no complete catalog add coverage information rather than false empty snapshots. Rollups preserve observed events when detailed runs age out.
+
+## JSON and report read contracts
+
+Top-level artifact `schema_version` is **3**. The history payload/schema and churn rule also carry their own versions; those are separate from the artifact version.
+
+- Identity: `run_id`, `started_at`, and compatibility `stamp`/`retrieved_at` where applicable.
+- Raw provider JSON: source payloads plus `source_health`; websites have matching identity, `allowlist`, page mappings and their health.
+- Analysis: `models[]`, `observations_count`, `views`, counts, thresholds, source/website health, `churn`, and compatibility fields.
+- Report JSON: `models_by_slug` stores full model rows once. `all_*`, `ocf_*`, practical, stack and family sections refer to slugs. `source_health`, `website_health`, and `churn` pass through to consumers.
+- `churn`: `run_id`, `rule_version`, `trusted_route_history`, `events`, `alert_events`, `counts`, `source_health`, `coverage`, and `daily.sources`. Event readers can use `kind`/`source`/`route_id`/`model` aliases; original fields remain `type`/`provider`/`id`/`canonical_id`. Detailed events carry stable event IDs and baseline/run references.
+- `free_churn` and broad historical diff fields remain compatibility data. They are not authoritative v3 route-loss semantics and must not drive new alerts. Prefer a present `churn` even when its event list is empty.
+
+Report readers should tolerate legacy inputs without reliability fields and label missing coverage/baselines unknown. `reports.build_report.reliability_data` passes supported fields through; `health_entries` merges source comparison evidence; `reliability_tables` renders source health, route events, and daily summaries without reinterpreting missing evidence as zero loss.
+
+Ranking keeps AA scores separate from BenchLM/LLM Stats/Vals scales. Normalization, crosswalks, observations, and views live in `analysis/analyze.py`, `crosswalk.py`, `observations.py`, and `views.py`; `enrichment.py` and `research.json` provide version/expiry/equivalence evidence. Display canonicalization currently merges normalized tail slugs and records collisions; broader identity resolution remains roadmap work. `nearest_callable` is display-only and never a fallback for `copy_id`.
+
+MD/JSON/XLSX retain nine ranking sections. New-schema XLSX adds `Source_Health` and `Churn` to the 13 legacy sheets (15 total). Required workbook errors propagate. The dashboard has seven views; Graph is local/inlined and uses token rates rather than measured task costs. Site output includes `index.html`, `models.html`, a page for **every non-router model**, `benchmarks.html`, `compare.html`, `methodology.html`, `confidence.html`, and `data.json`. Model filenames encode slugs safely. Source and nested benchmark tabs are group-scoped; truncated leaderboard views show counts and link to the full directory.
+
+## Retention and checks
+
+Only the coordinator prunes, after publication:
+
+- Keep recent `artifact_bundles` published bundles and always protect `current.json`'s target (default current + previous).
+- Remove manifested failed staging bundles older than `failed_days`; leave unrelated/legacy files alone.
+- Prune detailed runs older than `run_days`, protecting the last complete published source baseline per rule version, including its route/known-free evidence through outages.
+- Retain daily summaries for `daily_days`; these are independent of full artifact retention.
+
+Validation commands are `python -B tests/test_units.py`, `python -B -m unittest discover -s tests -p "test_*.py"`, and `python -B tests/smoke.py` (optionally `--bundle <bundle-directory>`). Automated tests use fixtures/temporary databases and directories; smoke reads existing artifacts. No validation command automatically performs live API retrieval. The pipeline's publication validator additionally checks the exact staged bundle before selection.
 
 ## Extension points
 
-- New provider: add `fetch_*()` + `safe()` call in snapshot, normalize in stage 2, render in stage 3. Keep missing-key behavior as `{"skipped": ...}`. models.dev is the Tier 1 capabilities reference (keyless, minimal projection); keep it failure-tolerant like other public catalogs. Benchmark sources join via `analysis/crosswalk.py` exact-norm only — never fuzzy-match names.
-- New benchmark scale: add a parallel view in `analysis/views.py` + observations in `analysis/observations.py` — never fill the AA `score` or enter `ratio/tier`. Cross-scale comparison stays forbidden.
-- New free signal: extend the strict predicate in `analyze.py` (OR `is_free_or` + Zen `*-free`), never in the report layer; keep provisional `verified/provisional-l1/provisional-l0` semantics (dead `aa_free_unverified` key removed). Use `modality_status` / models.dev to confirm text-out; never trust bare IDs alone.
-- New report sheet/section: read from analysis JSON only — stages must stay decoupled via file contracts above. Variant/effort/fallback columns (`variant`, `efforts`, `default_effort`, `fallback_id`) are display-only; OCF gating stays groups/provisional-based. `nearest_callable` is display-only by contract — never feed it to `copy_id`.
-- New score evidence: add entries to `analysis/research.json` with `checked_at`/`expires_at`, `benchmark`+`version`, and rationale/URLs — never mix benchmark scales. Update `snapshot_benchmarks[day]` when the AA Intelligence Index revision changes; expired entries become reference-only automatically via `eligible`. Inheritance `supported_efforts` must stay a subset of models.dev `reasoning_efforts` when the route is known.
+- Provider: add explicit source/config support, bounded retrieval, health/completeness evidence, exact route normalization, and fixture coverage before allowing absence inference.
+- History rule: version semantics, preserve publication gates, and test same-day changes, missing coverage, outages/restorations, replay, migration, retention, and recovery.
+- Benchmark: add observations and a separate view with source/version/scale provenance; do not insert unrelated scores into AA ranking or ratios.
+- Free signal: change evidence rules rather than presentation heuristics; keep unknown and provisional states distinct from verified paid/free evidence.
+- Report: read only the selected artifact and paired files, preserve schema metadata, generate valid links for all linked models, and keep scratch output separate from published bundles.
+- Evidence registry: verify URLs, benchmark versions, effort equivalence, and expiry before updating entries. See [ROADMAP.md](ROADMAP.md) for broader follow-up scope.

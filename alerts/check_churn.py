@@ -1,93 +1,65 @@
-"""4. Alerts — evaluate free_churn from the latest report, print a summary, write an alert file on bad news. Never fails."""
-import json, os, glob
+"""Alerts from the selected report's trusted, verified-free route losses only."""
+import json
+import os
+import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-REP = os.path.join(ROOT, "reports")
-
+if ROOT not in sys.path:
+    sys.path.insert(0, ROOT)
 MD_CAP = 20
+LOSS_TYPES = frozenset(("verified_free_paid", "verified_free_removed"))
 
 
-def _triage_qualifiers():
-    """Latest analysis views.provisional_triage qualifiers (score>=40 + callable route)."""
-    a_files = sorted(glob.glob(os.path.join(ROOT, "analysis", "*_analysis.json")), key=os.path.getmtime)
-    if not a_files:
-        return [], "unknown"
-    try:
-        with open(a_files[-1], encoding="utf-8") as f:
-            a = json.load(f)
-    except Exception:
-        return [], "unknown"
-    tri = ((a.get("views") or {}).get("provisional_triage") or [])
-    stamp = a.get("stamp") or os.path.basename(a_files[-1]).split("_analysis")[0]
-    return [t for t in tri if t.get("qualifier")], stamp
-
-
-def main():
-    r_files = sorted(glob.glob(os.path.join(REP, "*_models.json")), key=os.path.getmtime)
-    if not r_files:
-        print("alerts: no reports yet (run reports/build_report.py first)")
-        return
-    with open(r_files[-1], encoding="utf-8") as f:
-        r = json.load(f)
-    stamp = r.get("stamp", "unknown")
-    quals, _ = _triage_qualifiers()
-    if quals:
-        print(f"alerts {stamp}: {len(quals)} provisional qualifier(s) (score>=40 + route) "
-              f"— verify billing for promotion")
-        L = [f"# Provisional triage alert — {stamp}\n",
-             f"{len(quals)} qualifier(s): score >= 40 with a callable route.\n",
-             "\n## Qualifiers (verify billing, then promote to verified-free)\n"]
-        for t in quals[:MD_CAP]:
-            L.append(f"- `{t.get('id','')}` score {t.get('score')} via `{t.get('route','')}`"
-                     f"{' (' + t.get('provider','') + ')' if t.get('provider') else ''}\n")
-        L.append("\n_Action: spot-check billing/limits on each route before flipping free_status "
-                 "to verified._\n")
-        out = os.path.join(REP, f"{stamp}_triage_alert.md")
-        with open(out, "w", encoding="utf-8") as f:
-            f.write("".join(L))
-        print(f"TRIAGE ALERT written to {out}")
-    ch = r.get("free_churn") or {}
-    prev = ch.get("prev_day")
-    if not prev:
-        print(f"alerts {stamp}: no baseline yet (single day in history) — nothing to compare")
-        return
-    to_paid = ch.get("flipped_to_paid_total", 0)
-    to_free = ch.get("flipped_to_free_total", 0)
-    level = ch.get("level_changed_total", 0)
-    gone = ch.get("disappeared_total", 0)
-    new = ch.get("new_total", 0)
-    or_paid = ch.get("or_flipped_to_paid_total", 0)
-    or_free = ch.get("or_flipped_to_free_total", 0)
-    print(f"alerts {stamp} vs {prev}: to_paid={to_paid} to_free={to_free} "
-          f"level={level} disappeared={gone} new={new} or_to_paid={or_paid} or_to_free={or_free}")
-    bad = to_paid + gone + or_paid
-    if not bad:
-        if to_free or or_free:
-            print(f"alerts {stamp}: good news only ({to_free + or_free} newly free) — no alert file")
-        else:
-            print(f"alerts {stamp}: no churn — no alert file")
-        return
-    L = [f"# Churn alert — {stamp} (vs {prev})\n",
-         f"Free→paid flips: {to_paid} | disappeared: {gone} | OR free→paid: {or_paid} | "
-         f"newly free: {to_free} | level changes: {level} | new listings: {new}\n"]
-    for title, items in [("Free→paid (was free-ish, now paid/unlisted-free)", ch.get("flipped_to_paid", [])),
-                         ("Disappeared listings", ch.get("disappeared", [])),
-                         ("OR free→paid flips", ch.get("or_flipped_to_paid", []))]:
-        if items:
-            L.append(f"\n## {title}\n")
-            L += [f"- `{i}`\n" for i in items[:MD_CAP]]
-            if len(items) > MD_CAP:
-                L.append(f"_…and {len(items) - MD_CAP} more (see JSON free_churn)_\n")
-    if ch.get("flipped_to_free"):
-        L.append("\n_Newly free (verify billing before trusting): " +
-                 ", ".join(f"`{i}`" for i in ch["flipped_to_free"][:MD_CAP]) + "_\n")
-    L.append("\n_Action: re-run on use for fresh data; spot-check billing requirements on flipped "
-             "models before trusting free status._\n")
-    out = os.path.join(REP, f"{stamp}_churn_alert.md")
-    with open(out, "w", encoding="utf-8") as f:
-        f.write("".join(L))
-    print(f"ALERT written to {out}")
+def main(input_path=None, output_dir=None):
+    if input_path is None or output_dir is None:
+        raise ValueError("Explicit input_path and output_dir are required")
+    with open(input_path, encoding="utf-8") as stream:
+        report = json.load(stream)
+    stamp = str(report.get("stamp") or report.get("run_id") or "unknown")
+    # A present structured field is authoritative, including an empty/no-loss result.
+    churn = (report.get("churn") if "churn" in report else report.get("free_churn")) or {}
+    if not churn.get("trusted_route_history"):
+        print(f"alerts {stamp}: no trusted route baseline (legacy/informational report)")
+        return None
+    losses = [e for e in churn.get("events", []) if e.get("type") in LOSS_TYPES
+              and e.get("baseline_run_id") and (e.get("before") or {}).get("verified_free") is True]
+    if not losses:
+        print(f"alerts {stamp}: no verified-free route losses")
+        return None
+    lines = [f"# Verified-free route loss — {stamp}\n\n",
+             f"{len(losses)} verified-free route loss(es).\n"]
+    for event in losses[:MD_CAP]:
+        lines.append(f"\n- `{event['provider']}:{event['id']}` — {event['type']}\n")
+        source_health = (churn.get("source_health") or {}).get(event["provider"]) or {}
+        baseline = source_health.get("baseline") or (churn.get("baselines") or {}).get(event["provider"]) or {}
+        baseline_time = event.get("baseline_observed_at") or baseline.get("fetched_at") or baseline.get("started_at") or "unknown"
+        current_time = event.get("current_observed_at") or source_health.get("fetched_at") or churn.get("started_at") or "unknown"
+        lines.append(f"  Baseline observed: {baseline_time}; current observed: {current_time}.\n")
+        evidence_time = event.get("before_observed_at") or (event.get("before") or {}).get("observed_at")
+        if evidence_time:
+            lines.append(f"  Last decisive verified-free evidence: {evidence_time}"
+                         f" (run `{event.get('before_run_id') or event['baseline_run_id']}`).\n")
+        alternatives = event.get("alternatives") or []
+        verified = [r for r in alternatives if r.get("verified_free") is True]
+        if verified:
+            lines.append("  Verified-free alternatives: " + ", ".join(
+                f"`{r['provider']}:{r['id']}`" for r in verified) + ".\n")
+        if event.get("unknown_coverage", True):
+            lines.append("  Alternative coverage is incomplete or unverified; remaining free access is unknown.\n")
+        elif not verified:
+            lines.append("  No verified-free alternative in the compared catalogs.\n")
+    if len(losses) > MD_CAP:
+        lines.append(f"\n… and {len(losses) - MD_CAP} more; see this report's churn events.\n")
+    directory = os.fspath(output_dir)
+    os.makedirs(directory, exist_ok=True)
+    safe_stamp = stamp.replace("/", "_").replace("\\", "_").replace(":", "_")
+    path = os.path.join(directory, f"{safe_stamp}_churn_alert.md")
+    with open(path, "w", encoding="utf-8") as stream:
+        stream.write("".join(lines))
+    print(f"ALERT written to {path}")
+    return path
 
 
 if __name__ == "__main__":
-    main()
+    from pipeline_common import stage_cli
+    stage_cli(main, __doc__)

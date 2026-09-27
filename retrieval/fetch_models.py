@@ -3,21 +3,21 @@ Benchmark sources: AA (keyed API) + BenchLM (keyless JSON) + LLM Stats (keyed AP
 public website fallback via fetch_websites.py) + Vals (public website, best-effort).
 """
 import json, os, sys, datetime, time, urllib.request, urllib.error
-
-try:
-    from dotenv import load_dotenv
-    load_dotenv(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env"))
-except Exception:
-    pass
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from pipeline_common import (apply_credentials, atomic_json, new_run_id, utc_now, safe_error,
+                             source_status, load_config, SOURCES, PROVIDERS, SCHEMA_VERSION)
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 RAW = os.path.join(ROOT, "raw")
 os.makedirs(RAW, exist_ok=True)
 ERRLOG = os.path.join(RAW, "_errors.log")
+FETCH_HEALTH = {}
+CONFIG = load_config()
 
 def log_err(msg):
     with open(ERRLOG, "a", encoding="utf-8") as f:
-        f.write(f"{datetime.datetime.now().isoformat()} {msg}\n")
+        f.write(f"{utc_now()} {safe_error(msg)}\n")
 
 def get(url, headers=None, timeout=60, retries=3):
     last = None
@@ -60,42 +60,86 @@ def get_text(url, headers=None, timeout=60, retries=3):
     raise last
 
 
+def catalog(source, url, headers=None, paginate=False):
+    from urllib.parse import urlencode
+    rows, seen = [], set()
+    while True:
+        try:
+            data = get(url, headers)
+            batch = data.get("data") if isinstance(data, dict) else None
+            if not isinstance(batch, list) or any(not isinstance(m, dict) or not m.get("id") for m in batch):
+                raise ValueError(f"{source}: malformed catalog data")
+            rows.extend(batch)
+            if not data.get("has_more"):
+                FETCH_HEALTH[source] = source_status("complete", len(rows))
+                return rows
+            cursor = data.get("last_id") or (batch[-1]["id"] if batch else None)
+            if not paginate or not cursor or cursor in seen:
+                raise ValueError(f"{source}: unresolved pagination")
+            seen.add(cursor)
+            url = url.split("?", 1)[0] + "?" + urlencode({"after_id": cursor, "limit": 1000})
+        except Exception as exc:
+            FETCH_HEALTH[source] = source_status("partial" if rows else "failed", len(rows), reason=safe_error(exc))
+            if rows:
+                return rows
+            raise
+
+
 def fetch_openrouter():
-    return get("https://openrouter.ai/api/v1/models").get("data", [])
+    key = os.getenv("OPENROUTER_API_KEY")
+    return catalog("openrouter", "https://openrouter.ai/api/v1/models",
+                   {"Authorization": f"Bearer {key}"} if key else None)
 
 def fetch_openai():
     key = os.getenv("OPENAI_API_KEY")
     if not key:
         return {"skipped": "no OPENAI_API_KEY"}
-    return get("https://api.openai.com/v1/models", {"Authorization": f"Bearer {key}"}).get("data", [])
+    return catalog("openai", "https://api.openai.com/v1/models", {"Authorization": f"Bearer {key}"})
 
 def fetch_anthropic():
     key = os.getenv("ANTHROPIC_API_KEY")
     if not key:
         return {"skipped": "no ANTHROPIC_API_KEY"}
-    return get("https://api.anthropic.com/v1/models", {
-        "x-api-key": key, "anthropic-version": "2023-06-01"}).get("data", [])
+    return catalog("anthropic", "https://api.anthropic.com/v1/models?limit=1000", {
+        "x-api-key": key, "anthropic-version": "2023-06-01"}, paginate=True)
 
 def fetch_aa():
     key = os.getenv("AA_API_KEY")
     if not key:
         return {"skipped": "no AA_API_KEY"}
-    return get("https://artificialanalysis.ai/api/v2/data/llms/models", {"x-api-key": key})
+    data = get("https://artificialanalysis.ai/api/v2/data/llms/models", {"x-api-key": key})
+    if not isinstance(data, dict) or not isinstance(data.get("data"), list):
+        raise ValueError("AA: malformed data")
+    return data
 
 def fetch_nvidia():
-    return get("https://integrate.api.nvidia.com/v1/models").get("data", [])
+    return catalog("nvidia", "https://integrate.api.nvidia.com/v1/models")
 
 def fetch_zenmux():
-    return get("https://zenmux.ai/api/v1/models").get("data", [])
+    return catalog("zenmux", "https://zenmux.ai/api/v1/models")
 
 def fetch_zen():
-    return get("https://opencode.ai/zen/v1/models").get("data", [])
+    return catalog("zen", "https://opencode.ai/zen/v1/models")
 
 
 def fetch_benchlm():
     """BenchLM benchmark aggregator (public, keyless). Leaderboard + pricing JSON."""
-    lb = get("https://benchlm.ai/api/data/leaderboard?limit=1000", timeout=60)
-    pr = get("https://benchlm.ai/api/data/pricing?limit=5000", timeout=60)
+    components = {}
+    def component(name, url, cap):
+        try:
+            data = get(url, timeout=60)
+            if not isinstance(data, dict) or not isinstance(data.get("models"), list):
+                raise ValueError("missing models list")
+            limited = len(data["models"]) >= cap or bool(data.get("next_cursor") or data.get("has_more"))
+            components[name] = source_status("partial" if limited else "complete", len(data["models"]), scope="bounded-reference")
+            return data
+        except Exception as exc:
+            components[name] = source_status("failed", reason=safe_error(exc), scope="bounded-reference")
+            return {}
+    lb = component("leaderboard", "https://benchlm.ai/api/data/leaderboard?limit=1000", 1000)
+    pr = component("pricing", "https://benchlm.ai/api/data/pricing?limit=5000", 5000)
+    FETCH_HEALTH["benchlm"] = source_status("complete" if all(c["complete"] for c in components.values()) else "partial",
+                                            len(lb.get("models", [])), scope="bounded-reference", components=components)
     lb_models = lb.get("models", []) if isinstance(lb, dict) else []
     pr_models = pr.get("models", []) if isinstance(pr, dict) else []
     return {"leaderboard": lb_models if isinstance(lb_models, list) else [],
@@ -155,7 +199,7 @@ def fetch_llmstats(snap_so_far=None):
 
     # Quota pre-check (free call): fit details budget to remaining balance.
     try:
-        _detail_max = int(os.getenv("LLM_STATS_DETAIL_MAX", "12"))
+        _detail_max = int(os.getenv("LLM_STATS_DETAIL_MAX") or CONFIG["llmstats_detail_max"])
     except Exception:
         _detail_max = 12
     try:
@@ -171,51 +215,48 @@ def fetch_llmstats(snap_so_far=None):
         if _detail_max < 12:
             log_err(f"llmstats details capped to {_detail_max} (quota remaining {_remaining})")
 
-    models, cursor, pages = [], None, 0
-    while True:
-        url = "https://api.zeroeval.com/stats/v1/models?limit=200" + (f"&cursor={cursor}" if cursor else "")
+    components = {}
+    def pages(name, path, field, cap):
+        from urllib.parse import quote
+        rows, cursor, seen = [], None, set()
         try:
-            data = get(url, headers, timeout=60)
-        except Exception as e:
-            if models:
-                log_err(f"llmstats models page {pages+1} failed, keeping {len(models)}: {e}")
-                break
-            raise
-        batch = data.get("models", []) if isinstance(data, dict) else []
-        models.extend(_llmstats_project_model(m) for m in batch)
-        cursor = data.get("next_cursor") if isinstance(data, dict) else None
-        pages += 1
-        if not cursor or pages >= 5:
-            break
-    bench_raw = get("https://api.zeroeval.com/stats/v1/benchmarks?limit=500", headers, timeout=60)
+            for _ in range(cap):
+                url = "https://api.zeroeval.com/stats/v1/" + path
+                if cursor:
+                    url += "&cursor=" + quote(str(cursor), safe="")
+                data = get(url, headers, timeout=60)
+                batch = data.get(field) if isinstance(data, dict) else None
+                if not isinstance(batch, list) or any(not isinstance(x, dict) for x in batch):
+                    raise ValueError(f"{name}: malformed {field}")
+                rows.extend(batch)
+                cursor = data.get("next_cursor")
+                if not cursor:
+                    components[name] = source_status("complete", len(rows), scope="reference")
+                    return rows
+                if cursor in seen:
+                    raise ValueError("repeated pagination cursor")
+                seen.add(cursor)
+            components[name] = source_status("partial", len(rows), scope="reference", reason="page budget reached")
+        except Exception as exc:
+            components[name] = source_status("partial" if rows else "failed", len(rows), scope="reference", reason=safe_error(exc))
+        return rows
+    models = [_llmstats_project_model(m) for m in pages("models", "models?limit=200", "models", 5)]
+    bench_rows = pages("benchmarks", "benchmarks?limit=500", "benchmarks", 5)
     benchmarks = [{"id": b.get("id"), "name": b.get("name"),
                    "categories": b.get("categories") or [],
                    "verified": bool(b.get("verified")),
                    "model_count": b.get("model_count")}
-                  for b in (bench_raw.get("benchmarks", []) if isinstance(bench_raw, dict) else [])
+                   for b in bench_rows
                   if isinstance(b, dict)]
     rankings = {}
     for cat in ("general", "reasoning", "code", "agents"):
-        try:
-            rows, _cur, _pg = [], None, 0
-            while True:
-                rurl = (f"https://api.zeroeval.com/stats/v1/rankings?category={cat}&limit=50"
-                        + (f"&cursor={_cur}" if _cur else ""))
-                r = get(rurl, headers, timeout=60)
-                batch = r.get("models", []) if isinstance(r, dict) else []
-                rows.extend({"model_id": x.get("model_id"), "model_name": x.get("model_name"),
-                             "org": x.get("organization"), "rank": x.get("rank"),
-                             "rating": x.get("conservative_rating"),
-                             "evals": x.get("benchmarks_evaluated"),
-                             "min_in": x.get("min_input_price"),
-                             "url": x.get("url")} for x in batch if isinstance(x, dict))
-                _cur = r.get("next_cursor") if isinstance(r, dict) else None
-                _pg += 1
-                if not _cur or _pg >= 4:
-                    break
-            rankings[cat] = rows
-        except Exception as e:
-            log_err(f"llmstats rankings {cat} failed: {e}")
+        batch = pages("rankings." + cat, f"rankings?category={cat}&limit=50", "models", 4)
+        rankings[cat] = [{"model_id": x.get("model_id"), "model_name": x.get("model_name"),
+                              "org": x.get("organization"), "rank": x.get("rank"),
+                              "rating": x.get("conservative_rating"),
+                              "evals": x.get("benchmarks_evaluated"),
+                              "min_in": x.get("min_input_price"),
+                              "url": x.get("url")} for x in batch]
     # Detail priority: OR free routes, then AA-scored, then BenchLM top.
     priority, seen = [], set()
 
@@ -257,9 +298,9 @@ def fetch_llmstats(snap_so_far=None):
         detail_max = _detail_max
     except Exception:
         detail_max = 12
-    details, fetched = {}, 0
+    details, fetched, detail_failed = {}, 0, 0
     for slug in priority:
-        if fetched >= max(detail_max, 0):
+        if fetched + detail_failed >= max(detail_max, 0):
             break
         lid = by_norm.get(slug)
         if not lid or lid in details:
@@ -277,12 +318,18 @@ def fetch_llmstats(snap_so_far=None):
                             "n_benchmarks": len(scores)}
             fetched += 1
         except Exception as e:
+            detail_failed += 1
             log_err(f"llmstats detail {lid} failed: {e}")
     try:
         acct = get("https://api.zeroeval.com/stats/v1/account", headers, timeout=30)
         usage = (acct.get("usage", {}) if isinstance(acct, dict) else {})
     except Exception:
         usage = {}
+    components["details"] = source_status("partial" if detail_failed else "complete", len(details),
+                                          scope="selected-details", attempted_count=fetched + detail_failed,
+                                          failed_count=detail_failed, budget=detail_max)
+    FETCH_HEALTH["llmstats"] = source_status("complete" if all(c["complete"] for c in components.values()) else "partial",
+                                             len(models), scope="reference", components=components)
     return {"models": models, "model_count": len(models),
             "benchmarks": benchmarks, "benchmark_count": len(benchmarks),
             "rankings": rankings, "details": details,
@@ -319,7 +366,7 @@ def fetch_modelsdev():
     data = get("https://models.dev/api.json", timeout=90)
     routes = []
     if not isinstance(data, dict):
-        return routes
+        raise ValueError("models.dev: expected provider object")
     for provider_id, pdata in data.items():
         if not isinstance(pdata, dict):
             continue
@@ -366,42 +413,46 @@ def safe(fn):
     try:
         return fn()
     except Exception as e:
-        return {"error": str(e)}
+        return {"error": safe_error(e)}
 
-def main():
+def main(output_dir=None, run_id=None, started_at=None, config=None):
+    global RAW, ERRLOG, CONFIG
+    apply_credentials()
+    CONFIG = config or load_config()
+    if output_dir is not None:
+        RAW = str(output_dir)
+    os.makedirs(RAW, exist_ok=True)
+    ERRLOG = os.path.join(RAW, "_errors.log")
+    FETCH_HEALTH.clear()
     open(ERRLOG, "w").close()
-    try:
-        ors = fetch_openrouter()
-    except Exception as e:
-        print(f"openrouter failed, keeping previous snapshot: {e}")
-        sys.exit(1)
-    stamp = datetime.datetime.now().strftime("%Y-%m-%d_%H%M")
-    snap = {"retrieved_at": stamp,
-            "openrouter": ors,
-            "openai": safe(fetch_openai),
-            "anthropic": safe(fetch_anthropic),
-            "nvidia": safe(fetch_nvidia),
-            "zenmux": safe(fetch_zenmux),
-            "zen": safe(fetch_zen),
-            "modelsdev": safe(fetch_modelsdev),
-            "aa": safe(fetch_aa),
-            "benchlm": safe(fetch_benchlm)}
-    snap["llmstats"] = safe(lambda: fetch_llmstats(snap))
-    snap["vals"] = safe(fetch_vals_index)
+    stamp = run_id or new_run_id()
+    snap = {"retrieved_at": stamp, "run_id": stamp, "schema_version": SCHEMA_VERSION,
+            "started_at": started_at or utc_now()}
+    fetchers = {"openrouter": fetch_openrouter, "openai": fetch_openai, "anthropic": fetch_anthropic,
+                "nvidia": fetch_nvidia, "zenmux": fetch_zenmux, "zen": fetch_zen,
+                "modelsdev": fetch_modelsdev, "aa": fetch_aa, "benchlm": fetch_benchlm,
+                "llmstats": lambda: fetch_llmstats(snap), "vals": fetch_vals_index}
+    for source in SOURCES:
+        value = {"skipped": "disabled in configuration"} if source in CONFIG["disabled_sources"] else safe(fetchers[source])
+        snap[source] = value
+        scope = "catalog" if source in PROVIDERS else "best-effort" if source == "vals" else "reference"
+        if isinstance(value, dict) and ("error" in value or "skipped" in value):
+            status = "failed" if "error" in value else "skipped"
+            FETCH_HEALTH[source] = source_status(status, scope=scope, reason=value.get("error", value.get("skipped", "")))
+        elif source not in FETCH_HEALTH:
+            count = len(value) if isinstance(value, list) else len(value.get("data", value.get("models", [])))
+            FETCH_HEALTH[source] = source_status("complete", count, scope=scope, complete=source != "vals")
+        print(f"source {source}: {FETCH_HEALTH[source]['status']} ({FETCH_HEALTH[source]['count']})")
+    snap["source_health"] = dict(FETCH_HEALTH)
     out = os.path.join(RAW, f"{stamp}_models.json")
-    with open(out, "w", encoding="utf-8") as f:
-        json.dump(snap, f, indent=1)
-    prune(1)
-    print(f"wrote {out} | openrouter={len(ors) if isinstance(ors, list) else ors} "
-          f"| openai={len(snap['openai']) if isinstance(snap['openai'], list) else snap['openai']} "
-          f"| anthropic={len(snap['anthropic']) if isinstance(snap['anthropic'], list) else snap['anthropic']} "
-          f"| nvidia={len(snap['nvidia']) if isinstance(snap['nvidia'], list) else snap['nvidia']} "
-          f"| zenmux={len(snap['zenmux']) if isinstance(snap['zenmux'], list) else snap['zenmux']} "
-          f"| zen={len(snap['zen']) if isinstance(snap['zen'], list) else snap['zen']} "
-          f"| modelsdev={len(snap['modelsdev']) if isinstance(snap['modelsdev'], list) else snap['modelsdev']} "
-          f"| benchlm={len((snap['benchlm'].get('leaderboard', []) if isinstance(snap['benchlm'], dict) else []))} "
-          f"| llmstats={snap['llmstats'].get('model_count', snap['llmstats']) if isinstance(snap['llmstats'], dict) else snap['llmstats']} "
-          f"| vals={len((snap['vals'].get('models', []) if isinstance(snap['vals'], dict) else []))}")
+    atomic_json(out, snap)
+    print(f"wrote {out}")
+    return out
 
 if __name__ == "__main__":
-    main()
+    import argparse
+    parser = argparse.ArgumentParser(description="Fetch a uniquely identified snapshot (does not publish)")
+    parser.add_argument("--output", required=True)
+    parser.add_argument("--config")
+    args = parser.parse_args()
+    main(output_dir=args.output, config=load_config(args.config))

@@ -1,9 +1,7 @@
-"""3. Report — 9-section OCF views for MD/XLSX/JSON + 7-page HTML dashboard. On-use. Keeps latest only."""
-import json, os, glob, html as _html
+"""Build MD/XLSX/JSON and an offline HTML dashboard from an explicit analysis artifact."""
+import json, os, html as _html
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-REP = os.path.join(ROOT, "reports")
-os.makedirs(REP, exist_ok=True)
 
 MD_CAP = 20
 TIERS = ["max", "high", "medium"]
@@ -28,7 +26,139 @@ def copy_id(m):
     if oc:
         return oc
     fb = m.get("fallback_id", "")
-    return str(fb) if fb and m.get('fallback_provider') not in ('', 'aa') else ""
+    return str(fb) if fb and m.get('fallback_provider') not in (None, '', 'aa') else ""
+
+
+def reliability_data(a):
+    """Preserve optional run/history fields without reinterpreting source evidence."""
+    return {k: a[k] for k in ("run_id", "schema_version", "started_at", "source_health", "website_health", "churn") if k in a}
+
+
+def metadata_text(value):
+    """Readable nested source components and baseline references, without schema guesses."""
+    if isinstance(value, dict):
+        return "; ".join(f"{k}: {metadata_text(v)}" for k, v in value.items()) or "—"
+    if isinstance(value, list):
+        return "; ".join(metadata_text(v) for v in value) or "—"
+    if isinstance(value, bool):
+        return "yes" if value else "no"
+    return "—" if value is None or value == "" else str(value)
+
+
+def health_entries(a):
+    churn = a.get("churn") or {}
+    sources = dict(a.get("source_health") or {})
+    for source, health in (churn.get("source_health") or {}).items():
+        sources[source] = {**(sources.get(source) or {}), **health}
+    for group, values in (("", sources), ("website / ", a.get("website_health") or {})):
+        for source, value in values.items():
+            health = value if isinstance(value, dict) else {"status": value}
+            yield group + source, health, (health.get("baseline") or (churn.get("baselines") or {}).get(source))
+
+
+def partial_health(health):
+    return (health.get("complete") is False or health.get("status") not in ("complete", "fresh")
+            or health.get("scope", "catalog") != "catalog")
+
+
+def source_summary(a):
+    entries = list(health_entries(a))
+    if not entries:
+        return "Source coverage unknown — no health metadata."
+    partial = sum(partial_health(health) for _, health, _ in entries)
+    label = f"Partial coverage ({partial}/{len(entries)} sources limited or unavailable)" if partial else "Complete source coverage"
+    return label + " · " + " · ".join(f"{name}: {metadata_text(health.get('status'))}" for name, health, _ in entries)
+
+
+def baseline_message(a):
+    churn = a.get("churn") or {}
+    baselines = list((churn.get("baselines") or {}).values()) + [ref for _, _, ref in health_entries(a)]
+    if not churn or not any(baselines) or churn.get("trusted_route_history") is False:
+        return "No trusted baseline — route churn cannot be determined."
+    if not churn.get("events"):
+        return "No route events recorded; comparisons apply only to sources with trusted, complete coverage."
+    return "Route events use per-source trusted baselines; incomplete coverage is not evidence of route loss."
+
+
+def reliability_tables(a):
+    churn = a.get("churn") or {}
+    health_rows = []
+    for name, health, baseline in health_entries(a):
+        coverage = {k: health[k] for k in ("scope", "complete", "compared", "coverage", "components",
+                    "attempted_count", "failed_count", "cache_hits", "oldest_data_at") if k in health}
+        health_rows.append([name, health.get("status"), health.get("count"), health.get("fetched_at"),
+                            health.get("reason") or health.get("error") or health.get("coverage_reason"),
+                            baseline or "No trusted baseline", ("Partial coverage; " if partial_health(health) else "") + metadata_text(coverage)])
+    yield "Source health", ["Source", "Status", "Count", "Fetched at", "Reason", "Baseline", "Coverage / components"], health_rows
+    events = []
+    for event in churn.get("events") or []:
+        coverage = {k: event[k] for k in ("coverage", "unknown_coverage", "unknown_sources", "unknown_routes", "access_status") if k in event}
+        kind = event.get("kind") or event.get("type")
+        events.append([kind, event.get("source") or event.get("provider"), event.get("route_id") or event.get("id"),
+                       event.get("model") or event.get("canonical_id"),
+                       event.get("loss_reason") or event.get("reason") or kind,
+                       event.get("alternatives") or "None recorded", coverage or churn.get("coverage") or "Unknown"])
+    yield "Churn events", ["Event", "Source", "Route", "Model", "Loss reason / change", "Alternatives", "Coverage"], events
+    daily = churn.get("daily") or {}
+    if isinstance(daily.get("sources"), dict):
+        rows = []
+        for source, summary in daily["sources"].items():
+            def counts(events):
+                result = {}
+                for event in events or []:
+                    kind = event.get("kind") or event.get("type") or "unknown"
+                    result[kind] = result.get(kind, 0) + 1
+                return result or "No events"
+            rows.append([daily.get("day"), source, counts(summary.get("net_events")), counts(summary.get("observed_events")),
+                         summary.get("latest_complete"), summary.get("baseline") or "No trusted baseline",
+                         [{k: h[k] for k in ("run_id", "status", "complete", "reason") if k in h} for h in summary.get("coverage") or []]])
+        yield "Daily summary", ["Day", "Source", "Net events", "Observed events", "Latest complete", "Baseline", "Coverage"], rows
+    else:
+        yield "Daily summary", ["Day / field", "Summary"], list(daily.items())
+
+
+def reliability_markdown(a):
+    lines = ["\n## Reliability\n", source_summary(a) + "\n", baseline_message(a) + "\n"]
+    for title, headers, rows in reliability_tables(a):
+        lines.append(f"\n### {title}\n")
+        lines.append("| " + " | ".join(headers) + " |\n|" + "---|" * len(headers) + "\n")
+        for row in rows:
+            lines.append("| " + " | ".join(esc(metadata_text(v)).replace("|", "&#124;").replace("\n", "<br>") for v in row) + " |\n")
+        if not rows:
+            lines.append("\nNo records available.\n")
+    return "".join(lines)
+
+
+def reliability_html(a):
+    body = ["<section id='reliability'><h2>Reliability</h2>",
+            f"<p><strong>{esc(source_summary(a))}</strong></p>",
+            f"<p>{esc(baseline_message(a))}</p>"]
+    identity = {k: a[k] for k in ("run_id", "started_at", "schema_version") if k in a}
+    if identity:
+        body.append(f"<p>{esc(metadata_text(identity))}</p>")
+    for title, headers, rows in reliability_tables(a):
+        body.append(f"<h3>{title}</h3><div class='twrap'><table><thead><tr>" +
+                    "".join(f"<th>{esc(h)}</th>" for h in headers) + "</tr></thead><tbody>")
+        for row in rows:
+            body.append("<tr>" + "".join(f"<td>{esc(metadata_text(v))}</td>" for v in row) + "</tr>")
+        if not rows:
+            body.append(f"<tr><td colspan='{len(headers)}'>No records available.</td></tr>")
+        body.append("</tbody></table></div>")
+    body.extend(f"<details><summary>Raw {esc(k)}</summary><pre>{esc(json.dumps(v, ensure_ascii=False, indent=2))}</pre></details>"
+                for k, v in reliability_data(a).items())
+    return "".join(body) + "</section>"
+
+
+def metadata_rows(value, path=""):
+    """Lossless leaf paths for nested metadata in the spreadsheet."""
+    if isinstance(value, dict) and value:
+        for key, item in value.items():
+            yield from metadata_rows(item, f"{path}.{key}" if path else str(key))
+    elif isinstance(value, list) and value:
+        for index, item in enumerate(value):
+            yield from metadata_rows(item, f"{path}[{index}]")
+    else:
+        yield [path, json.dumps(value, ensure_ascii=False)]
 
 
 def score_evidence(m):
@@ -208,18 +338,6 @@ def build_family_full(all_rows):
         out.append({"family": fam, "peak": peak,
                     "rows": sorted(members, key=lambda r: (-(r.get("score") if r.get("score") is not None else -1)))})
     return sorted(out, key=lambda f: (-(f["peak"] if f["peak"] is not None else -1)))
-
-
-def prune_reports(keep_stamps):
-    pats = ["*_summary.md", "*_models.json", "*_models.xlsx", "*_report.html", "*_churn_alert.md"]
-    files = []
-    for p in pats:
-        files += glob.glob(os.path.join(REP, p))
-    for f in files:
-        bn = os.path.basename(f)
-        if not any(bn.startswith(s) for s in keep_stamps):
-            os.remove(f)
-            print(f"pruned report {os.path.basename(f)}")
 
 
 def build_sections(a):
@@ -477,10 +595,12 @@ def build_html(a, s, stamp):
     def _pick_card(title, m, extra=""):
         if not m:
             return f"<div class='card'><h3>{esc(title)}</h3><p>— (gap)</p></div>"
-        cp = esc(copy_id(m) or "AA-only / no callable ID")
+        cp = copy_id(m)
+        route = (f"<code class='copy' onclick=\"copyId(this)\" title='click to copy'>{esc(cp)}</code>"
+                 if cp else "AA-only / no callable ID")
         return (f"<div class='card'><h3>{esc(title)}</h3>"
                 f"<p><code>{esc(m['id'])}</code> ({esc(fmt_score(m))}, {esc(fmt_cost(m))})</p>"
-                f"<p>Copy: <code class='copy' onclick=\"copyId(this)\" title='click to copy'>{cp}</code></p>"
+                f"<p>Route: {route}</p>"
                 + (f"<p class='note'>{extra}</p>" if extra else "") + "</div>")
 
     v_extra = ""
@@ -492,6 +612,7 @@ def build_html(a, s, stamp):
     ov += _pick_card("Best value", top_value, v_extra)
     ov += _pick_card("Top free", top_free, "Verified/provisional free, score-ranked.")
     ov += "</div>"
+    ov += reliability_html(a)
     ov += "<div class='cards'>"
     for t in TIERS:
         rows = s["stack"][t]["rows"]
@@ -635,7 +756,7 @@ def build_html(a, s, stamp):
             sec("explore", "Explore — all models", explore_html))
 
     # Inline the script so the dated HTML works offline (including file:// URLs).
-    with open(os.path.join(REP, "graph.js"), encoding="utf-8") as f:
+    with open(os.path.join(ROOT, "reports", "graph.js"), encoding="utf-8") as f:
         graph_script = f.read()
     graph_rows = json.dumps(graph_data(s["all_intel"]), ensure_ascii=True, separators=(",", ":"))
     graph_rows = graph_rows.replace("<", "\\u003c").replace(">", "\\u003e").replace("&", "\\u0026")
@@ -695,14 +816,18 @@ document.querySelector('.tab').classList.add('on');
 </script></body></html>"""
 
 
-def main():
-    afiles = sorted(glob.glob(os.path.join(ROOT, "analysis", "*_analysis.json")), key=os.path.getmtime)
-    if not afiles:
-        print("run analysis first")
-        return
-    with open(afiles[-1], encoding="utf-8") as f:
+def main(input_path=None, output_dir=None):
+    """Write required report artifacts; retention belongs to the coordinator."""
+    if input_path is None or output_dir is None:
+        raise ValueError("input_path and output_dir are required")
+    rep = os.fspath(output_dir)
+    with open(input_path, encoding="utf-8") as f:
         a = json.load(f)
-    stamp = a.get("stamp", a.get("day", "unknown"))
+    from pipeline_common import validate_run_id
+    stamp = validate_run_id(a.get("stamp"))
+    if "run_id" in a:
+        validate_run_id(a["run_id"])
+    os.makedirs(rep, exist_ok=True)
     th = a.get("thresholds", {"max": 50, "high": 40, "medium": 30})
     s = build_sections(a)
 
@@ -784,7 +909,10 @@ def main():
                  f" · →free {ch.get('flipped_to_free_total', 0)}" +
                  (", ".join(f"`{i}`" for i in ch.get('flipped_to_free', [])[:MD_CAP]) if ch.get('flipped_to_free') else "") +
                  f" · disappeared {ch.get('disappeared_total', 0)} · new {ch.get('new_total', 0)}._\n")
-    with open(os.path.join(REP, f"{stamp}_summary.md"), "w", encoding="utf-8") as f:
+    L.insert(2, reliability_markdown(a))
+    for key, value in reliability_data(a).items():
+        L.append(f"\n## {key}\n\n```json\n{json.dumps(value, ensure_ascii=False, indent=2)}\n```\n")
+    with open(os.path.join(rep, f"{stamp}_summary.md"), "w", encoding="utf-8") as f:
         f.write("".join(L))
 
     slim = lambda m: [m["id"], groups_display(m), m["score"], m["cost_blended"],
@@ -835,13 +963,17 @@ def main():
                               for p in s["practical"]],
             "ocf_outliers": {k: [m["slug"] for m in v] for k, v in s["outliers"].items()},
             "family_variants": [{"family": f["family"], "peak": f["peak"], "rows": [m["slug"] for m in f["rows"]]} for f in s.get("family_variants", [])]}
-    with open(os.path.join(REP, f"{stamp}_models.json"), "w", encoding="utf-8") as f:
+    full.update(reliability_data(a))
+    with open(os.path.join(rep, f"{stamp}_models.json"), "w", encoding="utf-8") as f:
         json.dump(full, f, indent=1)
 
-    try:
+    def write_workbook():
         from openpyxl import Workbook
         wb = Workbook(); ws = wb.active; ws.title = "summary"
         ws.append(["stamp", stamp])
+        for key in ("run_id", "schema_version", "started_at"):
+            if key in a:
+                ws.append([key, json.dumps(a[key], ensure_ascii=False)])
         ws.append(["models", s["model_count"]])
         ws.append(["ocf", s["ocf_count"]])
         fsc = a.get("free_status_counts", {})
@@ -923,15 +1055,25 @@ def main():
             w.append([mid, slug, g.get("rank"), g.get("rating"), g.get("evals"),
                       h.get("rank"), h.get("rating"), c.get("rank"), c.get("rating"),
                       t.get("rank"), t.get("rating"), g.get("url", "")])
-        wb.save(os.path.join(REP, f"{stamp}_models.xlsx"))
-        x = "xlsx ok"
-    except Exception as e:
-        x = f"xlsx skipped: {e}"
-    with open(os.path.join(REP, f"{stamp}_report.html"), "w", encoding="utf-8") as f:
+        if any(key in a for key in ("schema_version", "source_health", "website_health", "churn")):
+            for title, key in (("Source_Health", "source_health"), ("Churn", "churn")):
+                w = wb.create_sheet(title)
+                w.append(["path", "value_json"])
+                if key in a:
+                    for row in metadata_rows(a[key]):
+                        w.append(row)
+                if key == "source_health" and "website_health" in a:
+                    for row in metadata_rows(a["website_health"], "website_health"):
+                        w.append(row)
+        wb.save(os.path.join(rep, f"{stamp}_models.xlsx"))
+    write_workbook()
+    with open(os.path.join(rep, f"{stamp}_report.html"), "w", encoding="utf-8") as f:
         f.write(build_html(a, s, stamp))
-    prune_reports([os.path.basename(f).replace("_analysis.json", "") for f in afiles[-1:]])
-    print(f"report {stamp} written ({x} + html)")
+    print(f"report {stamp} written (xlsx ok + html)")
 
 
 if __name__ == "__main__":
-    main()
+    import sys
+    sys.path.insert(0, ROOT)
+    from pipeline_common import stage_cli
+    stage_cli(main, __doc__)

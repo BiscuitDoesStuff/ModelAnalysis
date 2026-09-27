@@ -16,12 +16,9 @@ import time
 import datetime
 import urllib.request
 import urllib.error
-
-try:
-    from dotenv import load_dotenv
-    load_dotenv(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env"))
-except Exception:
-    pass
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from pipeline_common import atomic_json, safe_error, utc_now, source_status, load_config, SCHEMA_VERSION
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 RAW = os.path.join(ROOT, "raw")
@@ -36,7 +33,7 @@ CACHE_MAX_DAYS = 7
 
 def log_err(msg):
     with open(ERRLOG, "a", encoding="utf-8") as f:
-        f.write(f"{datetime.datetime.now().isoformat()} {msg}\n")
+        f.write(f"{utc_now()} {safe_error(msg)}\n")
 
 
 def _cache_path(source, slug):
@@ -44,25 +41,32 @@ def _cache_path(source, slug):
     return os.path.join(CACHE, f"{source}__{safe}.json")
 
 
-def cache_get(source, slug, max_days=CACHE_MAX_DAYS):
+def cache_get(source, slug, max_days=None):
     """Slug-keyed cache: BenchLM md rarely changes; refresh after max_days."""
     try:
         p = _cache_path(source, slug)
         if not os.path.exists(p):
             return None
-        age = (datetime.datetime.now() - datetime.datetime.fromtimestamp(os.path.getmtime(p))).days
-        if age > max_days:
-            return None
         with open(p, encoding="utf-8") as f:
-            return json.load(f)
+            value = json.load(f)
+        # Legacy caches have no trustworthy observation timestamp: refresh them.
+        observed = datetime.datetime.fromisoformat(value["fetched_at"])
+        if observed.tzinfo is None:
+            return None
+        age = datetime.datetime.now(datetime.timezone.utc) - observed
+        if age.total_seconds() > (CACHE_MAX_DAYS if max_days is None else max_days) * 86400:
+            return None
+        value["cache_hit"] = True
+        return value
     except Exception:
         return None
 
 
 def cache_put(source, slug, payload):
     try:
-        with open(_cache_path(source, slug), "w", encoding="utf-8") as f:
-            json.dump(payload, f)
+        payload["fetched_at"] = utc_now()
+        payload["cache_hit"] = False
+        atomic_json(_cache_path(source, slug), payload)
     except Exception as e:
         log_err(f"websites cache write failed {source}/{slug}: {e}")
 
@@ -283,12 +287,20 @@ def fetch_vals_pages(snap, allowlist):
     return pages
 
 
-def main():
-    snaps = sorted(glob.glob(os.path.join(RAW, "*_models.json")), key=os.path.getmtime)
-    if not snaps:
-        print("websites: no snapshots in raw/ (run retrieval/fetch_models.py first)")
-        return
-    with open(snaps[-1], encoding="utf-8") as f:
+def main(input_path=None, output_dir=None, cache_dir=None, config=None):
+    global RAW, CACHE, ERRLOG, MAX_PAGES_PER_SOURCE, CACHE_MAX_DAYS
+    cfg = config or load_config()
+    MAX_PAGES_PER_SOURCE, CACHE_MAX_DAYS = cfg["website_max_pages"], cfg["cache_days"]
+    if input_path is None:
+        raise ValueError("websites requires an explicit input snapshot")
+    if output_dir is not None:
+        RAW = str(output_dir)
+    if cache_dir is not None:
+        CACHE = str(cache_dir)
+    os.makedirs(RAW, exist_ok=True)
+    os.makedirs(CACHE, exist_ok=True)
+    ERRLOG = os.path.join(RAW, "_errors.log")
+    with open(input_path, encoding="utf-8") as f:
         snap = json.load(f)
     stamp = str(snap.get("retrieved_at", datetime.datetime.now().strftime("%Y-%m-%d_%H%M")))
     allowlist = build_allowlist(snap)
@@ -297,18 +309,28 @@ def main():
     bench = snap.get("benchlm", {}) if isinstance(snap.get("benchlm"), dict) else {}
     if isinstance(bench.get("leaderboard"), list):
         leaderboard = bench["leaderboard"]
-    out = {"retrieved_at": stamp,
+    out = {"retrieved_at": stamp, "run_id": snap.get("run_id", stamp), "schema_version": SCHEMA_VERSION,
            "allowlist": allowlist,
-           "benchlm_md": fetch_benchlm_md(allowlist, leaderboard),
-           "llmstats": fetch_llmstats_pages(allowlist),
-           "vals": fetch_vals_pages(snap, allowlist)}
+           "benchlm_md": {} if "benchlm" in cfg["disabled_sources"] else fetch_benchlm_md(allowlist, leaderboard),
+           "llmstats": {} if "llmstats" in cfg["disabled_sources"] else fetch_llmstats_pages(allowlist),
+           "vals": {} if "vals" in cfg["disabled_sources"] else fetch_vals_pages(snap, allowlist)}
+    out["source_health"] = {}
+    for src in ("benchlm_md", "llmstats", "vals"):
+        pages = out[src]
+        failed = sum("error" in v for v in pages.values())
+        cached = sum(bool(v.get("cache_hit")) for v in pages.values())
+        disabled = ("benchlm" if src == "benchlm_md" else src) in cfg["disabled_sources"]
+        out["source_health"][src] = source_status("skipped" if disabled else "partial" if failed else "complete",
+                                                  len(pages) - failed, scope="selected-pages", complete=False,
+                                                  attempted_count=len(pages), failed_count=failed, cache_hits=cached,
+                                                  oldest_data_at=min((v["fetched_at"] for v in pages.values() if v.get("fetched_at")), default=None))
     path = os.path.join(RAW, f"{stamp}_websites.json")
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(out, f, indent=1)
-    prune(1)
+    atomic_json(path, out)
     print(f"wrote {path} | benchlm_md={len(out['benchlm_md'])} "
-          f"llmstats={len(out['llmstats'])} vals={len(out['vals'])}")
+           f"llmstats={len(out['llmstats'])} vals={len(out['vals'])}")
+    return path
 
 
 if __name__ == "__main__":
-    main()
+    from pipeline_common import stage_cli
+    stage_cli(main, __doc__)
