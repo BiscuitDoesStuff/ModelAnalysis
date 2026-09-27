@@ -24,6 +24,8 @@ The reliability foundation is implemented: pinned run bundles, staged publicatio
 
 ## 3. UX convergence and accessibility
 
+**Status (2026-09-27):** implemented as Phase 5 of `docs/PLAN.md` (`reports/ui.py` shared tokens/components and `check_html`, one `row_view` for dashboard/site columns, `validate_bundle` structure checks, `tests/test_ui.py`, CI `a11y` job with axe-core and a keyboard pass); owner's screenshot/keyboard review (PLAN step 8) pending.
+
 **Goal:** align dashboard and reference-site labels, filters, copy behavior, coverage summaries, and navigation while preserving their useful views.
 
 **Dependencies:** shared report contracts and provenance vocabulary; source-tab/model-directory fixes already provide the baseline.

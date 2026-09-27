@@ -98,6 +98,10 @@ The dashboard has seven views:
 | Graph | Up to 12 non-router models/efforts, AA score versus blended token price |
 | Explore | Filterable model table with group, price-source, and free-status filters |
 
+**Keyboard and screen readers.** Both the dashboard and the site work without a mouse. The first **Tab** reaches "Skip to content". In a row of tabs, the **arrow keys** switch tabs and **Home**/**End** jump to the first or last. Every route is a button: **Tab** to it and press **Enter** to copy it, and a screen reader announces "Copied …". Display-only rows (AA-only, or `nearest …` hints) have no copy button. A wide table on a narrow screen scrolls inside its own box, which takes focus so the arrow keys can scroll it. The colours follow your system's light or dark setting. A missing price or score shows as *unknown* / *unscored* in muted italics, while `$0/1M` is a real zero price.
+
+To check a bundle in a browser yourself (Node 22 and Chromium needed): `npm ci --prefix tools/a11y`, then `node tools/a11y/check.mjs runs/bundles/<run_id> --shots shots`. It runs axe in both themes, does the keyboard pass and saves screenshots.
+
 AA is the ranking scale. Other benchmarks retain their own scales and provenance; scores are never averaged across them. An inherited score is an estimate, not a measurement of that destination route. Expired/version-incompatible external evidence is reference-only.
 
 `cost_source` is `aa`, `or-derived`, `inherited`, or `none`; prices are blended dollars per million tokens, **not measured per-task costs**. Unknown prices are not zero. Free rows do not enter paid score/price ratios.

@@ -4,9 +4,10 @@
 
 **Read this first.** You're continuing the roadmap plan below on branch `biscuit` of `BiscuitDoesStuff/ModelAnalysis`. Work and push directly on `biscuit`, which is the owner's working branch. Use the plan's phase order.
 
-**Where things stand (2026-09-27, end of session 2; head `bef55cb` plus this handoff):**
+**Where things stand (2026-09-27, end of session 3):**
 - **Done and live-verified:** Phase 0 (0a–d), Phase 1 (CI), Phase 2 (identity), Phase 3 (provenance), Phase 4 (evidence maintenance). Each phase's Status note below says what landed and where it differs from the original text. Live evidence is in the Status table and `docs/run-notes.md`.
-- **CI:** GitHub Actions runs `python -B tools/ci.py` on Windows and Linux × Python 3.11 and 3.13, plus a ruff job. It was green on every push this session. `tools/ci.py` runs: fixture staleness check, unit checks, 90 unittest tests, golden replay + smoke + coverage + `audit_provenance`, and the same for `recorded_*` once that fixture exists.
+- **Done offline, owner review pending (step 8):** Phase 5 (UX and accessibility). See its Status note. It changes only report rendering, so it needs no live run, but the owner's next ordinary run shows it on real data.
+- **CI:** GitHub Actions runs `python -B tools/ci.py` on Windows and Linux × Python 3.11 and 3.13, a ruff job, and (since Phase 5) an `a11y` job: axe-core, a keyboard pass and 390px checks on the golden bundle, with screenshots uploaded as an artifact. `tools/ci.py` runs: fixture staleness check, unit checks, 101 unittest tests, golden replay + smoke + coverage + `audit_provenance`, and the same for `recorded_*` once that fixture exists.
 - **Latest owner live run:** `2026-09-27_112035_c0dfcdeef530`. Smoke 0 failures, 0 identity conflicts, 3,666 observations, audit 0 orphans.
   - Every run on 09-27 after ~10:00 UTC had **partial coverage only because LLM Stats' daily quota was spent** (it resets 00:00 UTC). That's expected, not a bug.
 - **Session 2 changes that aren't obvious from the plan text:**
@@ -16,30 +17,17 @@
   - `identity.json` has the step 5 aliases `spacexai`→`xai` and `longcat`→`meituan`.
   - `research.json` uses `aa_index_versions` ranges, and inheritance entries carry `version`.
 
-**Owner items (independent of Phase 5; don't block on them):**
+**Owner items (independent of the phase work; don't block on them):**
 - **Step 4 (record fixture), after 00:00 UTC:** `run.ps1` then `python tools/record_fixture.py`, then commit `tests/fixtures`. It was refused three times on 09-27 (quota). When the push lands, check the CI run shows `== recorded replay` and `== recorded provenance audit` green.
   - If the recorded fixture shows the AA response's non-`data` keys, revisit the Phase 4 "AA API version field" item.
 - **Step R (evidence refresh), due before 2026-10-04:** the owner ran `refresh_evidence.py list` but hasn't confirmed anything yet. If they paste findings, run the `confirm`/`retire`/`version-confirm` commands for them, then commit `analysis/research.json` and `docs/run-notes.md`.
 
-**Next action: Phase 5 (UX and accessibility).** Nothing is coded yet. Design notes from reading the code:
-- **Current state:**
-  - `reports/build_report.py` `build_html` (~line 610–890) is one big function with inline CSS/JS. Tabs are `<nav><button data-t onclick=showTab>` plus `<section class='tab'>`. Copy controls are `<code class='copy' onclick="copyId(this)">` in `html_table`, `explore_table` and `_pick_card`.
-  - `reports/build_site.py` has its own `CSS`, `page()`, `copy_control()` (`<code onclick='cp(this)'>`) and `lt()` tabs, plus `routes_html()` from Phase 2.
-  - Search inputs have placeholders but no `<label>`. Tables have no `<caption>` or `th scope`.
-  - `reports/graph.js` already gives SVG points `<title>`s and the `#g-plot` `role=img`/`aria-label`. `renderDetails` builds the selected-models table (the fallback table exists). It calls `plot.replaceChildren()`, so a static `<title>`/`<desc>` must be re-added in `renderPlot`.
-- **Plan:**
-  - Create `reports/ui.py` with:
-    - colour tokens (dark = current palette; light via `prefers-color-scheme`) and a contrast function for the WCAG AA 4.5:1 unit test;
-    - `copy_button(route)` → `<button type=button aria-label="Copy route …">` plus one `aria-live` status element;
-    - `tabs()` with `role=tablist/tab/tabpanel`, `aria-selected`, `aria-controls` and arrow/Home/End keys;
-    - a labelled search input, a skip link and `<main id=main>`, `:focus-visible`, and a `≤480px` media query;
-    - a finaliser that adds `scope='col'` to bare `<th>`.
-  - Split `build_html` into one function per page.
-  - One row-view helper for the columns the dashboard and site must share: identity, free status, price, price source and evidence. Keep the existing `prov_attrs` `data-obs` cells: `tools/audit_provenance.py` parses `<td class='sc|cc' data-obs=…>`, so keep that attribute order, or update `CELL` in the audit.
-  - Tests in `tests/test_ui.py` over the golden bundle: every button named, every input/select labelled, tab/panel wiring, no copy button for display-only routes, every table captioned and every `th` scoped, token contrast, and a cross-format test that one model shows the same values in the dashboard, site and XLSX.
-  - Extend `pipeline.validate_bundle` with the structure checks.
-- **Screenshots:** Chromium is at `/opt/pw-browsers` and Node 22 at `/opt/node22/bin`. There's no Python playwright, so use a small Node script with `executablePath`. Take desktop and phone widths, light and dark, and send them to the owner (step 8).
-- **After Phase 5:** Phase 6 (retrieval, then owner step 7 with two live runs), then Phase 7.
+**Next action: Phase 6 (retrieval efficiency and observability).** Nothing is coded yet. Start with "Measure first": a shared `retrieval/http.py` with per-host counters, then the Retrieval table on the Confidence page, then ask the owner for one live run (step 7 needs two runs, a few minutes apart, and costs about 38 LLM Stats requests) before any optimisation. Replay tests use recorded fixtures and never touch the network. After Phase 6 comes Phase 7.
+
+**Phase 5 notes for later phases:**
+- New pages or tables must use `reports/ui.py`: `ui.table`/`kv_table` (captions and scoped headers), `ui.copy_button`, `ui.tabs`, `ui.filter_input` inside a `.tblock`, and `ui.page_shell`. Otherwise `validate_bundle` (`ui.check_html`) fails the run.
+- Shared model columns come from `build_report.row_view` and `score_td`/`price_td`. Those keep the `<td class='sc|cc' data-obs=…>` format that `tools/audit_provenance.py` parses.
+- Phase 6's Retrieval table on the Confidence page should be a `ui.table`. For browser checks: `npm ci --prefix tools/a11y`, `python -B tools/golden_bundle.py <dir>`, then `node tools/a11y/check.mjs <bundle> --shots <dir>`. Playwright is pinned to 1.56.1 to match the preinstalled `/opt/pw-browsers` Chromium, and Node 22 is at `/opt/node22/bin`.
 
 **Constraints that aren't obvious from the code:**
 - **Cloud sessions can't reach the provider APIs** (a proxy returns 403). Live runs happen only on the owner's Windows machine, so validate offline and ask the owner for a live run at the plan's checkpoints.
@@ -48,7 +36,7 @@
   - For big JSON files, pipe a here-string into Python (`@' ... '@ | python -`) instead of using `ConvertFrom-Json`, which fails on large files in 5.1.
   - `runs/current.json` is small, so `ConvertFrom-Json` is fine for that one.
 - **LLM Stats quota:** each live run uses about 19 of the 250 daily requests, so don't ask for repeated runs on the same day.
-- **Before every push:** `python -B tools/ci.py` (fixture staleness, unit checks, 90 unittest tests, golden replay + smoke + coverage + provenance audit) and `ruff check --select F401,F811,F821,F841 .`; CI runs both on every push. In a fresh container, first run `pip install -r requirements.lock ruff==0.15.8`.
+- **Before every push:** `python -B tools/ci.py` (fixture staleness, unit checks, 101 unittest tests, golden replay + smoke + coverage + provenance audit) and `ruff check --select F401,F811,F821,F841 .`; CI runs both on every push. In a fresh container, first run `pip install -r requirements.lock ruff==0.15.8`.
 - **Owner instruction (session 2):** don't get sidetracked debugging owner steps (for example quota refusals). Record the result and keep moving on the plan.
 - **`runs/`, `raw/` and all generated reports are gitignored.** The owner's bundles exist only on their machine.
 - **Route churn:** Phase 2 bumped `churn.RULE_VERSION` to 3, so the first live run after it only sets baselines ("no trusted baseline" is expected); the ~82 Zen `catalog_changed` events disappear from the run after that.
@@ -71,6 +59,7 @@
 | LLM Stats failure | **Closed**: daily quota spent | `quota too low (4 remaining), need ~8 for base calls; wait for UTC reset`. The guard worked as designed |
 | Phase 1: CI | **Done**: [run #1](https://github.com/BiscuitDoesStuff/ModelAnalysis/actions/runs/36312905540) green on Windows + Linux × 3.11 + 3.13, and lint | `python -B tools/ci.py` passes in clean Python 3.11 and 3.13 venvs from `requirements.lock`: 59 tests, golden replay, smoke 0 failures, golden coverage OK |
 | Your step 5: identity review | **Done** | Replay `2026-09-27_105813_e741d6e03a9d` vs `104304`: 1,129 → 1,129 entities, 0 splits/merges/renames, 0 rank/score/free/pick changes. 6 `aa-creator-unaliased` (grok420/43/45/46/47, longcat20) resolved by aliases `spacexai`→`xai`, `longcat`→`meituan` |
+| Phase 5: UX and accessibility | **Done offline**; your review is step 8 | 101 tests incl. `test_ui.py` (contrast, tab wiring, checker, zero vs unknown, dashboard/site/XLSX row match); axe 0 violations (any impact) on the golden bundle in dark/light and at 390px; keyboard pass OK; golden audit 426 cells, 0 orphans |
 | Phase 4: evidence maintenance | **Done**, live-verified (7a) | `aa_index_versions` ranges replace per-day pins; `analysis/registry.py` validation; `tools/refresh_evidence.py`; expiry warnings in pipeline, Start page, Methodology; 90 tests incl. `test_registry.py` boundaries |
 | Your step 7a: Phase 3/4 live check | **Done** | Run `2026-09-27_112035_c0dfcdeef530`: 3,666 observations, 0 contract problems, all scores/prices traced; `audit_provenance`: 1,888 cells, 0 orphans/mismatches/wrong scale/missing version/URL/stale; smoke 0 failures |
 | Phase 3: provenance | **Done**, live-verified (7a) | 82 tests incl. `test_provenance.py` (contract, scale guard, audit catches orphans/mismatches); golden audit: 409 cells, 0 orphans; CI runs the audit |
@@ -336,6 +325,14 @@ You replay your latest real snapshot through the new code into `replay-runs/` an
 
 **Done when:** keyboard-only use reaches every control; axe reports no serious or critical issues; zero and unknown look different; common rows match across views.
 
+**Status (2026-09-27): done offline** (commits `686dd45`, `0701cd6`). Differences from the text above:
+- Row headers come from `ui.kv_table` and scoped `ui.table` headers directly, so the planned "finaliser" that adds `scope` to bare `<th>` wasn't needed; `check_html` rejects any unscoped `th`.
+- `row_view` lives in `build_report.py` next to `copy_id`/`score_evidence`, and `ui.py` stays presentation-only.
+- The dashboard and the site both gained a **Free** column. The site directory and leaderboard show price with its source.
+- Table filters work on the table in the same `.tblock`, so they need no ids.
+- A wrapper that scrolls sideways (a table or the chart) is made focusable and named by the shared script only while it overflows. axe's `scrollable-region-focusable` flagged the chart, and permanent tab stops on every table would have been noisy.
+- The axe CI job is required, not optional. It also runs axe at 390px, and checks that no page scrolls sideways at that width.
+
 ---
 
 ## Phase 6: Retrieval efficiency and observability (roadmap item 5)
@@ -436,7 +433,7 @@ Run every command in PowerShell from `C:\DevProjects\ModelAnalysis`. Unless a st
 | 6b | Any run after 00:00 UTC | — | Informational: Zen `catalog_changed` noise should be gone (0 events vs ~82) | Live run checkpoint (first run after rule 3 sets baselines only) |
 | R | **Before 2026-10-04** | ~15 min | Evidence refresh with `tools/refresh_evidence.py` (see Step R) |
 | 7 | After Phase 6 | ~10 min | Live run checkpoint (Phase 6 needs two runs); Phase 3's is 7a above |
-| 8 | During Phase 5 | ~10 min | Review screenshots and try the site by keyboard |
+| 8 | **Now** (Phase 5 landed) | ~10 min | Review the screenshots sent in session 3 and try your next run's site by keyboard (see Step 8) |
 
 ### Step 1: Python version
 ```powershell
@@ -565,7 +562,7 @@ For each split, reply with one of:
 `replay-runs/` and `replay-history.sqlite` will be gitignored, so delete them once we're done.
 
 ### Step 8: UX review (Phase 5)
-I'll send screenshots at desktop and phone widths, in light and dark. Also open your current site (`runs/bundles/<run_id>/reports/<run_id>_site/index.html`) and try it without a mouse:
+Screenshots at desktop and phone widths, in light and dark, were sent in session 3; CI also uploads a fresh set as the `a11y-screenshots` artifact on every push. After your next ordinary run, open your current site (`runs/bundles/<run_id>/reports/<run_id>_site/index.html`) and try it without a mouse:
 - **Tab** reaches every link and button;
 - **Enter** copies a route;
 - the **arrow keys** switch leaderboard tabs.
