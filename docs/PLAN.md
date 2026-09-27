@@ -4,21 +4,42 @@
 
 **Read this first.** You're continuing the roadmap plan below on branch `biscuit` of `BiscuitDoesStuff/ModelAnalysis`. Work and push directly on `biscuit`, which is the owner's working branch. Use the plan's phase order.
 
-**Where things stand (2026-09-27):**
-- `d8ff832`: interrupted runs' staging now gets pruned; smoke checks the manifest and route churn.
-- `891efc7`: Phase 0b–d, meaning the dead in-memory history is removed, helpers are shared in `analysis/common.py`, and nothing is created on import.
-- Both are verified by the owner's live run `2026-09-27_095157_f0e75f9fb295`: smoke 0 failures, complete coverage.
-- The Context bullets below describe the code *before* `891efc7`. The first bullet (in-memory history) and the import side-effects are already fixed.
-- 0a (`research.json` refresh) is pushed as `1330219` and verified by live run `2026-09-27_102010_2272b1477638`: no AA pin warning, 2 inherited estimates, `ok research registry current`, smoke 0 failures. Entries expire 2026-10-04.
-- That run was **partial coverage** only because LLM Stats' daily quota was spent (`quota too low (4 remaining)`); the fetcher's guard skipped it by design. Nothing to fix.
-- **Phase 1 is pushed** (see its Status note): `requirements.lock`, `.github/workflows/ci.yml`, `tools/ci.py`, a **synthetic** golden fixture, `--as-of`/`--registry` replay flags, cross-process lock test, ruff job. Verified locally in clean 3.11 and 3.13 venvs, and **CI run #1 is green** on all 5 jobs (https://github.com/BiscuitDoesStuff/ModelAnalysis/actions/runs/36312905540).
-- **Owner decided `record`** (accepting that a trimmed real fixture publishes some AA/BenchLM/LLM Stats data in this public repo). `tools/record_fixture.py` is built and pushed; the owner records from the next complete-coverage run (step 4). The synthetic fixture stays and CI replays both. First attempt (10:43 UTC 09-27) was correctly refused (quota); retry after 00:00 UTC.
-- **Phase 2 is pushed** (see its Status note): `analysis/identity.py` + `identity.json`, churn rule 3 (report identity + Zen `created` ignored), identity conflicts in site/XLSX/MD, `tools/compare_bundles.py`, registry-slug warning. Offline only so far; the owner's step 5 replay review decides any joins/splits.
+**Where things stand (2026-09-27, end of session 2; head `bef55cb` plus this handoff):**
+- **Done and live-verified:** Phase 0 (0a–d), Phase 1 (CI), Phase 2 (identity), Phase 3 (provenance), Phase 4 (evidence maintenance). Each phase's Status note below says what landed and where it differs from the original text. Live evidence is in the Status table and `docs/run-notes.md`.
+- **CI:** GitHub Actions runs `python -B tools/ci.py` on Windows and Linux × Python 3.11 and 3.13, plus a ruff job. It was green on every push this session. `tools/ci.py` runs: fixture staleness check, unit checks, 90 unittest tests, golden replay + smoke + coverage + `audit_provenance`, and the same for `recorded_*` once that fixture exists.
+- **Latest owner live run:** `2026-09-27_112035_c0dfcdeef530`. Smoke 0 failures, 0 identity conflicts, 3,666 observations, audit 0 orphans.
+  - Every run on 09-27 after ~10:00 UTC had **partial coverage only because LLM Stats' daily quota was spent** (it resets 00:00 UTC). That's expected, not a bug.
+- **Session 2 changes that aren't obvious from the plan text:**
+  - The golden fixture is synthetic (`tests/fixtures/make_golden.py`, `--check` in CI). The owner chose `record`, so `tools/record_fixture.py` writes `tests/fixtures/recorded_*.json`, which CI replays when present.
+  - Replay flags `--as-of` and `--registry` fix the evidence day and registry.
+  - Churn `RULE_VERSION` is 3.
+  - `identity.json` has the step 5 aliases `spacexai`→`xai` and `longcat`→`meituan`.
+  - `research.json` uses `aa_index_versions` ranges, and inheritance entries carry `version`.
 
-**Next action: Phase 5 (UX and accessibility).** Phases 3 and 4 are pushed. Owner items, independent of Phase 5:
-- Step 4 after 00:00 UTC (recording the fixture; 7a's live check is done). Three tries before the reset (10:43, 11:03, 11:20 UTC 09-27) were correctly refused. When that fixture push lands, check CI shows `== recorded replay` and `== recorded provenance audit` green.
-- **Step R, the evidence refresh, is due before 2026-10-04.** It now uses `tools/refresh_evidence.py`.
- Step 4 (record fixture) is independent: when that push lands, check its CI run includes `== recorded replay` and is green. Phase 3 starts after step 5 is settled. The evidence entries expire on **2026-10-04**; refresh them with step R (`tools/refresh_evidence.py`).
+**Owner items (independent of Phase 5; don't block on them):**
+- **Step 4 (record fixture), after 00:00 UTC:** `run.ps1` then `python tools/record_fixture.py`, then commit `tests/fixtures`. It was refused three times on 09-27 (quota). When the push lands, check the CI run shows `== recorded replay` and `== recorded provenance audit` green.
+  - If the recorded fixture shows the AA response's non-`data` keys, revisit the Phase 4 "AA API version field" item.
+- **Step R (evidence refresh), due before 2026-10-04:** the owner ran `refresh_evidence.py list` but hasn't confirmed anything yet. If they paste findings, run the `confirm`/`retire`/`version-confirm` commands for them, then commit `analysis/research.json` and `docs/run-notes.md`.
+
+**Next action: Phase 5 (UX and accessibility).** Nothing is coded yet. Design notes from reading the code:
+- **Current state:**
+  - `reports/build_report.py` `build_html` (~line 610–890) is one big function with inline CSS/JS. Tabs are `<nav><button data-t onclick=showTab>` plus `<section class='tab'>`. Copy controls are `<code class='copy' onclick="copyId(this)">` in `html_table`, `explore_table` and `_pick_card`.
+  - `reports/build_site.py` has its own `CSS`, `page()`, `copy_control()` (`<code onclick='cp(this)'>`) and `lt()` tabs, plus `routes_html()` from Phase 2.
+  - Search inputs have placeholders but no `<label>`. Tables have no `<caption>` or `th scope`.
+  - `reports/graph.js` already gives SVG points `<title>`s and the `#g-plot` `role=img`/`aria-label`. `renderDetails` builds the selected-models table (the fallback table exists). It calls `plot.replaceChildren()`, so a static `<title>`/`<desc>` must be re-added in `renderPlot`.
+- **Plan:**
+  - Create `reports/ui.py` with:
+    - colour tokens (dark = current palette; light via `prefers-color-scheme`) and a contrast function for the WCAG AA 4.5:1 unit test;
+    - `copy_button(route)` → `<button type=button aria-label="Copy route …">` plus one `aria-live` status element;
+    - `tabs()` with `role=tablist/tab/tabpanel`, `aria-selected`, `aria-controls` and arrow/Home/End keys;
+    - a labelled search input, a skip link and `<main id=main>`, `:focus-visible`, and a `≤480px` media query;
+    - a finaliser that adds `scope='col'` to bare `<th>`.
+  - Split `build_html` into one function per page.
+  - One row-view helper for the columns the dashboard and site must share: identity, free status, price, price source and evidence. Keep the existing `prov_attrs` `data-obs` cells: `tools/audit_provenance.py` parses `<td class='sc|cc' data-obs=…>`, so keep that attribute order, or update `CELL` in the audit.
+  - Tests in `tests/test_ui.py` over the golden bundle: every button named, every input/select labelled, tab/panel wiring, no copy button for display-only routes, every table captioned and every `th` scoped, token contrast, and a cross-format test that one model shows the same values in the dashboard, site and XLSX.
+  - Extend `pipeline.validate_bundle` with the structure checks.
+- **Screenshots:** Chromium is at `/opt/pw-browsers` and Node 22 at `/opt/node22/bin`. There's no Python playwright, so use a small Node script with `executablePath`. Take desktop and phone widths, light and dark, and send them to the owner (step 8).
+- **After Phase 5:** Phase 6 (retrieval, then owner step 7 with two live runs), then Phase 7.
 
 **Constraints that aren't obvious from the code:**
 - **Cloud sessions can't reach the provider APIs** (a proxy returns 403). Live runs happen only on the owner's Windows machine, so validate offline and ask the owner for a live run at the plan's checkpoints.
@@ -27,7 +48,8 @@
   - For big JSON files, pipe a here-string into Python (`@' ... '@ | python -`) instead of using `ConvertFrom-Json`, which fails on large files in 5.1.
   - `runs/current.json` is small, so `ConvertFrom-Json` is fine for that one.
 - **LLM Stats quota:** each live run uses about 19 of the 250 daily requests, so don't ask for repeated runs on the same day.
-- **Before every push:** `python -B tools/ci.py` (fixture staleness, unit checks, 77 unittest tests, golden replay + smoke + coverage) and `ruff check --select F401,F811,F821,F841 .`; CI runs both on every push.
+- **Before every push:** `python -B tools/ci.py` (fixture staleness, unit checks, 90 unittest tests, golden replay + smoke + coverage + provenance audit) and `ruff check --select F401,F811,F821,F841 .`; CI runs both on every push. In a fresh container, first run `pip install -r requirements.lock ruff==0.15.8`.
+- **Owner instruction (session 2):** don't get sidetracked debugging owner steps (for example quota refusals). Record the result and keep moving on the plan.
 - **`runs/`, `raw/` and all generated reports are gitignored.** The owner's bundles exist only on their machine.
 - **Route churn:** Phase 2 bumped `churn.RULE_VERSION` to 3, so the first live run after it only sets baselines ("no trusted baseline" is expected); the ~82 Zen `catalog_changed` events disappear from the run after that.
 - **Owner preferences:**
