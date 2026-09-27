@@ -1,0 +1,16 @@
+name: sw-validate
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Workspace contract
+        shell: pwsh
+        run: pwsh -NoProfile -File .sw/sw.ps1 validate
+      - name: Whitespace
+        run: git diff --check $(git hash-object -t tree /dev/null) HEAD -- .sw .opencode AGENTS.md opencode.jsonc

@@ -1,0 +1,26 @@
+name: Task
+description: A scoped piece of approved or proposed work
+labels: ["type:task", "status:proposed"]
+body:
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Outcome
+      description: What is true when this is done?
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: Checkable evidence, one per line.
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope and exclusions
+  - type: input
+    id: owner
+    attributes:
+      label: Owner (contributor)

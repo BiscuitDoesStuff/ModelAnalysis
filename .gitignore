@@ -18,3 +18,13 @@ replay-runs/
 replay-history.sqlite*
 identity-diff.txt
 tools/a11y/node_modules/
+
+# sw:begin superworkspace
+.opencode/opencode.json
+.opencode/opencode.jsonc
+.claude/
+.sw/backup/
+.env
+.env.*
+!.env.example
+# sw:end superworkspace
