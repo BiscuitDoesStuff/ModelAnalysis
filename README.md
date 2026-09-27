@@ -81,6 +81,7 @@ Validation uses fixtures/temporary storage or existing artifacts, with no automa
 - [User guide](docs/USER_GUIDE.md): configuration, commands, report interpretation, troubleshooting.
 - [Pipeline contracts](docs/PIPELINE.md): schemas, recovery, history, extension points.
 - [Roadmap](docs/ROADMAP.md): scoped follow-up goals and acceptance criteria.
+- [Plan](docs/PLAN.md): execution plan, current status, and handoff notes.
 - [Run notes](docs/run-notes.md): dated implementation history.
 
 Snapshots are point-in-time, and per-model client compatibility is not verified. Check current provider limits and data-use terms before heavy use or redistribution.
