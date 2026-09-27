@@ -1,10 +1,11 @@
 """Build MD/XLSX/JSON and an offline HTML dashboard from an explicit analysis artifact."""
-import json, os, sys, html as _html
+import json, os, sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 from analysis.common import EFFORTS as EFFORT_TOKENS, EVIDENCE, TIERS as TIER_FLOORS, evidence_label, score_evidence_type
+from reports import ui
 
 MD_CAP = 20
 TIERS = ["max", "high", "medium"]
@@ -139,13 +140,9 @@ def reliability_html(a):
     if identity:
         body.append(f"<p>{esc(metadata_text(identity))}</p>")
     for title, headers, rows in reliability_tables(a):
-        body.append(f"<h3>{title}</h3><div class='twrap'><table><thead><tr>" +
-                    "".join(f"<th>{esc(h)}</th>" for h in headers) + "</tr></thead><tbody>")
-        for row in rows:
-            body.append("<tr>" + "".join(f"<td>{esc(metadata_text(v))}</td>" for v in row) + "</tr>")
-        if not rows:
-            body.append(f"<tr><td colspan='{len(headers)}'>No records available.</td></tr>")
-        body.append("</tbody></table></div>")
+        cells = "".join("<tr>" + "".join(f"<td>{esc(metadata_text(v))}</td>" for v in row) + "</tr>" for row in rows)
+        cells = cells or f"<tr><td colspan='{len(headers)}'>No records available.</td></tr>"
+        body.append(f"<h3>{title}</h3><div class='twrap'>" + ui.table(title, headers, cells, hide_caption=True) + "</div>")
     body.extend(f"<details><summary>Raw {esc(k)}</summary><pre>{esc(json.dumps(v, ensure_ascii=False, indent=2))}</pre></details>"
                 for k, v in reliability_data(a).items())
     return "".join(body) + "</section>"
@@ -509,8 +506,7 @@ def row_md(m):
     return f"- `{m['id']}`{v} [{g}] — score {s} — ${c}/1M{cs_tag} — ratio {r}{eff_s}{oc} — {evidence} {refs}\n"
 
 
-def esc(v):
-    return _html.escape("" if v is None else str(v))
+esc = ui.esc
 
 
 def fmt_cost(m):
@@ -522,81 +518,91 @@ def fmt_score(m):
     return "unscored" if m.get("score") is None else str(m["score"]) + suffix
 
 
-def html_table(rows, note=""):
-    h = ['<input class="search" placeholder="Filter…" oninput="filterRows(this)">']
-    if note:
-        h.append(f'<p class="note">{esc(note)}</p>')
-    h.append('<div class="twrap"><table><thead><tr><th>Model</th><th>Groups</th>'
-             '<th>Score</th><th>Cost</th><th>Ratio</th><th>Variant</th><th>Efforts</th>'
-             '<th>Route ID / selector <span class="hint">(click to copy)</span></th>'
-             '<th>Sources</th><th>Score evidence / external metrics</th></tr></thead><tbody>')
-    for m in rows:
-        oc = copy_id(m)
-        hint = copy_hint(m)
-        var_cell = esc(m.get("variant", "") or "–")
-        if m.get("variant_ambiguous"):
-            var_cell += "<br><span class='gap'>ambiguous-effort</span>"
-        elif not m.get("variant") and m.get("variant_label") == "base (unspecified effort)":
-            var_cell += "<br><span class='hint'>base, unspecified</span>"
-        if m.get("deprecated_upstream"):
-            var_cell += "<br><span class='gap'>deprecated-upstream</span>"
-        if m.get("modality_status") == "modality-unverified":
-            var_cell += "<br><span class='gap'>modality-unverified</span>"
-        eff_cell = esc(efforts_display(m) or "–")
-        cost_cell = esc(fmt_cost(m))
-        if m.get("cost_source") in ("aa", "or-derived", "inherited"):
-            cost_cell += f"<br><span class='hint'>{esc(m['cost_source'])}</span>"
-        route_cell = (f"<code class='copy' onclick=\"copyId(this)\" title='click to copy'>{esc(oc)}</code><span class='hint'>{esc(hint)}</span>" if oc
-                      else "AA-only / no callable ID" + (f"<br><span class='hint'>nearest {esc(m.get('nearest_callable',''))} display-only</span>" if m.get("nearest_callable") else ""))
-        h.append("<tr><td><code>" + esc(m["id"]) + "</code>" +
-                 (f"<br><span class='nm'>{esc(m.get('name', ''))}</span>" if m.get("name") else "") +
-                 "</td><td>" + esc(groups_display(m)) + "</td><td" + prov_attrs(m, "score") + ">" + esc(fmt_score(m)) +
-                 "</td><td" + prov_attrs(m, "price") + ">" + cost_cell + "</td><td>" +
-                 esc(m["ratio"] if m.get("ratio") is not None else "–") + "</td><td>" +
-                 var_cell + "</td><td>" +
-                 eff_cell + "</td><td>" +
-                 route_cell +
-                 "</td><td>" + esc(",".join(m.get("providers", []))) + "</td><td>" + evidence_html(m) + "</td></tr>")
-    h.append("</tbody></table></div>")
-    return "".join(h)
+FREE_LABEL = {"verified": "F verified", "provisional-l1": "F? provisional L1",
+              "provisional-l0": "F? provisional L0", "none": "not free"}
+
+
+def row_view(m):
+    """The columns every view shows for a model, as display text (dashboard, site, graph)."""
+    evidence, urls = score_evidence(m)
+    status = free_status_of(m)
+    return {"id": m["id"], "name": m.get("name") or "", "groups": groups_display(m),
+            "score": fmt_score(m), "score_known": m.get("score") is not None,
+            "price": fmt_cost(m), "price_known": m.get("cost_blended") is not None,
+            "price_source": m.get("cost_source") or "none",
+            "free_status": status, "free": FREE_LABEL[status],
+            "route": copy_id(m), "evidence": evidence, "evidence_urls": urls}
+
+
+def _value(text, known):
+    """Unknown/unscored reads differently from a real value (including zero)."""
+    return esc(text) if known else f"<span class='unk'>{esc(text)}</span>"
+
+
+def score_td(m):
+    v = row_view(m)
+    return f"<td{prov_attrs(m, 'score')}>{_value(v['score'], v['score_known'])}</td>"
+
+
+def price_td(m):
+    v = row_view(m)
+    hint = f"<br><span class='hint'>{esc(v['price_source'])}</span>" if v["price_known"] else ""
+    return f"<td{prov_attrs(m, 'price')}>{_value(v['price'], v['price_known'])}{hint}</td>"
+
+
+def route_html(m):
+    """Copy button for a callable route, else the display-only explanation (never copyable)."""
+    cp = copy_id(m)
+    if cp:
+        return ui.copy_button(cp) + f"<span class='hint'>{esc(copy_hint(m))}</span>"
+    return "AA-only / no callable ID" + (f"<br><span class='hint'>nearest {esc(m.get('nearest_callable', ''))} display-only</span>"
+                                         if m.get("nearest_callable") else "")
+
+
+MODEL_HEADERS = ["Model", "Groups", "Score", "Price", "Free", "Ratio", "Variant", "Efforts",
+                 "Route ID / selector (copy)", "Sources", "Score evidence / external metrics"]
+
+
+def _model_row(m, attrs=""):
+    var_cell = esc(m.get("variant", "") or "–")
+    if m.get("variant_ambiguous"):
+        var_cell += "<br><span class='gap'>ambiguous-effort</span>"
+    elif not m.get("variant") and m.get("variant_label") == "base (unspecified effort)":
+        var_cell += "<br><span class='hint'>base, unspecified</span>"
+    if m.get("deprecated_upstream"):
+        var_cell += "<br><span class='gap'>deprecated-upstream</span>"
+    if m.get("modality_status") == "modality-unverified":
+        var_cell += "<br><span class='gap'>modality-unverified</span>"
+    v = row_view(m)
+    return (f"<tr{attrs}><td><code>{esc(v['id'])}</code>"
+            + (f"<br><span class='nm'>{esc(v['name'])}</span>" if v["name"] else "")
+            + f"</td><td>{esc(v['groups'])}</td>{score_td(m)}{price_td(m)}<td>{esc(v['free'])}</td>"
+            f"<td>{esc(m['ratio'] if m.get('ratio') is not None else '–')}</td><td>{var_cell}</td>"
+            f"<td>{esc(efforts_display(m) or '–')}</td><td>{route_html(m)}</td>"
+            f"<td>{esc(','.join(m.get('providers', [])))}</td><td>{evidence_html(m)}</td></tr>")
+
+
+def html_table(rows, caption, note=""):
+    body = "".join(_model_row(m) for m in rows)
+    return ("<div class='tblock'>" + ui.filter_input() + (f"<p class='note'>{esc(note)}</p>" if note else "")
+            + "<div class='twrap'>" + ui.table(caption, MODEL_HEADERS, body, hide_caption=True) + "</div></div>")
 
 
 def explore_table(rows):
-    h = ['<div class="filters">'
-         '<input class="search" id="xq" placeholder="Filter text…" oninput="filterExplore()">'
-         '<select id="xgrp" onchange="filterExplore()"><option value="">Groups: all</option>'
-         '<option value="O">O only</option><option value="C">C only</option>'
-         '<option value="F">F verified</option><option value="F?">F? provisional</option></select>'
-         '<select id="xcost" onchange="filterExplore()"><option value="">Cost source: all</option>'
-         '<option>aa</option><option>or-derived</option><option>inherited</option><option>none</option></select>'
-         '<select id="xfree" onchange="filterExplore()"><option value="">Free: all</option>'
-         '<option>verified</option><option>provisional-l1</option><option>provisional-l0</option><option>none</option></select>'
-         '</div><div class="twrap"><table id="xtab"><thead><tr><th>Model</th><th>Groups</th>'
-         '<th>Score</th><th>Cost</th><th>Ratio</th><th>Variant</th><th>Efforts</th>'
-         '<th>Route ID / selector <span class="hint">(click to copy)</span></th>'
-         '<th>Sources</th><th>Score evidence</th></tr></thead><tbody>']
-    for m in rows:
-        oc = copy_id(m)
-        hint = copy_hint(m)
-        var_cell = esc(m.get("variant", "") or "–")
-        if m.get("variant_ambiguous"):
-            var_cell += "<br><span class='gap'>ambiguous-effort</span>"
-        if m.get("deprecated_upstream"):
-            var_cell += "<br><span class='gap'>deprecated-upstream</span>"
-        if m.get("modality_status") == "modality-unverified":
-            var_cell += "<br><span class='gap'>modality-unverified</span>"
-        cost_cell = esc(fmt_cost(m))
-        if m.get("cost_source") in ("aa", "or-derived", "inherited"):
-            cost_cell += f"<br><span class='hint'>{esc(m['cost_source'])}</span>"
-        route_cell = (f"<code class='copy' onclick=\"copyId(this)\" title='click to copy'>{esc(oc)}</code><span class='hint'>{esc(hint)}</span>" if oc
-                      else "AA-only / no callable ID" + (f"<br><span class='hint'>nearest {esc(m.get('nearest_callable',''))} display-only</span>" if m.get("nearest_callable") else ""))
-        h.append(f"<tr data-groups=\"{esc(groups_display(m))}\" data-cost=\"{esc(m.get('cost_source',''))}\" data-free=\"{esc(free_status_of(m))}\">"
-                 "<td><code>" + esc(m["id"]) + "</code></td><td>" + esc(groups_display(m)) + "</td><td" + prov_attrs(m, "score") + ">" + esc(fmt_score(m)) +
-                 "</td><td" + prov_attrs(m, "price") + ">" + cost_cell + "</td><td>" + esc(m["ratio"] if m.get("ratio") is not None else "–") + "</td><td>" +
-                 var_cell + "</td><td>" + esc(efforts_display(m) or "–") + "</td><td>" + route_cell +
-                 "</td><td>" + esc(",".join(m.get("providers", []))) + "</td><td>" + evidence_html(m) + "</td></tr>")
-    h.append("</tbody></table></div>")
-    return "".join(h)
+    filters = ("<div class='filters'>"
+               "<label for='xq'>Filter text</label> <input class='search' type='search' id='xq' placeholder='Filter text…' "
+               "oninput='filterExplore()' autocomplete='off'> "
+               + ui.select_input("Groups", "xgrp", [("", "all"), ("O", "O only"), ("C", "C only"),
+                                                    ("F", "F verified"), ("F?", "F? provisional")], "filterExplore()") + " "
+               + ui.select_input("Cost source", "xcost", [(x, x or "all") for x in ("", "aa", "or-derived", "inherited", "none")],
+                                 "filterExplore()") + " "
+               + ui.select_input("Free status", "xfree", [(x, x or "all") for x in ("", "verified", "provisional-l1",
+                                                                                   "provisional-l0", "none")], "filterExplore()")
+               + "</div>")
+    body = "".join(_model_row(m, f" data-groups=\"{esc(groups_display(m))}\" data-cost=\"{esc(m.get('cost_source', ''))}\""
+                                 f" data-free=\"{esc(free_status_of(m))}\"") for m in rows)
+    return filters + "<div class='twrap'>" + ui.table("All non-router models", MODEL_HEADERS, body,
+                                                      attrs=" id='xtab'", hide_caption=True) + "</div>"
 
 
 def graph_data(rows):
@@ -605,70 +611,49 @@ def graph_data(rows):
              "variant": m.get("variant") or "", "ambiguous": bool(m.get("variant_ambiguous")),
              "score": m.get("score"), "estimate": (m.get("score_source") or {}).get("kind") == "inherited-estimate",
              "cost": m.get("cost_blended"), "cost_source": m.get("cost_source") or "none",
-             "free_status": free_status_of(m), "route": copy_id(m),
+             "free_status": free_status_of(m), "free": FREE_LABEL[free_status_of(m)], "route": copy_id(m),
              "deprecated": bool(m.get("deprecated_upstream")),
              "modality_unverified": m.get("modality_status") == "modality-unverified"}
             for m in rows]
 
 
-def build_html(a, s, stamp):
+def _pick_card(title, m, extra=""):
+    if not m:
+        return f"<div class='card'><h3>{esc(title)}</h3><p>— (gap)</p></div>"
+    return (f"<div class='card'><h3>{esc(title)}</h3>"
+            f"<p><code>{esc(m['id'])}</code> ({esc(fmt_score(m))}, {esc(fmt_cost(m))})</p>"
+            f"<p>Route: {ui.copy_button(copy_id(m)) or 'AA-only / no callable ID'}</p>"
+            + (f"<p class='note'>{extra}</p>" if extra else "") + "</div>")
+
+
+def _winner_html(w):
+    vtag = f" ({esc(w['variant'])})" if w.get("variant") else ""
+    return f"<code>{esc(w['id'])}</code>{vtag}"
+
+
+def page_start(a, s, stamp, value_bands):
     th = a.get("thresholds", {"max": 50, "high": 40, "medium": 30})
-    fsc = a.get("free_status_counts", {})
-    chips = (f"<span class='chip'>Models {s['model_count']}</span>"
-             f"<span class='chip'>OCF {s['ocf_count']}</span>"
-             f"<span class='chip'>Scored {sum(1 for m in a.get('models', []) if m.get('score') is not None)}</span>"
-             f"<span class='chip'>Max {len(s['stack']['max']['rows'])}</span>"
-             f"<span class='chip'>High {len(s['stack']['high']['rows'])}</span>"
-             f"<span class='chip'>Medium {len(s['stack']['medium']['rows'])}</span>"
-             f"<span class='chip'>F verified {fsc.get('verified', sum(1 for m in a.get('models', []) if free_status_of(m) == 'verified'))}</span>"
-             f"<span class='chip'>F? prov {fsc.get('provisional-l1', 0) + fsc.get('provisional-l0', 0)}</span>"
-             f"<span class='chip dim'>Routers {len(s['routers'])} excluded</span>")
-
-    def sec(tid, title, body):
-        return f"<section id='t-{tid}' class='tab'><h2>{esc(title)}</h2>{body}</section>"
-
-    tabs = [("start", "Start here"), ("value", "Best value"),
-            ("stack", "Stack"), ("compare", "Variants"),
-            ("free", "Free"), ("graph", "Graph"), ("explore", "Explore")]
-    nav = "".join(f"<button data-t='t-{tid}' onclick='showTab(this)'>{t}</button>" for tid, t in tabs)
-
-    ov = f"<p>Snapshot <b>{esc(stamp)}</b> · thresholds {th['max']}/{th['high']}/{th['medium']} " \
-         "· free models never enter ratios, ranked by score instead. " \
-         "[F?] = provisional free (AA $0, billing unverified; exact level in JSON/XLSX). " \
-         "Variants (max/xhigh/high/medium/…) are separate ranked rows from AA; " \
-         "Select an available <code>provider/model#variant</code> in OpenCode V2 (OR efforts shown per row, *=default). " \
-         "Inherited scores are estimates from a matched effort, not measurements of the destination route. External metrics retain their own scale. " \
-         "L0 = AA $0 only, intel-only unless a native fallback ID is shown.</p>"
-    # Start-here top picks: quality / value / free, all copy-ready.
-    value_bands = build_value_bands(s["ocf_ratio"])
+    ov = (f"<p>Snapshot <b>{esc(stamp)}</b> · thresholds {th['max']}/{th['high']}/{th['medium']} "
+          "· free models never enter ratios, ranked by score instead. "
+          "[F?] = provisional free (AA $0, billing unverified; exact level in JSON/XLSX). "
+          "Variants (max/xhigh/high/medium/…) are separate ranked rows from AA; "
+          "Select an available <code>provider/model#variant</code> in OpenCode V2 (OR efforts shown per row, *=default). "
+          "Inherited scores are estimates from a matched effort, not measurements of the destination route. External metrics retain their own scale. "
+          "L0 = AA $0 only, intel-only unless a native fallback ID is shown. "
+          "<span class='unk'>unknown</span> marks a missing price or score; $0/1M is a real zero.</p>")
     top_quality = s["stack"]["max"]["rows"][0] if s["stack"]["max"]["rows"] else None
     top_value = value_bands[0]["winner"] if value_bands else None
     top_free = (s["ocf_free"] + s["ocf_provisional"][:1])[:1]
     top_free = top_free[0] if top_free else None
-
-    def _pick_card(title, m, extra=""):
-        if not m:
-            return f"<div class='card'><h3>{esc(title)}</h3><p>— (gap)</p></div>"
-        cp = copy_id(m)
-        route = (f"<code class='copy' onclick=\"copyId(this)\" title='click to copy'>{esc(cp)}</code>"
-                 if cp else "AA-only / no callable ID")
-        return (f"<div class='card'><h3>{esc(title)}</h3>"
-                f"<p><code>{esc(m['id'])}</code> ({esc(fmt_score(m))}, {esc(fmt_cost(m))})</p>"
-                f"<p>Route: {route}</p>"
-                + (f"<p class='note'>{extra}</p>" if extra else "") + "</div>")
-
     v_extra = ""
     if value_bands:
         b0 = value_bands[0]
-        v_extra = (f"Band {b0['top']:.1f}–{b0['bottom']:.1f}: saves {b0['saving_pct']}% vs priciest in band.")
+        v_extra = f"Band {b0['top']:.1f}–{b0['bottom']:.1f}: saves {b0['saving_pct']}% vs priciest in band."
     if evidence_expiry_text(a):
         warn = a["evidence_status"].get("expiring") or a["evidence_status"].get("expired")
         ov += f"<p class='{'gap' if warn else 'note'}'>{esc(evidence_expiry_text(a))}</p>"
-    ov += "<div class='cards'>"
-    ov += _pick_card("Top quality", top_quality)
-    ov += _pick_card("Best value", top_value, v_extra)
-    ov += _pick_card("Top free", top_free, "Verified/provisional free, score-ranked.")
-    ov += "</div>"
+    ov += ("<div class='cards'>" + _pick_card("Top quality", top_quality) + _pick_card("Best value", top_value, v_extra)
+           + _pick_card("Top free", top_free, "Verified/provisional free, score-ranked.") + "</div>")
     ov += reliability_html(a)
     ov += "<div class='cards'>"
     for t in TIERS:
@@ -677,58 +662,43 @@ def build_html(a, s, stamp):
         gaps = f"<span class='gap'>gaps: {','.join(s['stack'][t]['gaps'])}</span>" if s["stack"][t]["gaps"] else ""
         ov += (f"<div class='card'><h3>{TIER_LABEL[t]}</h3>"
                f"<p class='bign'>{len(rows)} models {gaps}</p>" +
-               (f"<p>Top: <code>{esc(top['id'])}</code> ({fmt_score(top)}, {fmt_cost(top)})</p>" if top else "<p>—</p>") +
+               (f"<p>Top: <code>{esc(top['id'])}</code> ({esc(fmt_score(top))}, {esc(fmt_cost(top))})</p>" if top else "<p>—</p>") +
                "</div>")
-    ov += "</div><h3>Practical winners</h3><table><thead><tr><th>Tier</th><th>OCF</th><th>OF</th><th>CF</th><th>F-only</th></tr></thead><tbody>"
+    rows = ""
     for t in TIERS:
         cells = []
         for v in ("OCF", "OF", "CF", "F"):
             p = next(x for x in s["practical"] if x["tier"] == t and x["variant"] == v)
-            if p["winner"]:
-                wv = f" ({esc(p['winner'].get('variant', ''))})" if p["winner"].get("variant") else ""
-                cells.append(f"<code>{esc(p['winner']['id'])}</code>{wv}")
-            else:
-                cells.append("<span class='gap'>gap</span>")
-        ov += f"<tr><td>{TIER_LABEL[t]}</td><td>{cells[0]}</td><td>{cells[1]}</td><td>{cells[2]}</td><td>{cells[3]}</td></tr>"
-    ov += "</tbody></table>"
+            cells.append(_winner_html(p["winner"]) if p["winner"] else "<span class='gap'>gap</span>")
+        rows += f"<tr><th scope='row'>{TIER_LABEL[t]}</th>" + "".join(f"<td>{c}</td>" for c in cells) + "</tr>"
+    ov += "</div><h3>Practical winners</h3>" + ui.table("Practical winners by tier and access variant",
+                                                        ["Tier", "OCF", "OF", "CF", "F-only"], rows, hide_caption=True)
     ov += ("<p class='note'>Full 9-section data (All/OCF Intel/Cost/Ratio, stack, practical, outliers) "
            "stays in MD/JSON/XLSX. HTML is the 7-page user view: Start here · Best value · Stack · Variants · Free · Graph · Explore.</p>")
+    return ov
 
-    def prac_winner_cell(p):
-        w = p["winner"]
-        if not w:
-            return "<span class=gap>gap</span>"
-        vid = esc(w["id"])
-        vv = w.get("variant", "") or ""
-        vtag = " (" + esc(vv) + ")" if vv else ""
-        sc = esc(fmt_score(w))
-        rt = esc(w["ratio"] if w.get("ratio") is not None else "–")
-        cp = esc(copy_id(w))
-        return f"<code>{vid}</code>{vtag} {sc} / {rt} {cp}"
 
-    def prac_runner_cell(p):
-        u = p["runner_up"]
-        if not u:
-            return "–"
-        return "<code>" + esc(u["id"]) + "</code>"
-
-    # Best value bands: close score (±band), cheapest-first.
-    value_html = ("<p>Paid OCF models grouped by score bands "
-                  f"(width ±{VALUE_BAND}). Within each band cheapest-first; winner saves vs priciest in band. "
-                  "Free never enters ratios — see Free page. "
-                  "Note: AA $/1M is variant-blind within a family (same price across efforts); "
-                  "true task cost falls with lower effort via fewer reasoning tokens.</p>")
+def page_value(s, value_bands):
+    html = ("<p>Paid OCF models grouped by score bands "
+            f"(width ±{VALUE_BAND}). Within each band cheapest-first; winner saves vs priciest in band. "
+            "Free never enters ratios — see Free page. "
+            "Note: AA $/1M is variant-blind within a family (same price across efforts); "
+            "true task cost falls with lower effort via fewer reasoning tokens.</p>")
     if not value_bands:
-        value_html += "<p class='note'>No scored+costed paid OCF rows for banding.</p>"
+        html += "<p class='note'>No scored+costed paid OCF rows for banding.</p>"
     for b in value_bands:
         w = b["winner"]
         note = (f"Winner <code>{esc(w['id'])}</code> saves {b['saving_pct']}% vs priciest "
                 f"(${esc(str(b['top_cost']))}/1M) in band." if w and b["saving_pct"] is not None else "")
-        value_html += f"<h3>Score {b['top']:.1f}–{b['bottom']:.1f}</h3><p class='note'>{note}</p>" + html_table(b["rows"])
+        title = f"Score {b['top']:.1f}–{b['bottom']:.1f}"
+        html += f"<h3>{title}</h3><p class='note'>{note}</p>" + html_table(b["rows"], f"Value band {title}")
+    return html
 
-    stack_html = ("<p class='note'>AA $/1M is variant-blind within a family — same price across max/xhigh/high/medium/low; "
-                  "Stack ranks max first on score, but lower effort is cheaper per-task via fewer reasoning tokens. "
-                  "Check Variants family table before locking max.</p>")
+
+def page_stack(s):
+    html = ("<p class='note'>AA $/1M is variant-blind within a family — same price across max/xhigh/high/medium/low; "
+            "Stack ranks max first on score, but lower effort is cheaper per-task via fewer reasoning tokens. "
+            "Check Variants family table before locking max.</p>")
     for t in TIERS:
         rows = s["stack"][t]["rows"]
         gaps = f" <span class='gap'>gaps: {','.join(s['stack'][t]['gaps'])}</span>" if s["stack"][t]["gaps"] else ""
@@ -746,131 +716,134 @@ def build_html(a, s, stamp):
                     vnote = (f"<p class='note'>Value in tier: <code>{esc(cheap['id'])}</code> "
                              f"({cheap['score']}, ${cheap['cost_blended']}/1M) saves {save}% vs "
                              f"<code>{esc(pricey['id'])}</code> within {VALUE_BAND}pts of top.</p>")
-        stack_html += f"<h3>{TIER_LABEL[t]}{gaps}</h3>" + vnote + html_table(rows)
-    prac_rows = ""
+        html += f"<h3>{TIER_LABEL[t]}{gaps}</h3>" + vnote + html_table(rows, f"Stack tier {TIER_LABEL[t]}")
+    rows = ""
     for p in s["practical"]:
-        prac_rows += ("<tr><td>" + TIER_LABEL[p["tier"]] + "</td><td>" + p["variant"] + "</td>"
-                      "<td>" + prac_winner_cell(p) + "</td>"
-                      "<td>" + prac_runner_cell(p) + "</td></tr>")
-    prac = ("<p>Winner + runner-up per tier × access variant. Copy the winner ID; AA-only rows never copy.</p>"
-            "<table><thead><tr><th>Tier</th><th>Variant</th><th>Winner</th><th>Runner-up</th></tr></thead><tbody>" +
-            prac_rows + "</tbody></table>")
-    stack_html += "<h3>Practical picks</h3>" + prac
+        w, u = p["winner"], p["runner_up"]
+        winner = (_winner_html(w) + f" {esc(fmt_score(w))} / {esc(w['ratio'] if w.get('ratio') is not None else '–')} "
+                  + (ui.copy_button(copy_id(w)) or "<span class='hint'>no callable ID</span>")) if w else "<span class='gap'>gap</span>"
+        rows += (f"<tr><th scope='row'>{TIER_LABEL[p['tier']]}</th><td>{esc(p['variant'])}</td><td>{winner}</td>"
+                 f"<td>{'<code>' + esc(u['id']) + '</code>' if u else '–'}</td></tr>")
+    html += ("<h3>Practical picks</h3><p>Winner + runner-up per tier × access variant. Copy the winner ID; AA-only rows never copy.</p>"
+             + ui.table("Practical picks", ["Tier", "Variant", "Winner", "Runner-up"], rows, hide_caption=True))
+    return html
 
-    # Variant compare: top-30 at 30+ in HTML for readability; full 42-family export in JSON/XLSX.
+
+def page_variants(s):
+    # Top-30 at 30+ in HTML for readability; full family export in JSON/XLSX.
     fams = [f for f in s.get("family_variants", []) if (f.get("peak") or 0) >= TIER_FLOORS["medium"]][:30]
-    compare_html = ("<p>Top multi-variant families at 30+ in HTML for readability; full per-family table uncapped in "
-                    "JSON <code>family_variants</code> + XLSX <code>Family_Variants</code>. "
-                    "AA-only rows (no callable ID) are intel-only — "
-                    "use the callable sibling base with <code>provider/model#variant</code>. "
-                    "Same data uncapped in JSON <code>family_variants</code> + XLSX <code>Family_Variants</code>.</p>")
+    html = ("<p>Top multi-variant families at 30+ in HTML for readability; full per-family table uncapped in "
+            "JSON <code>family_variants</code> + XLSX <code>Family_Variants</code>. "
+            "AA-only rows (no callable ID) are intel-only — "
+            "use the callable sibling base with <code>provider/model#variant</code>.</p>")
     if not fams:
-        compare_html += "<p class='note'>No multi-variant families at 30+.</p>"
+        html += "<p class='note'>No multi-variant families at 30+.</p>"
     for f in fams:
         callable_ids = [m["id"] for m in f["rows"] if copy_id(m)]
         hint = ("Callable via: " + esc(", ".join(callable_ids[:3]))) if callable_ids else "No callable route in family."
-        compare_html += f"<h3>{esc(f['family'])} (peak {f['peak']})</h3><p class='note'>{hint}</p>" + html_table(f["rows"])
+        html += (f"<h3>{esc(f['family'])} (peak {esc(f['peak'])})</h3><p class='note'>{hint}</p>"
+                 + html_table(f["rows"], f"Family {f['family']}"))
+    return html
 
-    free_html = ("<p>Verified free ranked by score, then provisional [F?] (AA $0, billing unverified). "
-                 "Check <span class='gap'>deprecated-upstream</span> / <span class='gap'>modality-unverified</span> before trusting.</p>"
-                 "<h3>Verified free by score [F? no — verified only]</h3>" + html_table(s["ocf_free"]) +
-                 "<h3>Provisional free [F?] by score</h3>" + html_table(s["ocf_provisional"]))
+
+def page_free(s):
+    html = ("<p>Verified free ranked by score, then provisional [F?] (AA $0, billing unverified). "
+            "Check <span class='gap'>deprecated-upstream</span> / <span class='gap'>modality-unverified</span> before trusting.</p>"
+            "<h3>Verified free by score [F? no — verified only]</h3>" + html_table(s["ocf_free"], "Verified free by score") +
+            "<h3>Provisional free [F?] by score</h3>" + html_table(s["ocf_provisional"], "Provisional free by score"))
     if s["ocf_free_unscored"] or s["ocf_provisional_unscored"]:
-        free_html += ("<p class='note'>Unscored free: verified "
-                      + esc(", ".join(m["id"] for m in s["ocf_free_unscored"][:20])) +
-                      " | provisional " + esc(", ".join(m["id"] for m in s["ocf_provisional_unscored"][:20])) + "</p>")
+        html += ("<p class='note'>Unscored free: verified "
+                 + esc(", ".join(m["id"] for m in s["ocf_free_unscored"][:20])) +
+                 " | provisional " + esc(", ".join(m["id"] for m in s["ocf_provisional_unscored"][:20])) + "</p>")
+    return html
 
-    explore_html = ("<p>All non-router models in one filterable table. Replaces the old All/OCF Intel/Cost/Ratio duplicates. "
-                     "Full uncapped lists stay in JSON/XLSX.</p>" + explore_table(s["all_intel"]))
 
-    graph_html = ("<p>Select up to 12 models or effort variants from this snapshot. The scatter plot shows "
-                  "AA Intelligence Index score (right = higher) versus blended token price (down = cheaper). "
-                  "$/1M is a price proxy, <b>not measured cost per task</b>; AA prices can be identical across "
-                  "effort variants despite different reasoning-token use. Estimated scores are labelled; "
-                  "[F?] is not verified free. Missing scores/prices stay in the selection list but cannot be plotted.</p>"
-                  "<div class='g-controls'><label for='g-search'>Find models</label> "
-                  "<input id='g-search' class='search' type='search' placeholder='Search ID, name or effort…' autocomplete='off'> "
-                  "<label for='g-scale'>Price scale</label> <select id='g-scale'><option value='linear'>Linear</option>"
-                  "<option value='compressed'>Compressed (log1p)</option></select> "
-                  "<button id='g-clear' type='button'>Clear selection</button> "
-                  "<span id='g-count' aria-live='polite'></span></div>"
-                  "<p class='note'>Search all non-router models; results show the first 60 matches. "
-                  "Each variant is selectable separately.</p>"
-                  "<div id='g-results' class='g-results' aria-label='Model search results'></div>"
-                  "<p id='g-message' class='note' role='status' aria-live='polite'></p>"
-                  "<div class='g-chart'><svg id='g-plot' viewBox='0 0 840 460' role='img' "
-                  "aria-label='Selected model score versus blended price, higher quality to the right, cheaper toward the bottom'></svg></div>"
-                  "<div id='g-legend' class='g-legend'></div>"
-                  "<div id='g-bars' class='g-bars'></div>"
-                  "<h3>Selected models</h3><div id='g-details' class='twrap'></div>")
+def page_graph():
+    return ("<p>Select up to 12 models or effort variants from this snapshot. The scatter plot shows "
+            "AA Intelligence Index score (right = higher) versus blended token price (down = cheaper). "
+            "$/1M is a price proxy, <b>not measured cost per task</b>; AA prices can be identical across "
+            "effort variants despite different reasoning-token use. Estimated scores are labelled; "
+            "[F?] is not verified free. Missing scores/prices stay in the selection list but cannot be plotted.</p>"
+            "<div class='g-controls'><label for='g-search'>Find models</label> "
+            "<input id='g-search' class='search' type='search' placeholder='Search ID, name or effort…' autocomplete='off'> "
+            "<label for='g-scale'>Price scale</label> <select id='g-scale'><option value='linear'>Linear</option>"
+            "<option value='compressed'>Compressed (log1p)</option></select> "
+            "<button id='g-clear' type='button'>Clear selection</button> "
+            "<span id='g-count' aria-live='polite'></span></div>"
+            "<p class='note'>Search all non-router models; results show the first 60 matches. "
+            "Each variant is selectable separately.</p>"
+            "<div id='g-results' class='g-results' role='group' aria-label='Model search results'></div>"
+            "<p id='g-message' class='note' role='status' aria-live='polite'></p>"
+            "<div class='g-chart'><svg id='g-plot' viewBox='0 0 840 460' role='img' aria-labelledby='g-plot-title g-plot-desc'>"
+            "<title id='g-plot-title'>Selected model score versus blended price</title>"
+            "<desc id='g-plot-desc'>Higher quality to the right, cheaper toward the bottom. No models selected.</desc></svg></div>"
+            "<div id='g-legend' class='g-legend'></div>"
+            "<div id='g-bars' class='g-bars'></div>"
+            "<h3>Selected models</h3><div id='g-details' class='twrap'></div>")
 
-    body = (sec("start", "Start here", ov) +
-            sec("value", "Best value — close score, big cost gap", value_html) +
-            sec("stack", "Stack — tiered callable picks", stack_html) +
-            sec("compare", "Variants — family compare", compare_html) +
-            sec("free", "Free — verified + provisional [F?]", free_html) +
-            sec("graph", "Graph — compare selected models", graph_html) +
-            sec("explore", "Explore — all models", explore_html))
+
+def page_explore(s):
+    return ("<p>All non-router models in one filterable table. Replaces the old All/OCF Intel/Cost/Ratio duplicates. "
+            "Full uncapped lists stay in JSON/XLSX.</p>" + explore_table(s["all_intel"]))
+
+
+GRAPH_CSS = (
+    ".g-controls button,.g-controls select,.g-results button,.g-details button{background:var(--control);color:var(--text);"
+    "border:1px solid var(--line);border-radius:7px;padding:6px 10px;cursor:pointer;font:inherit}"
+    ".g-controls label{font-weight:600}.g-results{display:flex;gap:6px;flex-wrap:wrap;max-height:210px;overflow-y:auto;"
+    "padding:8px;background:var(--surface);border:1px solid var(--border);border-radius:8px}"
+    ".g-results button{text-align:left;max-width:100%}.g-results button[aria-pressed='true']{background:var(--selected);color:var(--selected-text)}"
+    ".g-results button:disabled{cursor:not-allowed;border-style:dashed}"
+    ".g-chart{max-width:100%;overflow-x:auto}#g-plot{display:block;width:100%;min-width:480px;background:var(--surface);"
+    "border:1px solid var(--border);border-radius:8px}"
+    ".g-legend{display:flex;flex-wrap:wrap;gap:6px;margin:12px 0}.g-legend span{padding:3px 8px;border:1px solid var(--border);border-radius:6px}"
+    ".g-bars{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,350px),1fr));gap:12px}"
+    ".g-bars>div{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:10px}"
+    ".g-bar-row{display:grid;grid-template-columns: minmax(100px,1fr) 2fr auto;align-items:center;gap:6px;margin:6px 0;font-size:12px}"
+    ".g-bar-track{height:12px;background:var(--control);border-radius:6px}.g-bar-fill{height:12px;border-radius:6px}"
+    ".g-details button{margin-right:5px}#g-message{min-height:1.5em}"
+    "@media(max-width:600px){.g-bar-row{grid-template-columns:1fr 2fr auto}}")
+
+EXPLORE_JS = """function filterExplore(){const q=(document.getElementById('xq').value||'').toLowerCase();
+const g=document.getElementById('xgrp').value;const c=document.getElementById('xcost').value;const f=document.getElementById('xfree').value;
+document.querySelectorAll('#xtab tbody tr').forEach(tr=>{
+let ok=tr.textContent.toLowerCase().includes(q);
+if(g){const gg=tr.getAttribute('data-groups')||'';if(g==='F?'){ok=ok&&gg.includes('F?');}else if(g==='F'){ok=ok&&gg.includes('F')&&!gg.includes('F?');}else{ok=ok&&gg.includes(g);}}
+if(c){ok=ok&&(tr.getAttribute('data-cost')||'')===c;}
+if(f){ok=ok&&(tr.getAttribute('data-free')||'')===f;}
+tr.hidden=!ok;});}"""
+
+
+def build_html(a, s, stamp):
+    fsc = a.get("free_status_counts", {})
+    chips = (f"<span class='chip'>Models {s['model_count']}</span>"
+             f"<span class='chip'>OCF {s['ocf_count']}</span>"
+             f"<span class='chip'>Scored {sum(1 for m in a.get('models', []) if m.get('score') is not None)}</span>"
+             f"<span class='chip'>Max {len(s['stack']['max']['rows'])}</span>"
+             f"<span class='chip'>High {len(s['stack']['high']['rows'])}</span>"
+             f"<span class='chip'>Medium {len(s['stack']['medium']['rows'])}</span>"
+             f"<span class='chip'>F verified {fsc.get('verified', sum(1 for m in a.get('models', []) if free_status_of(m) == 'verified'))}</span>"
+             f"<span class='chip'>F? prov {fsc.get('provisional-l1', 0) + fsc.get('provisional-l0', 0)}</span>"
+             f"<span class='chip dim'>Routers {len(s['routers'])} excluded</span>")
+    value_bands = build_value_bands(s["ocf_ratio"])
+    pages = [("start", "Start here", "Start here", page_start(a, s, stamp, value_bands)),
+             ("value", "Best value", "Best value — close score, big cost gap", page_value(s, value_bands)),
+             ("stack", "Stack", "Stack — tiered callable picks", page_stack(s)),
+             ("compare", "Variants", "Variants — family compare", page_variants(s)),
+             ("free", "Free", "Free — verified + provisional [F?]", page_free(s)),
+             ("graph", "Graph", "Graph — compare selected models", page_graph()),
+             ("explore", "Explore", "Explore — all models", page_explore(s))]
+    body = ui.tabs([(f"t-{tid}", label, f"<h2>{esc(title)}</h2>{html}") for tid, label, title, html in pages],
+                   "Dashboard pages", list_class="tabbar")
 
     # Inline the script so the dated HTML works offline (including file:// URLs).
     with open(os.path.join(ROOT, "reports", "graph.js"), encoding="utf-8") as f:
         graph_script = f.read()
     graph_rows = json.dumps(graph_data(s["all_intel"]), ensure_ascii=True, separators=(",", ":"))
     graph_rows = graph_rows.replace("<", "\\u003c").replace(">", "\\u003e").replace("&", "\\u0026")
-
-    return f"""<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>ModelAnalysis — {esc(stamp)}</title>
-<style>
-body{{font-family:Segoe UI,Arial,sans-serif;background:#020617;color:#e2e8f0;margin:0;padding:24px;max-width:1200px}}
-h1{{font-size:24px}}h2{{color:#7dd3fc}}h3{{color:#bae6fd}}
-.chip{{display:inline-block;background:#082f49;border:1px solid #38bdf8;border-radius:12px;padding:3px 12px;margin:2px;font-size:13px}}
-.dim{{opacity:.6}}nav{{position:sticky;top:0;background:#020617;padding:10px 0;z-index:5}}
-nav button{{background:#1e293b;color:#e2e8f0;border:1px solid #38bdf8;border-radius:8px;padding:6px 12px;margin:2px;cursor:pointer}}
-nav button.on{{background:#0369a1}}.tab{{display:none}}.tab.on{{display:block}}
-table{{border-collapse:collapse;width:100%;font-size:13px}}th,td{{border:1px solid #334155;padding:6px 8px;text-align:left;vertical-align:top}}
-th{{background:#0f172a}}tr:nth-child(even){{background:#0b1220}}code{{color:#7dd3fc}}
-.copy{{cursor:pointer;border-bottom:1px dotted #38bdf8}}.nm{{color:#94a3b8;font-size:12px}}
-.gap{{color:#fbbf24;font-weight:700}}.note{{color:#94a3b8}}.hint{{font-weight:400;font-size:11px;color:#94a3b8}}
-.search{{width:280px;padding:6px 10px;margin:8px 0;background:#0f172a;color:#e2e8f0;border:1px solid #38bdf8;border-radius:8px}}
-.filters select{{padding:6px 10px;margin:8px 4px;background:#0f172a;color:#e2e8f0;border:1px solid #38bdf8;border-radius:8px}}
-.twrap{{overflow-x:auto}}.cards{{display:flex;gap:12px;flex-wrap:wrap}}.card{{background:#0f172a;border:1px solid #38bdf8;border-radius:10px;padding:12px 16px;min-width:200px}}
-.bign{{font-size:15px}}
-.g-controls button,.g-controls select,.g-results button,.g-details button{{background:#1e293b;color:#e2e8f0;border:1px solid #38bdf8;border-radius:7px;padding:6px 10px;cursor:pointer}}
-.g-controls label{{font-weight:600}}.g-results{{display:flex;gap:6px;flex-wrap:wrap;max-height:210px;overflow-y:auto;padding:8px;background:#0f172a;border:1px solid #334155;border-radius:8px}}
-.g-results button{{text-align:left;max-width:100%}}.g-results button[aria-pressed='true']{{background:#0369a1}}.g-results button:disabled{{opacity:.5;cursor:not-allowed}}
-.g-chart{{max-width:100%;overflow-x:auto}}#g-plot{{display:block;width:100%;min-width:480px;background:#0f172a;border:1px solid #334155;border-radius:8px}}
-.g-legend{{display:flex;flex-wrap:wrap;gap:6px;margin:12px 0}}.g-legend span{{padding:3px 8px;border:1px solid #334155;border-radius:6px}}
-.g-bars{{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,350px),1fr));gap:12px}}.g-bars>div{{background:#0f172a;border:1px solid #334155;border-radius:8px;padding:10px}}
-.g-bar-row{{display:grid;grid-template-columns: minmax(100px,1fr) 2fr auto;align-items:center;gap:6px;margin:6px 0;font-size:12px}}
-.g-bar-track{{height:12px;background:#1e293b;border-radius:6px}}.g-bar-fill{{height:12px;border-radius:6px}}
-.g-details button{{margin-right:5px}}#g-message{{min-height:1.5em}}
-@media(max-width:600px){{body{{padding:12px}}.g-bar-row{{grid-template-columns:1fr 2fr auto}}}}
-</style></head><body>
-<h1>ModelAnalysis — {esc(stamp)}</h1>
-<div>{chips}</div><nav>{nav}</nav>{body}
-<script>
-function showTab(b){{document.querySelectorAll('nav button').forEach(x=>x.classList.remove('on'));
-document.querySelectorAll('.tab').forEach(x=>x.classList.remove('on'));
-b.classList.add('on');document.getElementById(b.dataset.t).classList.add('on');}}
-function filterRows(inp){{const q=inp.value.toLowerCase();
-inp.parentElement.querySelectorAll('tbody tr').forEach(tr=>{{
-tr.style.display=tr.textContent.toLowerCase().includes(q)?'':'none';}});}}
-function filterExplore(){{const q=(document.getElementById('xq').value||'').toLowerCase();
-const g=document.getElementById('xgrp').value;const c=document.getElementById('xcost').value;const f=document.getElementById('xfree').value;
-document.querySelectorAll('#xtab tbody tr').forEach(tr=>{{
-let ok=tr.textContent.toLowerCase().includes(q);
-if(g){{const gg=tr.getAttribute('data-groups')||'';if(g==='F?'){{ok=ok&&gg.includes('F?');}}else if(g==='F'){{ok=ok&&gg.includes('F')&&!gg.includes('F?');}}else{{ok=ok&&gg.includes(g);}}}}
-if(c){{ok=ok&&(tr.getAttribute('data-cost')||'')===c;}}
-if(f){{ok=ok&&(tr.getAttribute('data-free')||'')===f;}}
-tr.style.display=ok?'':'none';}});}}
-function copyId(el){{navigator.clipboard.writeText(el.textContent).then(()=>{{
-el.style.color='#4ade80';setTimeout(()=>el.style.color='',800);}});}}
-document.querySelector('nav button').classList.add('on');
-document.querySelector('.tab').classList.add('on');
-</script><script>const graphModels = {graph_rows};
-{graph_script}
-</script></body></html>"""
+    header = f"<header><h1>ModelAnalysis — {esc(stamp)}</h1><div>{chips}</div></header>"
+    script = f"<script>{EXPLORE_JS}</script><script>const graphModels = {graph_rows};\n{graph_script}\n</script>"
+    return ui.page_shell(f"ModelAnalysis — {stamp}", body, header=header, extra_css=GRAPH_CSS, extra_script=script)
 
 
 def main(input_path=None, output_dir=None):

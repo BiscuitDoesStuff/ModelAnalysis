@@ -138,7 +138,12 @@ class SiteTests(unittest.TestCase):
         directory = Document((self.site / "models.html").read_text(encoding="utf-8"))
         links = [n for n in directory.nodes if n.tag == "a" and n.attrs.get("href", "").startswith("models/")]
         self.assertEqual({n.text for n in links}, {m["id"] for m in expected})
-        self.assertTrue(any(n.attrs.get("oninput") == "f(this,'t-models')" for n in directory.nodes))
+        # The directory filter sits in the same .tblock as the full table, so it searches every model.
+        search = next(n for n in directory.nodes if n.tag == "input" and "data-filter" in n.attrs)
+        block = search
+        while not block.has_class("tblock"):
+            block = block.parent
+        self.assertTrue(self.is_descendant(directory.by_id("t-models"), block))
         for path in self.site.rglob("*.html"):
             doc = Document(path.read_text(encoding="utf-8"))
             self.assertEqual(doc.errors, [], str(path))
@@ -148,7 +153,7 @@ class SiteTests(unittest.TestCase):
                 href = urlsplit(node.attrs["href"])
                 if href.scheme or href.netloc:
                     continue
-                target = path.parent / unquote(href.path)
+                target = path.parent / unquote(href.path) if href.path else path
                 self.assertTrue(target.is_file(), f"{path.name}: {node.attrs['href']}")
         self.assertFalse((self.site / "models" / "router.html").exists())
 
@@ -165,9 +170,12 @@ class SiteTests(unittest.TestCase):
         self.assertIs(inner.parent, doc.by_id("l-b"))
         self.assertIs(doc.by_id("b-all").parent, inner)
         for node in doc.nodes:
-            if node.tag == "button" and "lt(this," in node.attrs.get("onclick", ""):
-                target = re.search(r"'([^']+)'", node.attrs["onclick"])[1]
-                self.assertIs(doc.by_id(target).parent, node.parent.parent)
+            if node.attrs.get("role") == "tab":
+                panel = doc.by_id(node.attrs["aria-controls"])
+                self.assertEqual(panel.attrs.get("role"), "tabpanel")
+                self.assertEqual(panel.attrs.get("aria-labelledby"), node.attrs["id"])
+                self.assertIs(panel.parent, node.parent.parent)
+                self.assertEqual(node.attrs["aria-selected"] == "true", "hidden" not in panel.attrs)
         supported = doc.by_id("t-b")
         self.assertEqual(sum(n.tag == "tr" for n in next(n for n in supported.children if n.tag == "tbody").children), 100)
         self.assertIn("Model 110", supported.text)
@@ -175,8 +183,7 @@ class SiteTests(unittest.TestCase):
         self.assertNotIn("estimated", supported.text)
         self.assertIn("Showing 100 of 215 supported models", doc.by_id("b-sup").text)
         self.assertIn("Showing 100 of 325 models", doc.by_id("b-all").text)
-        self.assertIn("Array.from(group.children)", text)
-        self.assertNotIn("document.querySelectorAll('.ltab')", text)
+        self.assertIn("querySelectorAll(':scope > [role=tab]')", text)
 
     def test_cross_view_model_links_and_callable_controls(self):
         allowed = {build_report.copy_id(m) for m in self.a["models"]} - {""}

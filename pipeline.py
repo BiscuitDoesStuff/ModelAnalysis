@@ -75,15 +75,27 @@ def validate_bundle(bundle, run_id):
         if not p.is_file() or not p.stat().st_size:
             raise ValueError("Missing report artifact: " + p.name)
     a = json.loads(analysis.read_text(encoding="utf-8"))
-    from reports.build_site import model_filename
+    from reports.build_site import model_filename, route_copy_id
+    from reports.build_report import copy_id
+    from reports.ui import check_html
     wanted = {model_filename(m["slug"]) for m in a["models"] if not m.get("router")}
     actual = {p.name for p in (site / "models").glob("*.html")}
     if wanted != actual:
         raise ValueError("Model-page coverage mismatch")
+    # Accessibility structure: named buttons, labelled fields, tab wiring, captioned and
+    # scoped tables, and copy buttons only for callable routes (never display-only ones).
+    callable_routes = {copy_id(m) for m in a["models"]} | {route_copy_id(r) for m in a["models"] for r in m.get("routes") or []}
+    dashboard = bundle / "reports" / f"{run_id}_report.html"
     parsed = {}
-    for p in site.rglob("*.html"):
+    for p in [dashboard, *site.rglob("*.html")]:
+        text = p.read_text(encoding="utf-8")
+        problems = check_html(text, callable_routes - {""})
+        if problems:
+            raise ValueError(f"Accessibility structure in {p.name}: {problems[0]}")
+        if p == dashboard:
+            continue
         parser = Links()
-        parser.feed(p.read_text(encoding="utf-8"))
+        parser.feed(text)
         parsed[p.resolve()] = parser
     for p, parser in parsed.items():
         for href in parser.links:

@@ -71,6 +71,12 @@
   function renderPlot(models) {
     plot.replaceChildren();
     const valid = models.filter(m => Number.isFinite(m.score) && Number.isFinite(m.cost));
+    // Name and describe the chart again after clearing it (role=img, aria-labelledby title + desc).
+    svg('title', {id: 'g-plot-title'}, 'Selected model score versus blended price');
+    svg('desc', {id: 'g-plot-desc'}, 'Higher quality to the right, cheaper toward the bottom. ' +
+      (models.length ? valid.length + ' of ' + models.length + ' selected models plotted' +
+        (valid.length < models.length ? '; the rest lack a score or price' : '') +
+        '. Values are in the Selected models table.' : 'No models selected.'));
     const left = 79, right = 814, top = 30, bottom = 395;
     const maxScore = Math.max(60, ...valid.map(m => m.score));
     const maxCost = Math.max(1, ...valid.map(m => m.cost));
@@ -80,16 +86,16 @@
     for (let tick = 0; tick <= 4; tick++) {
       const x = left + tick * (right - left) / 4;
       const y = bottom - tick * (bottom - top) / 4;
-      svg('line', {x1: x, y1: top, x2: x, y2: bottom, stroke: '#334155'});
-      svg('line', {x1: left, y1: y, x2: right, y2: y, stroke: '#334155'});
-      svg('text', {x: x, y: bottom + 23, fill: '#cbd5e1', 'text-anchor': 'middle', 'font-size': 13}, number(tick * maxScore / 4));
-      svg('text', {x: left - 8, y: y + 4, fill: '#cbd5e1', 'text-anchor': 'end', 'font-size': 13}, '$' + number(costTick(tick / 4)));
+      svg('line', {x1: x, y1: top, x2: x, y2: bottom, style: 'stroke:var(--border)'});
+      svg('line', {x1: left, y1: y, x2: right, y2: y, style: 'stroke:var(--border)'});
+      svg('text', {x: x, y: bottom + 23, style: 'fill:var(--muted)', 'text-anchor': 'middle', 'font-size': 13}, number(tick * maxScore / 4));
+      svg('text', {x: left - 8, y: y + 4, style: 'fill:var(--muted)', 'text-anchor': 'end', 'font-size': 13}, '$' + number(costTick(tick / 4)));
     }
-    svg('text', {x: (left + right) / 2, y: 447, fill: '#e2e8f0', 'text-anchor': 'middle', 'font-size': 15}, 'AA Intelligence Index (higher →)');
-    svg('text', {x: 15, y: (top + bottom) / 2, fill: '#e2e8f0', 'text-anchor': 'middle', 'font-size': 15,
+    svg('text', {x: (left + right) / 2, y: 447, style: 'fill:var(--text)', 'text-anchor': 'middle', 'font-size': 15}, 'AA Intelligence Index (higher →)');
+    svg('text', {x: 15, y: (top + bottom) / 2, style: 'fill:var(--text)', 'text-anchor': 'middle', 'font-size': 15,
       transform: 'rotate(-90 15 ' + ((top + bottom) / 2) + ')'}, 'Blended $/1M tokens (cheaper ↓)');
     if (!valid.length) {
-      svg('text', {x: 440, y: 205, fill: '#94a3b8', 'text-anchor': 'middle', 'font-size': 16},
+      svg('text', {x: 440, y: 205, style: 'fill:var(--muted)', 'text-anchor': 'middle', 'font-size': 16},
         models.length ? 'No selected models have both score and price.' : 'Select models above to draw the graph.');
     }
     for (const m of valid) {
@@ -141,10 +147,13 @@
       return;
     }
     const table = element('table');
+    table.appendChild(element('caption', 'Selected models: values behind the graph', 'sr-only'));
     const head = element('thead');
     const header = element('tr');
-    for (const col of ['Model', 'Score', 'Blended $/1M', 'Free status', 'Route ID / selector', '']) {
-      header.appendChild(element('th', col));
+    for (const col of ['Model', 'Score', 'Blended $/1M', 'Free status', 'Route ID / selector', 'Actions']) {
+      const th = element('th', col);
+      th.scope = 'col';
+      header.appendChild(th);
     }
     head.appendChild(header);
     const body = element('tbody');
@@ -157,13 +166,13 @@
       row.appendChild(element('td', label(m) + flags));
       row.appendChild(element('td', number(m.score) + (m.estimate ? ' (estimate)' : '')));
       row.appendChild(element('td', price(m.cost) + ' [' + m.cost_source + ']'));
-      row.appendChild(element('td', m.free_status === 'verified' ? 'F verified' :
-        m.free_status.startsWith('provisional') ? 'F? ' + m.free_status : 'not free'));
+      row.appendChild(element('td', m.free));
       row.appendChild(element('td', m.route || 'AA-only / no callable ID'));
       const actions = element('td');
       if (m.route) {
         const copy = element('button', 'Copy ID');
         copy.type = 'button';
+        copy.setAttribute('aria-label', 'Copy route ' + m.route);
         copy.addEventListener('click', async () => {
           try {
             await navigator.clipboard.writeText(m.route);
