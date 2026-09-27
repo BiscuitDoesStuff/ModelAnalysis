@@ -1,0 +1,12 @@
+{
+  "project-leader":        { "tier": "session",   "access": "full",     "claudeTools": "" },
+  "project-plan":          { "tier": "reasoning", "access": "readonly", "claudeTools": "Read, Grep, Glob, Bash, WebFetch, WebSearch, Skill" },
+  "project-architect":     { "tier": "reasoning", "access": "readonly", "claudeTools": "Read, Grep, Glob, Bash, Skill" },
+  "project-developer":     { "tier": "standard",  "access": "full",     "claudeTools": "" },
+  "project-worker":        { "tier": "standard",  "access": "worker",   "claudeTools": "" },
+  "project-build":         { "tier": "standard",  "access": "full",     "claudeTools": "" },
+  "project-documentation": { "tier": "standard",  "access": "markdown", "claudeTools": "Read, Grep, Glob, Bash, Edit, Write, Skill" },
+  "project-research":      { "tier": "reasoning", "access": "markdown", "claudeTools": "Read, Grep, Glob, Bash, Edit, Write, WebFetch, WebSearch, Skill" },
+  "project-review":        { "tier": "reasoning", "access": "readonly", "claudeTools": "Read, Grep, Glob, Bash, Skill" },
+  "explore":               { "tier": "fast",      "access": "builtin",  "claudeTools": "" }
+}

@@ -1,0 +1,7 @@
+{
+  "description": "Any stack. Validation commands are discovered from the repository.",
+  "editDeny": [],
+  "lfs": [],
+  "watcherIgnore": ["node_modules/**", "dist/**", "build/**", ".venv/**"],
+  "skills": []
+}

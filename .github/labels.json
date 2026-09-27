@@ -1,0 +1,9 @@
+[
+  { "name": "type:task", "color": "1d76db", "description": "Scoped work item" },
+  { "name": "type:bug", "color": "d73a4a", "description": "Broken behavior" },
+  { "name": "type:decision", "color": "5319e7", "description": "Needs a human decision" },
+  { "name": "status:proposed", "color": "fbca04", "description": "Not yet approved" },
+  { "name": "status:approved", "color": "0e8a16", "description": "Approved to implement" },
+  { "name": "status:blocked", "color": "b60205", "description": "Waiting on a dependency or decision" },
+  { "name": "agent", "color": "c5def5", "description": "Opened or updated by an AI agent" }
+]
