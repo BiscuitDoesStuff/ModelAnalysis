@@ -57,7 +57,7 @@ After Phase 6 comes Phase 7.
   - Offline experiments use `pipeline.py --snapshot … --state-dir replay-runs --db replay-history.sqlite` (gitignored) or `tools/golden_bundle.py`.
 - **API keys in child processes.** A `powershell -File` child started from an automation shell may not see keys set at Windows User scope. Before launching `run.ps1` from a tool, inject each needed key, for example `$env:LLM_STATS_API_KEY = [System.Environment]::GetEnvironmentVariable('LLM_STATS_API_KEY','User')`. Do the same for `ANTHROPIC_API_KEY` and any other key the run needs; see run-notes 2026-09-26.
 - **Keep `.ps1` files UTF-8 with BOM.** Windows PowerShell 5.1 misreads them without it (run-notes 2026-09-26).
-- **Before every push:** `python -B tools/ci.py` and `ruff check --select F401,F811,F821,F841 .`; CI runs both on every push. If they aren't installed: `python -m pip install -r requirements.lock ruff==0.15.8`.
+- **Before every push:** `python -B tools/ci.py` and `git diff --check`; CI additionally runs ruff on every push. Owner decision 2026-09-27: no local ruff (uninstalled; CI is the ruff arbiter). If the lock deps aren't installed: `python -m pip install -r requirements.lock`.
 - **Browser a11y check (optional locally; CI always runs it):** needs Node 22.
   - Run `npm ci --prefix tools/a11y` and `npm exec --prefix tools/a11y -- playwright install chromium` (Playwright 1.56.1).
   - Then `python -B tools/golden_bundle.py <dir>` and `node tools/a11y/check.mjs <bundle> --shots <dir>`.
@@ -461,7 +461,7 @@ Run every command in PowerShell from `C:\DevProjects\ModelAnalysis`. Start with 
 | 5 | — | — | ✅ Done: 0 splits; 2 aliases added |
 | 6 | — | — | ✅ Done: run `110352_9cb7c4c6bb66`, 0 conflicts, smoke 0 failures |
 | 6b | Any run after 00:00 UTC | — | Informational: Zen `catalog_changed` noise should be gone (0 events vs ~82) | Live run checkpoint (first run after rule 3 sets baselines only) |
-| R | **Before 2026-10-04** | ~15 min | Evidence refresh with `tools/refresh_evidence.py` (see Step R) |
+| R | **Before 2026-10-04** | ~15 min | Evidence refresh with `tools/refresh_evidence.py` (see Step R). **Deferred by owner 2026-09-27 to a later plan** — entries lose eligibility by rule once expired |
 | 7 | After Phase 6 | ~10 min | Live run checkpoint (Phase 6 needs two runs); Phase 3's is 7a above |
 | 8 | **Now** (Phase 5 landed) | ~10 min | Review the screenshots sent in session 3 and try your next run's site by keyboard (see Step 8) |
 
