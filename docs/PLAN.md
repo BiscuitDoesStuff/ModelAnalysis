@@ -16,7 +16,7 @@
 - **Phase 2 is pushed** (see its Status note): `analysis/identity.py` + `identity.json`, churn rule 3 (report identity + Zen `created` ignored), identity conflicts in site/XLSX/MD, `tools/compare_bundles.py`, registry-slug warning. Offline only so far; the owner's step 5 replay review decides any joins/splits.
 
 **Next action: Phase 5 (UX and accessibility).** Phases 3 and 4 are pushed. Owner items, independent of Phase 5:
-- Step 4 + 7a after 00:00 UTC (live check of Phases 3 and 4, and recording the fixture). When that fixture push lands, check CI shows `== recorded replay` and `== recorded provenance audit` green.
+- Step 4 after 00:00 UTC (recording the fixture; 7a's live check is done). Three tries before the reset (10:43, 11:03, 11:20 UTC 09-27) were correctly refused. When that fixture push lands, check CI shows `== recorded replay` and `== recorded provenance audit` green.
 - **Step R, the evidence refresh, is due before 2026-10-04.** It now uses `tools/refresh_evidence.py`.
  Step 4 (record fixture) is independent: when that push lands, check its CI run includes `== recorded replay` and is green. Phase 3 starts after step 5 is settled. The evidence entries expire on **2026-10-04**; refresh them with step R (`tools/refresh_evidence.py`).
 
@@ -49,8 +49,9 @@
 | LLM Stats failure | **Closed**: daily quota spent | `quota too low (4 remaining), need ~8 for base calls; wait for UTC reset`. The guard worked as designed |
 | Phase 1: CI | **Done**: [run #1](https://github.com/BiscuitDoesStuff/ModelAnalysis/actions/runs/36312905540) green on Windows + Linux × 3.11 + 3.13, and lint | `python -B tools/ci.py` passes in clean Python 3.11 and 3.13 venvs from `requirements.lock`: 59 tests, golden replay, smoke 0 failures, golden coverage OK |
 | Your step 5: identity review | **Done** | Replay `2026-09-27_105813_e741d6e03a9d` vs `104304`: 1,129 → 1,129 entities, 0 splits/merges/renames, 0 rank/score/free/pick changes. 6 `aa-creator-unaliased` (grok420/43/45/46/47, longcat20) resolved by aliases `spacexai`→`xai`, `longcat`→`meituan` |
-| Phase 4: evidence maintenance | **Pushed**; live check in step 4+7a | `aa_index_versions` ranges replace per-day pins; `analysis/registry.py` validation; `tools/refresh_evidence.py`; expiry warnings in pipeline, Start page, Methodology; 90 tests incl. `test_registry.py` boundaries |
-| Phase 3: provenance | **Pushed**; live check in step 4+7a | 82 tests incl. `test_provenance.py` (contract, scale guard, audit catches orphans/mismatches); golden audit: 409 cells, 0 orphans; CI runs the audit |
+| Phase 4: evidence maintenance | **Done**, live-verified (7a) | `aa_index_versions` ranges replace per-day pins; `analysis/registry.py` validation; `tools/refresh_evidence.py`; expiry warnings in pipeline, Start page, Methodology; 90 tests incl. `test_registry.py` boundaries |
+| Your step 7a: Phase 3/4 live check | **Done** | Run `2026-09-27_112035_c0dfcdeef530`: 3,666 observations, 0 contract problems, all scores/prices traced; `audit_provenance`: 1,888 cells, 0 orphans/mismatches/wrong scale/missing version/URL/stale; smoke 0 failures |
+| Phase 3: provenance | **Done**, live-verified (7a) | 82 tests incl. `test_provenance.py` (contract, scale guard, audit catches orphans/mismatches); golden audit: 409 cells, 0 orphans; CI runs the audit |
 | Phase 2: identity | **Done**, live-verified in step 6 |
 | Your step 6: live run | **Done** | Run `2026-09-27_110352_9cb7c4c6bb66`: 0 identity conflicts, each route owned once, XLSX 16 tabs, churn 0 events (rule-3 baseline run), smoke 0 failures. Partial coverage only from LLM Stats quota | 77 tests incl. `test_identity.py` (all plan fixtures), `test_compare_bundles.py`, Zen fingerprint test; CI green |
 | Fixture source | **Decided: record** | `tools/record_fixture.py` pushed; synthetic fixture kept alongside. Your step 4 records the real one |
@@ -235,7 +236,7 @@ You replay your latest real snapshot through the new code into `replay-runs/` an
 
 ## Phase 3: Benchmark provenance and scale audit (roadmap item 2)
 
-**Status (2026-09-27): pushed; live check pending (step 4+7a).** Built as below, with these specifics:
+**Status (2026-09-27): done; live-verified in step 7a (1,888 cells, 0 orphans).** Built as below, with these specifics:
 - **Saved observations:** the analysis JSON now has `observations` (with `obs_id`); the slim report doesn't. Each model carries `provenance.score`/`provenance.price` = `{obs_id, source, version, observed_at, evidence}`, a compact reference for rendering tooltips. The full row, with URL, unit and expiry, stays in the analysis.
 - **Real timestamps:** `observed_at` is the source's `fetched_at`; website hints use the cached page's original `fetched_at`; registry rows use `checked_at`/`expires_at`.
 - **Real sources:** price sources are now `aa`, `openrouter` or `registry`, with `detail` keeping `cost_source`.
@@ -259,7 +260,7 @@ You replay your latest real snapshot through the new code into `replay-runs/` an
 
 ## Phase 4: Evidence and benchmark-version maintenance (roadmap item 4)
 
-**Status (2026-09-27): pushed; live check pending (step 4+7a).** Built as below, with these specifics:
+**Status (2026-09-27): done; live-verified in step 7a.** Built as below, with these specifics:
 - **Version ranges:** `research.json` has `aa_index_versions` (one open range, 4.3.2 from 2026-09-25, `source_url` = the AA release page where you read it). Old per-day `snapshot_benchmarks` still resolve, with a "migrate" warning, for older registry copies such as fixtures. Inheritance entries now carry `version`, so an AA version change retires them by rule, like score entries.
 - **AA API version field:** not implemented yet. The response keys aren't known offline; revisit once the recorded fixture shows the AA response's non-`data` keys.
 - **Validation:** `analysis/registry.py` checks required fields, ISO dates, `checked_at ≤ expires_at`, URLs, `variant ∈ supported_efforts`, benchmarks in `scales.BENCHMARKS`, non-overlapping ranges and duplicates. `enrich` raises on errors, so the current report stays. Unmatched slugs are warnings: `registry_missing_targets`, which fails the fixture coverage check. `identity.json` has its own validator (Phase 2).
@@ -407,7 +408,7 @@ Run every command in PowerShell from `C:\DevProjects\ModelAnalysis`. Unless a st
 | 3 | — | — | ✅ Done: live run `095157_f0e75f9fb295`, smoke 0 failures |
 | 3b | — | — | Live run checkpoint: expect no "no AA benchmark pinned" warning, 2 inherited estimates, `ok research registry current` |
 | 3c | — | — | ✅ Done: LLM Stats failure was the daily quota |
-| 4 + 7a | **After 00:00 UTC** (LLM Stats quota reset) | ~15 min | One `run.ps1`: smoke + `audit_provenance.py` on it (Phase 3 live check), then record and commit the real fixture. Earlier step 4 tries (10:43, 11:03 UTC 09-27) were correctly refused (quota) |
+| 4 | **After 00:00 UTC** (LLM Stats quota reset) | ~10 min | `run.ps1`, then `record_fixture.py`, commit `tests/fixtures`. (7a ✅ done in run `112035`.) Tries at 10:43, 11:03, 11:20 UTC 09-27 were correctly refused (quota) |
 | 5 | — | — | ✅ Done: 0 splits; 2 aliases added |
 | 6 | — | — | ✅ Done: run `110352_9cb7c4c6bb66`, 0 conflicts, smoke 0 failures |
 | 6b | Any run after 00:00 UTC | — | Informational: Zen `catalog_changed` noise should be gone (0 events vs ~82) | Live run checkpoint (first run after rule 3 sets baselines only) |
