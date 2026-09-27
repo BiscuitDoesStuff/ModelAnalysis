@@ -12,9 +12,9 @@
 - 0a (`research.json` refresh) is pushed as `1330219` and verified by live run `2026-09-27_102010_2272b1477638`: no AA pin warning, 2 inherited estimates, `ok research registry current`, smoke 0 failures. Entries expire 2026-10-04.
 - That run was **partial coverage** only because LLM Stats' daily quota was spent (`quota too low (4 remaining)`); the fetcher's guard skipped it by design. Nothing to fix.
 - **Phase 1 is pushed** (see its Status note): `requirements.lock`, `.github/workflows/ci.yml`, `tools/ci.py`, a **synthetic** golden fixture, `--as-of`/`--registry` replay flags, cross-process lock test, ruff job. Verified locally in clean 3.11 and 3.13 venvs, and **CI run #1 is green** on all 5 jobs (https://github.com/BiscuitDoesStuff/ModelAnalysis/actions/runs/36312905540).
-- **Open decision for the owner:** the repo is public, so the planned real-data fixture (`tools/record_fixture.py`) would publish trimmed AA/BenchLM/LLM Stats data; LLM Stats' terms forbid redistribution. Asked whether to stay synthetic-only (recommended) or build the recorder anyway. `record_fixture.py` is not built until they answer.
+- **Owner decided `record`** (accepting that a trimmed real fixture publishes some AA/BenchLM/LLM Stats data in this public repo). `tools/record_fixture.py` is built and pushed; the owner records from the next complete-coverage run (step 4). The synthetic fixture stays and CI replays both.
 
-**Next action: get the owner's fixture decision (synthetic or record), then start Phase 2 (identity).** Phase 2 doesn't depend on that answer. The evidence entries now expire on **2026-10-04**; the next refresh is due before then (repeat step 2, then the 0a pattern).
+**Next action: start Phase 2 (identity).** In parallel the owner does step 4 (record the fixture); when that push lands, check its CI run includes `== recorded replay` and is green. The evidence entries now expire on **2026-10-04**; the next refresh is due before then (repeat step 2, then the 0a pattern).
 
 **Constraints that aren't obvious from the code:**
 - **Cloud sessions can't reach the provider APIs** (a proxy returns 403). Live runs happen only on the owner's Windows machine, so validate offline and ask the owner for a live run at the plan's checkpoints.
@@ -48,7 +48,7 @@
 | Your step 3b: live run | **Done** | Run `2026-09-27_102010_2272b1477638`: no AA pin warning, 2 inherited estimates, `ok research registry current`, smoke 0 failures, 82 churn events / 0 alerts. But **partial coverage**: `llmstats: failed (0)`, and canonical models dropped to 1,131 from 1,136 |
 | LLM Stats failure | **Closed**: daily quota spent | `quota too low (4 remaining), need ~8 for base calls; wait for UTC reset`. The guard worked as designed |
 | Phase 1: CI | **Done**: [run #1](https://github.com/BiscuitDoesStuff/ModelAnalysis/actions/runs/36312905540) green on Windows + Linux × 3.11 + 3.13, and lint | `python -B tools/ci.py` passes in clean Python 3.11 and 3.13 venvs from `requirements.lock`: 59 tests, golden replay, smoke 0 failures, golden coverage OK |
-| Fixture source | **Your decision** | Synthetic-only (recommended; public repo) or real trimmed data via `tools/record_fixture.py` |
+| Fixture source | **Decided: record** | `tools/record_fixture.py` pushed; synthetic fixture kept alongside. Your step 4 records the real one |
 
 ## Context
 
@@ -132,7 +132,15 @@ Changes to `analysis/research.json`:
 ## Phase 1: CI and reproducible installs (roadmap item 6; before the big refactors)
 
 **Status (2026-09-27): done; CI run #1 green.** What landed and how it differs from the list below:
-- **Golden fixture is synthetic** (`tests/fixtures/make_golden.py` writes `golden_snapshot.json`, `golden_websites.json`, `golden_research.json`; `--check` fails CI when they're stale). Invented names, prices and scores; it covers every case listed below, and `tools/ci.py` fails if a replay stops producing any of them (`golden_coverage`). Reason: the repo is public, and a real trimmed fixture would republish AA/BenchLM/LLM Stats data (LLM Stats' terms forbid redistribution). `tools/record_fixture.py` waits for the owner's decision.
+- **Two fixtures.** The synthetic one (`tests/fixtures/make_golden.py` writes `golden_*.json`; `--check` fails CI when stale) always runs: invented names, prices and scores covering every case listed below, and `tools/ci.py` fails if a replay stops producing any of them (`golden_coverage`). The **recorded** one (`recorded_*.json`) comes from `tools/record_fixture.py` on a real bundle and runs once committed. It uses the file prefix `recorded_` so it never overwrites the synthetic files, and a slightly relaxed coverage check: at least 1 inherited estimate, and no registry AA score or `claudeopus5medium` required, since live data no longer guarantees those.
+- **`tools/record_fixture.py`:**
+  - It refuses bundles without complete coverage.
+  - It keeps rows for a selected set of models: registry targets, free-status samples, stack and practical picks, variants, benchmark joins, bench-only rows and a router. Everything is filtered by canonical key.
+  - It drops OpenRouter descriptions and cuts BenchLM pages to 1,500 characters.
+  - It redacts resolved credential values and key-like query params, then runs a secret scan that reports JSON paths only, never values.
+  - It copies `research.json` as `recorded_research.json` and pins the bundle's evidence day.
+  - It replays the result, runs smoke and the coverage check, and only writes if all of that passes.
+  - Tests: `tests/test_record_fixture.py` (trimming, redaction, secret block, partial refusal).
 - **Replay flags `--as-of` and `--registry`** (replay-only; analysis accepts them too). The fixture pins its evidence day and registry, so CI results don't change when `research.json` entries expire or get refreshed. A test proves the pin: 2 inherited estimates on the fixture day, 0 one day after its registry expires.
 - **`tools/ci.py`** is the single command CI runs and the one to run locally.
 - **Lock test:** `test_writer_lock_excludes_other_process` holds the lock in a child process (msvcrt on Windows runners, fcntl on Linux).
@@ -369,7 +377,7 @@ Run every command in PowerShell from `C:\DevProjects\ModelAnalysis`. Unless a st
 | 3 | — | — | ✅ Done: live run `095157_f0e75f9fb295`, smoke 0 failures |
 | 3b | — | — | Live run checkpoint: expect no "no AA benchmark pinned" warning, 2 inherited estimates, `ok research registry current` |
 | 3c | — | — | ✅ Done: LLM Stats failure was the daily quota |
-| 4 | Now | ~1 min | Answer the fixture question (CI is already confirmed green) |
+| 4 | After your next complete-coverage run (LLM Stats quota resets 00:00 UTC) | ~15 min | Record and commit the real fixture |
 | 5 | After I push identity (Phase 2) | ~20 min | Replay and review the identity diff |
 | 6 | After Phase 2 merges | ~10 min | Live run checkpoint |
 | 7 | After Phases 3 and 6 | ~10 min each | Live run checkpoints (Phase 6 needs two runs) |
@@ -438,18 +446,22 @@ Notes:
 - **After Phase 2:** expect "no trusted baseline" churn on the first run. That's the rule-version bump, not a bug.
 - **After Phase 6:** run twice, a few minutes apart, and paste the Retrieval table from the site's Confidence page for both runs. The second run shows the cache and conditional-request savings.
 
-### Step 4: CI check (Phase 1)
-CI is already confirmed green ([run #1](https://github.com/BiscuitDoesStuff/ModelAnalysis/actions/runs/36312905540)), so there's nothing to check on GitHub. Every push to `biscuit` now runs it; the Actions tab shows the results.
-
-To reproduce CI locally (offline, no quota):
+### Step 4: Record the real fixture (Phase 1)
+The recorder needs a bundle where **every** source is complete. Your current one (`2026-09-27_102010_2272b1477638`) isn't, because LLM Stats was out of quota, so the recorder would refuse it. Do this after 00:00 UTC, when the quota resets.
 ```powershell
 git pull origin biscuit
-python -m pip install -r requirements.lock
-python -B tools/ci.py
+powershell -File run.ps1
+python tools/record_fixture.py
 ```
-It ends with `CI checks passed`.
+The run must end with `Published <run_id> (complete coverage)`. The recorder must print `secret scan: clean` and `fixture verified: smoke 0 failures, coverage OK`. If either is missing, nothing is written; paste its output instead. If both are there:
+```powershell
+git add tests/fixtures
+git commit -m "test: recorded fixture from live run"
+git push origin biscuit
+```
+Paste the recorder's output. I'll check that the CI run for your push replays the recorded fixture and is green.
 
-**Fixture question:** the golden fixture is synthetic because the repo is public. Reply **synthetic** to keep it that way (recommended), or **record** if you want `tools/record_fixture.py` built to commit a trimmed fixture from your real bundle, accepting that it publishes some AA/BenchLM/LLM Stats data.
+CI itself is already confirmed green ([run #1](https://github.com/BiscuitDoesStuff/ModelAnalysis/actions/runs/36312905540)). To reproduce it locally, offline and with no quota: `python -m pip install -r requirements.lock`, then `python -B tools/ci.py`, which ends with `CI checks passed`.
 
 ### Step 5: Identity review (Phase 2)
 This replays your latest real snapshot through the new matching into a **separate** state folder and database, so your real history is untouched.

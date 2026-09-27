@@ -158,6 +158,8 @@ python -B tests/smoke.py
 python -B tests/smoke.py --bundle runs/bundles/<run_id>
 # Everything CI runs (golden replay + smoke + coverage included):
 python -B tools/ci.py
+# Record a trimmed, key-free fixture from the current complete-coverage bundle (verified before writing):
+python tools/record_fixture.py
 ```
 
 Unit/integration checks use fixtures and temporary storage. Smoke checks existing artifacts. These commands do not automatically call live APIs.

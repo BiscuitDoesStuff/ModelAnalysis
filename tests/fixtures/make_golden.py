@@ -21,9 +21,9 @@ from pipeline_common import PROVIDERS, SOURCES  # noqa: E402
 
 AS_OF = "2026-09-27"
 RUN_ID = "golden-synthetic"
+# Paths are relative to the snapshot file (see tools/ci.py replay).
 FIXTURE = {"kind": "synthetic", "as_of": AS_OF,
-           "registry": "tests/fixtures/golden_research.json",
-           "websites": "tests/fixtures/golden_websites.json"}
+           "registry": "golden_research.json", "websites": "golden_websites.json"}
 FETCHED_AT = AS_OF + "T00:00:00+00:00"
 EFFORTS5 = ["minimal", "low", "medium", "high", "xhigh"]
 

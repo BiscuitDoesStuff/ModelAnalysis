@@ -316,8 +316,8 @@
  "fixture": {
   "as_of": "2026-09-27",
   "kind": "synthetic",
-  "registry": "tests/fixtures/golden_research.json",
-  "websites": "tests/fixtures/golden_websites.json"
+  "registry": "golden_research.json",
+  "websites": "golden_websites.json"
  },
  "llmstats": {
   "benchmark_count": 1,
