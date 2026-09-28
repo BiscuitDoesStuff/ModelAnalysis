@@ -18,7 +18,7 @@
 - **Done offline, owner review pending (step 8):** Phase 5 (UX and accessibility), commits `686dd45` (code), `0701cd6` (CI a11y job) and `d2354bb` (docs). See its Status note. It changes only report rendering, so it needs no special live run. The owner's next ordinary run shows it on real data, and `validate_bundle` now also checks page structure on that run.
 - **CI:** GitHub Actions runs `python -B tools/ci.py` on Windows and Linux × Python 3.11 and 3.13, a ruff job, and an `a11y` job (axe-core, keyboard pass and 390px checks on the golden bundle, with screenshots uploaded as the `a11y-screenshots` artifact).
   - `tools/ci.py` runs: fixture staleness check, unit checks, 101 unittest tests, golden replay + smoke + coverage + `audit_provenance`, and the same for `recorded_*` once that fixture exists.
-- **Latest owner live run:** `2026-09-27_112035_c0dfcdeef530`, from before Phase 5. Smoke 0 failures, 0 identity conflicts, 3,666 observations, audit 0 orphans.
+- **Latest owner live run:** `2026-09-28_010619_5f09a1a1bb88` (step 7 run 2, complete coverage). Smoke 0 failures, 0 identity conflicts, 8,724 observations, audit 0 orphans (run-notes).
   - Every run on 09-27 after ~10:00 UTC had **partial coverage only because LLM Stats' daily quota was spent** (it resets 00:00 UTC). That's expected, not a bug.
 - **Changes from sessions 2–3 that aren't obvious from the plan text:**
   - The golden fixture is synthetic (`tests/fixtures/make_golden.py`, `--check` in CI). The owner chose `record`, so `tools/record_fixture.py` writes `tests/fixtures/recorded_*.json`, which CI replays when present.
@@ -29,15 +29,14 @@
   - `tools/golden_bundle.py <dir>` replays the golden fixture and prints the bundle path.
 
 **Owner items (independent of the phase work; don't block on them):**
-- **Step 4 (record fixture), after 00:00 UTC:**
-  - Run `run.ps1`, then `python tools/record_fixture.py`, then commit `tests/fixtures`.
-  - It was refused three times on 09-27 (quota), and nothing has been pushed yet.
-  - The local session can run it with the owner's go-ahead. When the push lands, check that the CI run shows `== recorded replay` and `== recorded provenance audit` green.
+- **Step 4 (record fixture): recorded 2026-09-28, awaiting owner commit.**
+  - `tests/fixtures/recorded_*.json` written from `2026-09-28_010619_5f09a1a1bb88` (58 of 1,136 models, secret scan clean, local `tools/ci.py` passed incl. recorded replay + provenance audit). Not yet committed or pushed.
+  - When the push lands, check that the CI run shows `== recorded replay` and `== recorded provenance audit` green.
   - If the recorded fixture shows the AA response's non-`data` keys, revisit the Phase 4 "AA API version field" item.
 - **Step R (evidence refresh), due before 2026-10-04:** the owner ran `refresh_evidence.py list` but hasn't confirmed anything yet. If they paste what they saw, run the `confirm`/`retire`/`version-confirm` commands for them, then commit `analysis/research.json` and `docs/run-notes.md`.
 - **Step 8 (UX review):** screenshots were sent in session 3. The owner still needs to try their next run's site by keyboard. Fix anything they report within Phase 5's scope.
 
-**Current work: Phase 6 (retrieval efficiency and observability).** "Measure first" is **done and live-baselined** (`2026-09-27_131528_052735b81989`, run-notes); all four optimisation bullets are **implemented and offline-green** (135 tests): jittered retries, capped Retry-After on 429/503, conditional 304 revalidation for catalogs/BenchLM JSON, parallel fetch bounded to 4 threads with fixed output order, `llmstats_daily_budget` (default 0 = today's behaviour). Next: the live two-run before/after check (step 7), which needs a quota window and owner approval.
+**Current work: Phase 6 (retrieval efficiency and observability).** "Measure first" is **done and live-baselined** (`2026-09-27_131528_052735b81989`, run-notes); all four optimisation bullets are **implemented and offline-green** (135 tests): jittered retries, capped Retry-After on 429/503, conditional 304 revalidation for catalogs/BenchLM JSON, parallel fetch bounded to 4 threads with fixed output order, `llmstats_daily_budget` (default 0 = today's behaviour). The live before/after pair (step 7) ran 2026-09-28 (`005753`, `010619`; run-notes): identical completeness, body bytes −55% via 304s, but requests did not fall (304s still count as requests; run 2 also retried LLM Stats' upstream 5xx). Owner decides whether that meets "Done when" before Phase 6 closes.
 1. Start with "Measure first": a shared `retrieval/http.py` with per-host counters, then `source_health` metrics and the Retrieval table on the Confidence page.
 2. Take one baseline live run before any optimisation. The first run of step 7 is that baseline. Step 7 needs two runs a few minutes apart, and costs about 38 LLM Stats requests.
 3. Replay tests use recorded fixtures and never touch the network.
@@ -457,7 +456,7 @@ Run every command in PowerShell from `C:\DevProjects\ModelAnalysis`. Start with 
 | 3 | — | — | ✅ Done: live run `095157_f0e75f9fb295`, smoke 0 failures |
 | 3b | — | — | Live run checkpoint: expect no "no AA benchmark pinned" warning, 2 inherited estimates, `ok research registry current` |
 | 3c | — | — | ✅ Done: LLM Stats failure was the daily quota |
-| 4 | **After 00:00 UTC** (LLM Stats quota reset) | ~10 min | `run.ps1`, then `record_fixture.py`, commit `tests/fixtures`. (7a ✅ done in run `112035`.) Tries at 10:43, 11:03, 11:20 UTC 09-27 were correctly refused (quota) |
+| 4 | **Recorded 2026-09-28** from `010619` | ~2 min | Owner commits `tests/fixtures/recorded_*.json`, then checks CI recorded jobs. (7a ✅ done in run `112035`.) |
 | 5 | — | — | ✅ Done: 0 splits; 2 aliases added |
 | 6 | — | — | ✅ Done: run `110352_9cb7c4c6bb66`, 0 conflicts, smoke 0 failures |
 | 6b | Any run after 00:00 UTC | — | Informational: Zen `catalog_changed` noise should be gone (0 events vs ~82) | Live run checkpoint (first run after rule 3 sets baselines only) |

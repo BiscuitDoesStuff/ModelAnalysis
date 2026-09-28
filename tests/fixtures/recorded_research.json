@@ -1,0 +1,79 @@
+{
+ "aa_index_versions": [
+  {
+   "checked_at": "2026-09-27",
+   "source_url": "https://artificialanalysis.ai/models/releases/muse-spark-1-3",
+   "valid_from": "2026-09-25",
+   "valid_to": null,
+   "version": "4.3.2"
+  }
+ ],
+ "inheritance": [
+  {
+   "capability_url": "https://models.dev/api.json",
+   "checked_at": "2026-09-27",
+   "cost_blended": 0,
+   "equivalence_urls": [
+    "https://dev.meta.ai/docs/pricing-rate-limits",
+    "https://www.orcarouter.ai/blog/muse-spark-1-3-contributor-vs-muse-spark-1-3",
+    "https://llm-stats.com/models/muse-spark-1.3"
+   ],
+   "expires_at": "2026-10-04",
+   "provider": "zen",
+   "rationale": "OrcaRouter reports identical Contributor/standard checkpoints; LLM Stats describes Contributor as a pricing/data-use tier. models.dev opencode entry explicitly lists this free route, zero input/output prices, text output and xhigh effort. This is a cross-route estimate, not a measured Zen result. models.dev does NOT advertise max for this route. Meta primary pricing docs (read 2026-09-26) list muse-spark-1.3 in both Standard and Contributor tiers, differing only in price and training-data use; effort parity is not stated there. Capabilities re-confirmed 2026-09-26 in fresh models.dev snapshot ($0 in/out, text-out, xhigh, not deprecated). Re-confirmed 2026-09-27: listed on the opencode.ai/docs/zen free list; Meta pricing docs list 1.3 in both tiers; source row now scored by the AA API (xhigh 45.1, v4.3.2).",
+   "route_id": "muse-spark-1.3-contributor-free",
+   "selector": "opencode/muse-spark-1.3-contributor-free#xhigh",
+   "source_slug": "musespark13xhigh",
+   "supported_efforts": [
+    "minimal",
+    "low",
+    "medium",
+    "high",
+    "xhigh"
+   ],
+   "target_slug": "musespark13contributorfree",
+   "variant": "xhigh",
+   "version": "4.3.2"
+  },
+  {
+   "capability_url": "https://models.dev/api.json",
+   "checked_at": "2026-09-27",
+   "cost_blended": 0,
+   "equivalence_urls": [
+    "https://dev.meta.ai/docs/pricing-rate-limits",
+    "https://www.orcarouter.ai/blog/muse-spark-1-2-contributor-vs-muse-spark-1-2",
+    "https://llmtr.com/en/models/meta/muse-spark-1-2-contributor"
+   ],
+   "expires_at": "2026-10-04",
+   "provider": "zen",
+   "rationale": "OrcaRouter 1.2 article reports identical Contributor/standard checkpoint, same benchmarks, AA Index 57 for the family; LLMTR states Contributor is the same checkpoint with price/data-policy differences. models.dev opencode entry lists this free route with zero prices, text output and xhigh effort (deprecated flag noted, still listed). Cross-route estimate, not a measured Zen result. Meta primary pricing docs (read 2026-09-26) list muse-spark-1.2 in both tiers, differing only in price and training-data use. Route absent from the opencode.ai/docs/zen free list on 2026-09-26; expect removal. Capabilities re-confirmed 2026-09-26 in fresh models.dev snapshot ($0 in/out, text-out, xhigh, still flagged deprecated). 2026-09-27: still in the Zen API catalog but absent from the opencode.ai/docs/zen free list and flagged deprecated in models.dev; Meta pricing docs still list 1.2 in both tiers. Kept until the route leaves the catalog; route churn alerts on its removal.",
+   "route_id": "muse-spark-1.2-contributor-free",
+   "selector": "opencode/muse-spark-1.2-contributor-free#xhigh",
+   "source_slug": "musespark12",
+   "supported_efforts": [
+    "minimal",
+    "low",
+    "medium",
+    "high",
+    "xhigh"
+   ],
+   "target_slug": "musespark12contributorfree",
+   "variant": "xhigh",
+   "version": "4.3.2"
+  }
+ ],
+ "scores": [
+  {
+   "benchmark": "llm-stats-overall",
+   "checked_at": "2026-09-27",
+   "expires_at": "2026-10-04",
+   "note": "Different metric and unspecified effort: reference only, never an AA ranking score.",
+   "source": "LLM Stats",
+   "target_slug": "musespark13",
+   "url": "https://llm-stats.com/benchmarks",
+   "value": 53.8,
+   "variant": "unspecified",
+   "version": "TrueSkill conservative rating; revision unspecified"
+  }
+ ]
+}
