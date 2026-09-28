@@ -1,0 +1,936 @@
+{
+ "allowlist": [
+  {
+   "name": "GPT-6 Astra",
+   "slug": "gpt6astra"
+  },
+  {
+   "name": "Claude Opus 5.5",
+   "slug": "claudeopus55"
+  },
+  {
+   "name": "Claude Fable 5.1",
+   "slug": "claudefable51"
+  },
+  {
+   "name": "GPT-6 Sol",
+   "slug": "gpt6sol"
+  },
+  {
+   "name": "Claude Opus 5",
+   "slug": "claudeopus5"
+  },
+  {
+   "name": "Claude Fable 5",
+   "slug": "claudefable5"
+  },
+  {
+   "name": "GPT-5.6 Sol",
+   "slug": "gpt56sol"
+  },
+  {
+   "name": "GPT-5.6 Terra",
+   "slug": "gpt56terra"
+  },
+  {
+   "name": "Claude Opus 4.8",
+   "slug": "claudeopus48"
+  },
+  {
+   "name": "GPT-5.5",
+   "slug": "gpt55"
+  },
+  {
+   "name": "Claude Opus 4.7 (Adaptive)",
+   "slug": "claudeopus47adaptive"
+  },
+  {
+   "name": "GPT-5.4",
+   "slug": "gpt54"
+  },
+  {
+   "name": "Claude Sonnet 5",
+   "slug": "claudesonnet5"
+  },
+  {
+   "name": "GPT-6 Luna",
+   "slug": "gpt6luna"
+  },
+  {
+   "name": "Claude Opus 4.7",
+   "slug": "claudeopus47"
+  },
+  {
+   "name": "GPT-5.6 Luna",
+   "slug": "gpt56luna"
+  },
+  {
+   "name": "Muse Spark 1.2",
+   "slug": "musespark12"
+  },
+  {
+   "name": "GPT-5.3 Codex",
+   "slug": "gpt53codex"
+  },
+  {
+   "name": "GPT-5.2",
+   "slug": "gpt52"
+  },
+  {
+   "name": "Claude Opus 5.5 (Adaptive Reasoning, Xhigh Effort, Default Fallback)",
+   "slug": "claudeopus55xhigh"
+  },
+  {
+   "name": "Claude Opus 5.5 (Adaptive Reasoning, High Effort, Default Fallback)",
+   "slug": "claudeopus55high"
+  },
+  {
+   "name": "Claude Fable 5.1 (Adaptive Reasoning, Xhigh Effort, Default Fallback)",
+   "slug": "claudefable51xhigh"
+  },
+  {
+   "name": "GPT-6 Astra (xhigh)",
+   "slug": "gpt6astraxhigh"
+  },
+  {
+   "name": "Claude Opus 5.5 (Adaptive Reasoning, Medium Effort, Default Fallback)",
+   "slug": "claudeopus55medium"
+  },
+  {
+   "name": "Claude Fable 5.1 (Adaptive Reasoning, High Effort, Default Fallback)",
+   "slug": "claudefable51high"
+  },
+  {
+   "name": "GPT-6 Astra (high)",
+   "slug": "gpt6astrahigh"
+  },
+  {
+   "name": "Muse Spark 1.3 (max)",
+   "slug": "musespark13"
+  },
+  {
+   "name": "Muse Spark 1.3 (xhigh)",
+   "slug": "musespark13xhigh"
+  },
+  {
+   "name": "Claude Opus 5 (Adaptive Reasoning, Medium Effort)",
+   "slug": "claudeopus5medium"
+  },
+  {
+   "name": "inclusionAI: Ling 3.0 Flash Fin (free)",
+   "slug": "ling30flashfin"
+  },
+  {
+   "name": "Qwen: Qwen3.8 27B (free)",
+   "slug": "qwen3827b"
+  },
+  {
+   "name": "NVIDIA: Nemotron 3.5 Lightning (free)",
+   "slug": "nemotron35lightning"
+  },
+  {
+   "name": "Thinking Machines: Inkling Small (free)",
+   "slug": "inklingsmall"
+  },
+  {
+   "name": "Thinking Machines: Inkling (free)",
+   "slug": "inkling"
+  },
+  {
+   "name": "Cohere: North Mini Code (free)",
+   "slug": "northminicode"
+  }
+ ],
+ "benchlm_md": {
+  "claudefable5": {
+   "benchlm_slug": "claude-fable-5",
+   "cache_hit": true,
+   "fetched_at": "2026-09-27T07:16:45.551823+00:00",
+   "md": "# Claude Fable 5 Benchmark Scores & Performance\n\n> Claude Fable 5 by Anthropic scores 79.07/100 overall, ranking #6 out of 507 AI models.\n\nCanonical page: https://benchlm.ai/models/claude-fable\n\nLast updated: September 25, 2026\n\n## Model Details\n\n| Property | Value |\n|----------|-------|\n| Creator | Anthropic |\n| Source Type | Proprietary |\n| Reasoning Type | Reasoning |\n| Context Window | 1M+ |\n| Overall Score | 79.07/100 |\n| Overall Rank | #6 of 507 |\n\n## Family & Coverage\n\n- Family: Claude Fable\n- Variant: base\n- Benchmarks covered: 42 of 486\n- Sibling models: [Claude Fable 5.1](/models/claude-fable-5-1)\n- Coverage note: BenchLM currently has partial benchmark coverage for this model, so the overall score is conservative.\n\n## Agentic Benchmarks\n\n| Benchmark | Score |\n|-----------|-------|\n| [Terminal-Bench 3.0](/benchmarks/terminal-bench-3) | 34.0% |\n| [Terminal-Bench 2.1](/benchmarks/terminalbench21) | 84.3% |\n| [OSWorld-Verified](/benchmarks/osworld-verified) | 85% |\n| [GDPval-AA](/benchmarks/gdpvalaa) | 1747 |\n| [τ²-bench results](/benchmarks/tau2-bench) | 98.5% |\n| [GDPval-AA](/benchmarks/gdpvalaanormalized) | 54.8% |\n| [AA EnterpriseOps-Gym](/benchmarks/aaenterpriseopsgym) | 51.1% |\n| [AA Harvey LAB](/benchmarks/aaharveylab) | 93.6% |\n| [terminalBenchHard](/benchmarks/terminal-bench-hard) | 62.9% |\n| [Terminal-Bench 2.1 (Vals)](/benchmarks/valsterminalbench21) | 80.5% |\n| [AA Agentic Index](/benchmarks/aaagenticindex) | 51.0% |\n| [AA-AnalystAgent](/benchmarks/aaanalys",
+   "model": "Claude Fable 5",
+   "url": "https://benchlm.ai/md/models/claude-fable-5.md"
+  },
+  "claudefable51": {
+   "benchlm_slug": "claude-fable-5-1",
+   "cache_hit": true,
+   "fetched_at": "2026-09-27T07:16:45.312894+00:00",
+   "md": "# Claude Fable 5.1 Benchmark Scores & Performance\n\n> Claude Fable 5.1 by Anthropic scores 83/100 overall, ranking #3 out of 507 AI models.\n\nCanonical page: https://benchlm.ai/models/claude-fable-5-1\n\nLast updated: September 25, 2026\n\n## Model Details\n\n| Property | Value |\n|----------|-------|\n| Creator | Anthropic |\n| Source Type | Proprietary |\n| Reasoning Type | Reasoning |\n| Context Window | 1M |\n| Official model card | [Claude Fable 5.1 and Claude Mythos 5.1 system card](https://www-cdn.anthropic.com/0339e6a7c5c7b87f5c07798616dc32c215d14235/Claude%20Fable%205.1%20&%20Claude%20Mythos%205.1%20System%20Card.pdf) |\n| Overall Score | 83/100 |\n| Overall Rank | #3 of 507 |\n\n## Family & Coverage\n\n- Family: Claude Fable\n- Variant: base\n- Benchmarks covered: 47 of 486\n- Sibling models: [Claude Fable 5](/models/claude-fable)\n- Related earlier model: [Claude Fable 5](/models/claude-fable)\n- Coverage note: BenchLM currently has partial benchmark coverage for this model, so the overall score is conservative.\n\n## Agentic Benchmarks\n\n| Benchmark | Score |\n|-----------|-------|\n| [Terminal-Bench 4.0](/benchmarks/terminal-bench-4) | 55.80% |\n| [Terminal-Bench-Science 0.1](/benchmarks/terminal-bench-science) | 52.6% |\n| [OSWorld 2.0](/benchmarks/osworld2) | 41.7% |\n| [AutomationBench](/benchmarks/automationbench) | 31.4% |\n| [Toolathlon-Verified](/benchmarks/toolathlonverified) | 77.8% |\n| [Toolathlon Verified Pass@3](/benchmarks/toolathlonverifiedpass3) | 81.5% |\n| [Toolathlon Verified Pas",
+   "model": "Claude Fable 5.1",
+   "url": "https://benchlm.ai/md/models/claude-fable-5-1.md"
+  },
+  "claudeopus47": {
+   "benchlm_slug": "claude-opus-4-7",
+   "cache_hit": true,
+   "fetched_at": "2026-09-27T07:16:46.505645+00:00",
+   "md": "# Claude Opus 4.7 Benchmark Scores & Performance\n\n> Claude Opus 4.7 by Anthropic scores 66.28/100 overall, ranking #23 out of 507 AI models.\n\nCanonical page: https://benchlm.ai/models/claude-opus-4-7\n\nLast updated: September 25, 2026\n\n## Model Details\n\n| Property | Value |\n|----------|-------|\n| Creator | Anthropic |\n| Source Type | Proprietary |\n| Reasoning Type | Non-Reasoning |\n| Context Window | 1M |\n| Overall Score | 66.28/100 |\n| Overall Rank | #23 of 507 |\n\n## Family & Coverage\n\n- Family: Claude Opus 4.7\n- Variant: base\n- Benchmarks covered: 25 of 486\n- Sibling models: [Claude Opus 4.7 (Adaptive)](/models/claude-opus-4-7-adaptive)\n- Related earlier model: [Claude Opus 4.6](/models/claude-opus-4-6)\n- Coverage note: BenchLM currently has partial benchmark coverage for this model, so the overall score is conservative.\n\n## Agentic Benchmarks\n\n| Benchmark | Score |\n|-----------|-------|\n| [τ²-bench results](/benchmarks/tau2-bench) | 74% |\n| [Gert Labs](/benchmarks/gertlabs) | 65.59% |\n| [ResearchClawBench](/benchmarks/researchclawbench) | 20.7% |\n| [OSWorld 2.0](/benchmarks/osworld2) | 13.9% |\n| [Terminal-Bench 2.1 (Vals)](/benchmarks/valsterminalbench21) | 68.5% |\n| [ApprenticeBench](/benchmarks/apprenticebench) | 7% |\n\n## Coding Benchmarks\n\n| Benchmark | Score |\n|-----------|-------|\n| [Vibe Code Bench](/benchmarks/vibecodebench) | 71.00% |\n| [React Native Evals](/benchmarks/reactnativeevals) | 82.8% |\n| [FrontierCode 1.1 Main](/benchmarks/frontiercode) | 38.5% |\n| [LiveC",
+   "model": "Claude Opus 4.7",
+   "url": "https://benchlm.ai/md/models/claude-opus-4-7.md"
+  },
+  "claudeopus47adaptive": {
+   "benchlm_slug": "claude-opus-4-7-adaptive",
+   "cache_hit": true,
+   "fetched_at": "2026-09-27T07:16:46.165180+00:00",
+   "md": "# Claude Opus 4.7 (Adaptive) Benchmark Scores & Performance\n\n> Claude Opus 4.7 (Adaptive) by Anthropic scores 68.56/100 overall, ranking #17 out of 507 AI models.\n\nCanonical page: https://benchlm.ai/models/claude-opus-4-7-adaptive\n\nLast updated: September 25, 2026\n\n## Model Details\n\n| Property | Value |\n|----------|-------|\n| Creator | Anthropic |\n| Source Type | Proprietary |\n| Reasoning Type | Reasoning |\n| Context Window | 1M |\n| Overall Score | 68.56/100 |\n| Overall Rank | #17 of 507 |\n\n## Family & Coverage\n\n- Family: Claude Opus 4.7\n- Variant: reasoning (adaptive)\n- Benchmarks covered: 37 of 486\n- Sibling models: [Claude Opus 4.7](/models/claude-opus-4-7)\n- Related earlier model: [Claude Opus 4.6](/models/claude-opus-4-6)\n- Coverage note: BenchLM currently has partial benchmark coverage for this model, so the overall score is conservative.\n\n## Agentic Benchmarks\n\n| Benchmark | Score |\n|-----------|-------|\n| [Terminal-Bench 2.0](/benchmarks/terminal-bench-2) | 69.4% |\n| [BrowseComp](/benchmarks/browsecomp) | 79.3% |\n| [MCP Atlas](/benchmarks/mcpatlas) | 77.3% |\n| [OSWorld-Verified](/benchmarks/osworld-verified) | 78% |\n| [CyberGym](/benchmarks/cybergym) | 73.1% |\n| [τ²-bench results](/benchmarks/tau2-bench) | 88.6% |\n| [GDPval-AA](/benchmarks/gdpvalaanormalized) | 41.9% |\n| [OSWorld 2.0](/benchmarks/osworld2) | 18.2% |\n| [JobBench](/benchmarks/jobbench) | 45.9% |\n| [AA ITBench](/benchmarks/aaitbench) | 46.7% |\n| [AA Agentic Index](/benchmarks/aaagenticindex) | 39.5% |\n| ",
+   "model": "Claude Opus 4.7 (Adaptive)",
+   "url": "https://benchlm.ai/md/models/claude-opus-4-7-adaptive.md"
+  },
+  "claudeopus48": {
+   "benchlm_slug": "claude-opus-4-8",
+   "cache_hit": true,
+   "fetched_at": "2026-09-27T07:16:46.012162+00:00",
+   "md": "# Claude Opus 4.8 Benchmark Scores & Performance\n\n> Claude Opus 4.8 by Anthropic scores 70.46/100 overall, ranking #14 out of 507 AI models.\n\nCanonical page: https://benchlm.ai/models/claude-opus-4-8\n\nLast updated: September 25, 2026\n\n## Model Details\n\n| Property | Value |\n|----------|-------|\n| Creator | Anthropic |\n| Source Type | Proprietary |\n| Reasoning Type | Reasoning |\n| Context Window | 1M |\n| Overall Score | 70.46/100 |\n| Overall Rank | #14 of 507 |\n\n## Family & Coverage\n\n- Family: Claude Opus 4.8\n- Variant: base\n- Benchmarks covered: 55 of 486\n- Related earlier model: [Claude Opus 4.7 (Adaptive)](/models/claude-opus-4-7-adaptive)\n- Coverage note: BenchLM currently has partial benchmark coverage for this model, so the overall score is conservative.\n\n## Agentic Benchmarks\n\n| Benchmark | Score |\n|-----------|-------|\n| [Terminal-Bench 3.0](/benchmarks/terminal-bench-3) | 21.1% |\n| [Terminal-Bench 2.1](/benchmarks/terminalbench21) | 74.6% |\n| [BrowseComp](/benchmarks/browsecomp) | 84.3% |\n| [DeepSearchQA](/benchmarks/deepsearchqa) | 93.1% |\n| [OSWorld-Verified](/benchmarks/osworld-verified) | 83.4% |\n| [Finance Agent v2](/benchmarks/financeagentv2) | 53.9% |\n| [GDPval-AA](/benchmarks/gdpvalaa) | 1593 |\n| [MCP Atlas](/benchmarks/mcpatlas) | 82.2% |\n| [Toolathlon](/benchmarks/toolathlon) | 59.9% |\n| [Gert Labs](/benchmarks/gertlabs) | 72.97% |\n| [τ²-bench results](/benchmarks/tau2-bench) | 94.4% |\n| [GDPval-AA](/benchmarks/gdpvalaanormalized) | 46.9% |\n| [ResearchClawBen",
+   "model": "Claude Opus 4.8",
+   "url": "https://benchlm.ai/md/models/claude-opus-4-8.md"
+  },
+  "claudeopus5": {
+   "benchlm_slug": "claude-opus-5",
+   "cache_hit": true,
+   "fetched_at": "2026-09-27T07:16:45.456863+00:00",
+   "md": "# Claude Opus 5 Benchmark Scores & Performance\n\n> Claude Opus 5 by Anthropic scores 79.81/100 overall, ranking #5 out of 507 AI models.\n\nCanonical page: https://benchlm.ai/models/claude-opus-5\n\nLast updated: September 25, 2026\n\n## Model Details\n\n| Property | Value |\n|----------|-------|\n| Creator | Anthropic |\n| Source Type | Proprietary |\n| Reasoning Type | Reasoning |\n| Context Window | Coming soon |\n| Official model card | [Claude Opus 5 System Card](https://www-cdn.anthropic.com/c5fbac3f0b1280a933ebd26d3cb8bb9f5bdeaf48/Claude%20Opus%205%20System%20Card.pdf) |\n| Overall Score | 79.81/100 |\n| Overall Rank | #5 of 507 |\n\n## Family & Coverage\n\n- Family: Claude Opus 5\n- Variant: base\n- Benchmarks covered: 97 of 486\n- Related earlier model: [Claude Opus 4.8](/models/claude-opus-4-8)\n- Coverage note: BenchLM currently has partial benchmark coverage for this model, so the overall score is conservative.\n\n## Agentic Benchmarks\n\n| Benchmark | Score |\n|-----------|-------|\n| [Terminal-Bench 3.0](/benchmarks/terminal-bench-3) | 42.7% |\n| [BrowseComp](/benchmarks/browsecomp) | 90.8% |\n| [HLE w/ tools](/benchmarks/hlewithtools) | 64.7% |\n| [DeepSearchQA](/benchmarks/deepsearchqa) | 95.0% |\n| [DRACO](/benchmarks/draco) | 88.6% |\n| [BrowseComp (10-agent, prerelease)](/benchmarks/multiagentbrowsecompprerelease) | 93.6% |\n| [OSWorld 2.0](/benchmarks/osworld2) | 70.6% |\n| [MCP Atlas](/benchmarks/mcpatlas) | 85.8% |\n| [MCP-Atlas claim coverage](/benchmarks/mcpatlasclaimcoverage) | 89.1% |\n| [",
+   "model": "Claude Opus 5",
+   "url": "https://benchlm.ai/md/models/claude-opus-5.md"
+  },
+  "claudeopus55": {
+   "benchlm_slug": "claude-opus-5-5",
+   "cache_hit": true,
+   "fetched_at": "2026-09-27T07:16:45.250360+00:00",
+   "md": "# Claude Opus 5.5 Benchmark Scores & Performance\n\n> Claude Opus 5.5 by Anthropic scores 86.98/100 overall, ranking #2 out of 507 AI models.\n\nCanonical page: https://benchlm.ai/models/claude-opus-5-5\n\nLast updated: September 25, 2026\n\n## Model Details\n\n| Property | Value |\n|----------|-------|\n| Creator | Anthropic |\n| Source Type | Proprietary |\n| Reasoning Type | Reasoning |\n| Context Window | 1M |\n| Official model card | [Claude Opus 5.5 system card](https://www.anthropic.com/claude-opus-5-5-system-card) |\n| Overall Score | 86.98/100 |\n| Overall Rank | #2 of 507 |\n\n## Family & Coverage\n\n- Family: Claude Opus 5.5\n- Variant: base\n- Benchmarks covered: 64 of 486\n- Related earlier model: [Claude Opus 5](/models/claude-opus-5)\n- Coverage note: BenchLM currently has partial benchmark coverage for this model, so the overall score is conservative.\n\n## Agentic Benchmarks\n\n| Benchmark | Score |\n|-----------|-------|\n| [Terminal-Bench 4.0](/benchmarks/terminal-bench-4) | 66.40% |\n| [Terminal-Bench-Science 0.1](/benchmarks/terminal-bench-science) | 58.7% |\n| [GDPval-AA](/benchmarks/gdpvalaa) | 1846 |\n| [AutomationBench](/benchmarks/automationbench) | 40.0% |\n| [HLE w/ tools](/benchmarks/hlewithtools) | 67.7% |\n| [GDPval-AA](/benchmarks/gdpvalaanormalized) | 67.3% |\n| [AA Briefcase](/benchmarks/aabriefcaseelo) | 1822 |\n| [AA AutomationBench](/benchmarks/aaautomationbench) | 69.5% |\n| [AA Harvey LAB](/benchmarks/aaharveylab) | 91.2% |\n| [GDP.pdf](/benchmarks/aagdppdf) | 26.2% |\n| [OSWorl",
+   "model": "Claude Opus 5.5",
+   "url": "https://benchlm.ai/md/models/claude-opus-5-5.md"
+  },
+  "claudesonnet5": {
+   "benchlm_slug": "claude-sonnet-5",
+   "cache_hit": true,
+   "fetched_at": "2026-09-27T07:16:46.373482+00:00",
+   "md": "# Claude Sonnet 5 Benchmark Scores & Performance\n\n> Claude Sonnet 5 by Anthropic scores 67.01/100 overall, ranking #20 out of 507 AI models.\n\nCanonical page: https://benchlm.ai/models/claude-sonnet-5\n\nLast updated: September 25, 2026\n\n## Model Details\n\n| Property | Value |\n|----------|-------|\n| Creator | Anthropic |\n| Source Type | Proprietary |\n| Reasoning Type | Reasoning |\n| Context Window | 1M |\n| Overall Score | 67.01/100 |\n| Overall Rank | #20 of 507 |\n\n## Family & Coverage\n\n- Family: Claude Sonnet 5\n- Variant: base\n- Benchmarks covered: 43 of 486\n- Related earlier model: [Claude Sonnet 4.6](/models/claude-sonnet-4-6)\n- Coverage note: BenchLM currently has partial benchmark coverage for this model, so the overall score is conservative.\n\n## Agentic Benchmarks\n\n| Benchmark | Score |\n|-----------|-------|\n| [Terminal-Bench 3.0](/benchmarks/terminal-bench-3) | 14.6% |\n| [Terminal-Bench 2.1](/benchmarks/terminalbench21) | 80.4% |\n| [BrowseComp](/benchmarks/browsecomp) | 84.7% |\n| [HLE w/ tools](/benchmarks/hlewithtools) | 57.4% |\n| [OSWorld-Verified](/benchmarks/osworld-verified) | 81.2% |\n| [GDPval-AA](/benchmarks/gdpvalaa) | 1603 |\n| [GDPval-AA](/benchmarks/gdpvalaanormalized) | 47.5% |\n| [Terminal-Bench 2.1 (Vals)](/benchmarks/valsterminalbench21) | 74.5% |\n| [AA Agentic Index](/benchmarks/aaagenticindex) | 44.3% |\n| [AA-AnalystAgent](/benchmarks/aaanalystagent) | 46.3% |\n| [ApprenticeBench](/benchmarks/apprenticebench) | 16% |\n\n## Coding Benchmarks\n\n| Benchmark | Score ",
+   "model": "Claude Sonnet 5",
+   "url": "https://benchlm.ai/md/models/claude-sonnet-5.md"
+  },
+  "gpt52": {
+   "benchlm_slug": "gpt-5-2",
+   "cache_hit": true,
+   "fetched_at": "2026-09-27T07:16:47.468520+00:00",
+   "md": "# GPT-5.2 Benchmark Scores & Performance\n\n> GPT-5.2 by OpenAI scores 61.37/100 overall, ranking #39 out of 507 AI models.\n\nCanonical page: https://benchlm.ai/models/gpt-5-2\n\nLast updated: September 25, 2026\n\n## Model Details\n\n| Property | Value |\n|----------|-------|\n| Creator | OpenAI |\n| Source Type | Proprietary |\n| Reasoning Type | Reasoning |\n| Context Window | 400K |\n| Overall Score | 61.37/100 |\n| Overall Rank | #39 of 507 |\n\n## Family & Coverage\n\n- Family: GPT-5.2\n- Variant: thinking\n- Benchmarks covered: 27 of 486\n- Sibling models: [GPT-5.2 Pro](/models/gpt-5-2-pro), [GPT-5.2 Instant](/models/gpt-5-2-instant)\n- Coverage note: BenchLM currently has partial benchmark coverage for this model, so the overall score is conservative.\n\n## Agentic Benchmarks\n\n| Benchmark | Score |\n|-----------|-------|\n| [BrowseComp](/benchmarks/browsecomp) | 65.8% |\n| [OSWorld-Verified](/benchmarks/osworld-verified) | 47.3% |\n| [τ²-bench results](/benchmarks/tau2-bench) | 84.8% |\n| [Gert Labs](/benchmarks/gertlabs) | 46.54% |\n| [JobBench](/benchmarks/jobbench) | 34.3% |\n\n## Coding Benchmarks\n\n| Benchmark | Score |\n|-----------|-------|\n| [SWE-bench Verified](/benchmarks/swe-bench-verified) | 80% |\n| [SWE-bench Pro](/benchmarks/swe-bench-pro) | 55.6% |\n| [Vibe Code Bench](/benchmarks/vibecodebench) | 53.50% |\n\n## Multimodal & Grounded Benchmarks\n\n| Benchmark | Score |\n|-----------|-------|\n| [MMMU-Pro](/benchmarks/mmmu-pro) | 79.5% |\n| [MathVision](/benchmarks/mathvision) | 83.0% |\n| [CharXiv",
+   "model": "GPT-5.2",
+   "url": "https://benchlm.ai/md/models/gpt-5-2.md"
+  },
+  "gpt53codex": {
+   "benchlm_slug": "gpt-5-3-codex",
+   "cache_hit": true,
+   "fetched_at": "2026-09-27T07:16:47.349381+00:00",
+   "md": "# GPT-5.3 Codex Benchmark Scores & Performance\n\n> GPT-5.3 Codex by OpenAI scores 62.18/100 overall, ranking #37 out of 507 AI models.\n\nCanonical page: https://benchlm.ai/models/gpt-5-3-codex\n\nLast updated: September 25, 2026\n\n## Model Details\n\n| Property | Value |\n|----------|-------|\n| Creator | OpenAI |\n| Source Type | Proprietary |\n| Reasoning Type | Reasoning |\n| Context Window | 400K |\n| Overall Score | 62.18/100 |\n| Overall Rank | #37 of 507 |\n\n## Family & Coverage\n\n- Family: GPT-5.3 Codex\n- Variant: base\n- Benchmarks covered: 22 of 486\n- Sibling models: [GPT-5.3-Codex-Spark](/models/gpt-5-3-codex-spark)\n- Coverage note: BenchLM currently has partial benchmark coverage for this model, so the overall score is conservative.\n\n## Agentic Benchmarks\n\n| Benchmark | Score |\n|-----------|-------|\n| [Terminal-Bench 2.0](/benchmarks/terminal-bench-2) | 77.3% |\n| [OSWorld-Verified](/benchmarks/osworld-verified) | 64.7% |\n| [τ²-bench results](/benchmarks/tau2-bench) | 86% |\n| [Gert Labs](/benchmarks/gertlabs) | 57.47% |\n| [JobBench](/benchmarks/jobbench) | 33.7% |\n\n## Coding Benchmarks\n\n| Benchmark | Score |\n|-----------|-------|\n| [SWE-bench Verified](/benchmarks/swe-bench-verified) | 85% |\n| [SWE-bench Pro](/benchmarks/swe-bench-pro) | 56.8% |\n| [SWE-Rebench](/benchmarks/swe-rebench) | 58.2% |\n| [Vibe Code Bench](/benchmarks/vibecodebench) | 61.77% |\n| [LiveCodeBench (Vals)](/benchmarks/valslivecodebench) | 87.3% |\n| [SWE-bench (Vals)](/benchmarks/valsswebench) | 78.0% |\n\n## Mult",
+   "model": "GPT-5.3 Codex",
+   "url": "https://benchlm.ai/md/models/gpt-5-3-codex.md"
+  },
+  "gpt54": {
+   "benchlm_slug": "gpt-5-4",
+   "cache_hit": true,
+   "fetched_at": "2026-09-27T07:16:46.264181+00:00",
+   "md": "# GPT-5.4 Benchmark Scores & Performance\n\n> GPT-5.4 by OpenAI scores 68.51/100 overall, ranking #18 out of 507 AI models.\n\nCanonical page: https://benchlm.ai/models/gpt-5-4\n\nLast updated: September 25, 2026\n\n## Model Details\n\n| Property | Value |\n|----------|-------|\n| Creator | OpenAI |\n| Source Type | Proprietary |\n| Reasoning Type | Reasoning |\n| Context Window | 1.05M |\n| Overall Score | 68.51/100 |\n| Overall Rank | #18 of 507 |\n\n## Family & Coverage\n\n- Family: GPT-5.4\n- Variant: base\n- Benchmarks covered: 53 of 486\n- Sibling models: [GPT-5.4 Pro](/models/gpt-5-4-pro), [GPT-5.4 mini](/models/gpt-5-4-mini), [GPT-5.4 nano](/models/gpt-5-4-nano)\n- Coverage note: BenchLM currently has partial benchmark coverage for this model, so the overall score is conservative.\n\n## Agentic Benchmarks\n\n| Benchmark | Score |\n|-----------|-------|\n| [Terminal-Bench 2.0](/benchmarks/terminal-bench-2) | 75.1% |\n| [CyberGym](/benchmarks/cybergym) | 79.0% |\n| [BrowseComp](/benchmarks/browsecomp) | 82.7% |\n| [OSWorld-Verified](/benchmarks/osworld-verified) | 75% |\n| [MCP Atlas](/benchmarks/mcpatlas) | 70.6% |\n| [Toolathlon](/benchmarks/toolathlon) | 54.6% |\n| [τ²-bench results](/benchmarks/tau2-bench) | 98.9% |\n| [Claw-Eval](/benchmarks/claw-eval) | 60.3% |\n| [DeepSearchQA](/benchmarks/deepsearchqa) | 73.6% |\n| [APEX-Agents-AA](/benchmarks/apexagentsaa) | 33.3% |\n| [GDPval-AA](/benchmarks/gdpvalaanormalized) | 36.6% |\n| [Gert Labs](/benchmarks/gertlabs) | 64.89% |\n| [ResearchClawBench](/benchmarks",
+   "model": "GPT-5.4",
+   "url": "https://benchlm.ai/md/models/gpt-5-4.md"
+  },
+  "gpt55": {
+   "benchlm_slug": "gpt-5-5",
+   "cache_hit": true,
+   "fetched_at": "2026-09-27T07:16:46.117627+00:00",
+   "md": "# GPT-5.5 Benchmark Scores & Performance\n\n> GPT-5.5 by OpenAI scores 69.13/100 overall, ranking #16 out of 507 AI models.\n\nCanonical page: https://benchlm.ai/models/gpt-5-5\n\nLast updated: September 25, 2026\n\n## Model Details\n\n| Property | Value |\n|----------|-------|\n| Creator | OpenAI |\n| Source Type | Proprietary |\n| Reasoning Type | Reasoning |\n| Context Window | 1M |\n| Overall Score | 69.13/100 |\n| Overall Rank | #16 of 507 |\n\n## Family & Coverage\n\n- Family: GPT-5.5\n- Variant: base\n- Benchmarks covered: 62 of 486\n- Sibling models: [GPT-5.5 Pro](/models/gpt-5-5-pro)\n- Related earlier model: [GPT-5.4](/models/gpt-5-4)\n- Coverage note: BenchLM currently has partial benchmark coverage for this model, so the overall score is conservative.\n\n## Agentic Benchmarks\n\n| Benchmark | Score |\n|-----------|-------|\n| [Terminal-Bench 2.0](/benchmarks/terminal-bench-2) | 82% |\n| [CyberGym](/benchmarks/cybergym) | 81.8% |\n| [BrowseComp](/benchmarks/browsecomp) | 84.4% |\n| [OSWorld-Verified](/benchmarks/osworld-verified) | 78.7% |\n| [MCP Atlas](/benchmarks/mcpatlas) | 75.3% |\n| [Toolathlon](/benchmarks/toolathlon) | 55.6% |\n| [τ²-bench results](/benchmarks/tau2-bench) | 98% |\n| [APEX-Agents-AA](/benchmarks/apexagentsaa) | 37.7% |\n| [GDPval-AA](/benchmarks/gdpvalaanormalized) | 41.8% |\n| [Gert Labs](/benchmarks/gertlabs) | 72.93% |\n| [ResearchClawBench](/benchmarks/researchclawbench) | 17.0% |\n| [OSWorld 2.0](/benchmarks/osworld2) | 13.0% |\n| [JobBench](/benchmarks/jobbench) | 42.7% |\n| [Exp",
+   "model": "GPT-5.5",
+   "url": "https://benchlm.ai/md/models/gpt-5-5.md"
+  },
+  "gpt56luna": {
+   "benchlm_slug": "gpt-5-6-luna",
+   "cache_hit": true,
+   "fetched_at": "2026-09-27T07:16:46.611888+00:00",
+   "md": "# GPT-5.6 Luna Benchmark Scores & Performance\n\n> GPT-5.6 Luna by OpenAI scores 65.6/100 overall, ranking #25 out of 507 AI models.\n\nCanonical page: https://benchlm.ai/models/gpt-5-6-luna\n\nLast updated: September 25, 2026\n\n## Model Details\n\n| Property | Value |\n|----------|-------|\n| Creator | OpenAI |\n| Source Type | Proprietary |\n| Reasoning Type | Reasoning |\n| Context Window | 1.05M |\n| Overall Score | 65.6/100 |\n| Overall Rank | #25 of 507 |\n\n## Family & Coverage\n\n- Family: GPT-5.6\n- Variant: luna (luna)\n- Benchmarks covered: 51 of 486\n- Sibling models: [GPT-5.6 Sol](/models/gpt-5-6-sol), [GPT-5.6 Terra](/models/gpt-5-6-terra), [GPT-5.6 Cyber](/models/gpt-5-6-cyber)\n- Coverage note: BenchLM currently has partial benchmark coverage for this model, so the overall score is conservative.\n\n## Agentic Benchmarks\n\n| Benchmark | Score |\n|-----------|-------|\n| [Terminal-Bench 3.0](/benchmarks/terminal-bench-3) | 14.3% |\n| [Terminal-Bench 2.1](/benchmarks/terminalbench21) | 84.7% |\n| [BrowseComp](/benchmarks/browsecomp) | 83.3% |\n| [OSWorld 2.0](/benchmarks/osworld2) | 45.6% |\n| [CyberGym](/benchmarks/cybergym) | 77.9% |\n| [ExploitGym](/benchmarks/exploitgym) | 12.4% |\n| [Toolathlon](/benchmarks/toolathlon) | 53.4% |\n| [GDPval-AA](/benchmarks/gdpvalaanormalized) | 47.2% |\n| [GDPval-AA](/benchmarks/gdpvalaa) | 1582 |\n| [AA Harvey LAB](/benchmarks/aaharveylab) | 87.9% |\n| [AA ITBench](/benchmarks/aaitbench) | 40.3% |\n| [APEX-Agents-AA](/benchmarks/apexagentsaa) | 35.8% |\n| [AA Enter",
+   "model": "GPT-5.6 Luna",
+   "url": "https://benchlm.ai/md/models/gpt-5-6-luna.md"
+  },
+  "gpt56sol": {
+   "benchlm_slug": "gpt-5-6-sol",
+   "cache_hit": true,
+   "fetched_at": "2026-09-27T07:16:45.600442+00:00",
+   "md": "# GPT-5.6 Sol Benchmark Scores & Performance\n\n> GPT-5.6 Sol by OpenAI scores 78.49/100 overall, ranking #7 out of 507 AI models.\n\nCanonical page: https://benchlm.ai/models/gpt-5-6-sol\n\nLast updated: September 25, 2026\n\n## Model Details\n\n| Property | Value |\n|----------|-------|\n| Creator | OpenAI |\n| Source Type | Proprietary |\n| Reasoning Type | Reasoning |\n| Context Window | 1.05M |\n| Overall Score | 78.49/100 |\n| Overall Rank | #7 of 507 |\n\n## Family & Coverage\n\n- Family: GPT-5.6\n- Variant: sol (sol)\n- Benchmarks covered: 74 of 486\n- Sibling models: [GPT-5.6 Terra](/models/gpt-5-6-terra), [GPT-5.6 Luna](/models/gpt-5-6-luna), [GPT-5.6 Cyber](/models/gpt-5-6-cyber)\n- Related earlier model: [GPT-5.5](/models/gpt-5-5)\n- Coverage note: BenchLM currently has partial benchmark coverage for this model, so the overall score is conservative.\n\n## Agentic Benchmarks\n\n| Benchmark | Score |\n|-----------|-------|\n| [Terminal-Bench 3.0](/benchmarks/terminal-bench-3) | 34.6% |\n| [Terminal-Bench 2.1](/benchmarks/terminalbench21) | 91.9% |\n| [BrowseComp](/benchmarks/browsecomp) | 92.2% |\n| [OSWorld 2.0](/benchmarks/osworld2) | 62.6% |\n| [CyberGym](/benchmarks/cybergym) | 84.5% |\n| [ExploitGym](/benchmarks/exploitgym) | 33.7% |\n| [Toolathlon](/benchmarks/toolathlon) | 58% |\n| [τ²-bench results](/benchmarks/tau2-bench) | 85.1% |\n| [GDPval-AA](/benchmarks/gdpvalaanormalized) | 54.4% |\n| [GDPval-AA](/benchmarks/gdpvalaa) | 1735 |\n| [AA Briefcase](/benchmarks/aabriefcaseelo) | 1487 |\n| [AA ITBen",
+   "model": "GPT-5.6 Sol",
+   "url": "https://benchlm.ai/md/models/gpt-5-6-sol.md"
+  },
+  "gpt56terra": {
+   "benchlm_slug": "gpt-5-6-terra",
+   "cache_hit": true,
+   "fetched_at": "2026-09-27T07:16:45.701810+00:00",
+   "md": "# GPT-5.6 Terra Benchmark Scores & Performance\n\n> GPT-5.6 Terra by OpenAI scores 72.58/100 overall, ranking #9 out of 507 AI models.\n\nCanonical page: https://benchlm.ai/models/gpt-5-6-terra\n\nLast updated: September 25, 2026\n\n## Model Details\n\n| Property | Value |\n|----------|-------|\n| Creator | OpenAI |\n| Source Type | Proprietary |\n| Reasoning Type | Reasoning |\n| Context Window | 1.05M |\n| Overall Score | 72.58/100 |\n| Overall Rank | #9 of 507 |\n\n## Family & Coverage\n\n- Family: GPT-5.6\n- Variant: terra (terra)\n- Benchmarks covered: 51 of 486\n- Sibling models: [GPT-5.6 Sol](/models/gpt-5-6-sol), [GPT-5.6 Luna](/models/gpt-5-6-luna), [GPT-5.6 Cyber](/models/gpt-5-6-cyber)\n- Coverage note: BenchLM currently has partial benchmark coverage for this model, so the overall score is conservative.\n\n## Agentic Benchmarks\n\n| Benchmark | Score |\n|-----------|-------|\n| [Terminal-Bench 3.0](/benchmarks/terminal-bench-3) | 20.8% |\n| [Terminal-Bench 2.1](/benchmarks/terminalbench21) | 87.4% |\n| [BrowseComp](/benchmarks/browsecomp) | 87.5% |\n| [OSWorld 2.0](/benchmarks/osworld2) | 50.2% |\n| [CyberGym](/benchmarks/cybergym) | 81.8% |\n| [ExploitGym](/benchmarks/exploitgym) | 23.2% |\n| [Toolathlon](/benchmarks/toolathlon) | 53.1% |\n| [τ²-bench results](/benchmarks/tau2-bench) | 86.3% |\n| [GDPval-AA](/benchmarks/gdpvalaanormalized) | 46.6% |\n| [GDPval-AA](/benchmarks/gdpvalaa) | 1583 |\n| [AA ITBench](/benchmarks/aaitbench) | 51.0% |\n| [APEX-Agents-AA](/benchmarks/apexagentsaa) | 38.9% |\n| [Ter",
+   "model": "GPT-5.6 Terra",
+   "url": "https://benchlm.ai/md/models/gpt-5-6-terra.md"
+  },
+  "gpt6astra": {
+   "benchlm_slug": "gpt-6-astra",
+   "cache_hit": true,
+   "fetched_at": "2026-09-27T07:16:45.191612+00:00",
+   "md": "# GPT-6 Astra Benchmark Scores & Performance\n\n> GPT-6 Astra by OpenAI scores 88.69/100 overall, ranking #1 out of 507 AI models.\n\nCanonical page: https://benchlm.ai/models/gpt-6-astra\n\nLast updated: September 25, 2026\n\n## Model Details\n\n| Property | Value |\n|----------|-------|\n| Creator | OpenAI |\n| Source Type | Proprietary |\n| Reasoning Type | Reasoning |\n| Context Window | 1.05M |\n| Overall Score | 88.69/100 |\n| Overall Rank | #1 of 507 |\n\n## Family & Coverage\n\n- Family: GPT-6\n- Variant: astra (astra)\n- Benchmarks covered: 61 of 486\n- Sibling models: [GPT-6 Sol](/models/gpt-6-sol), [GPT-6 Luna](/models/gpt-6-luna)\n- Related earlier model: [GPT-5.6 Sol](/models/gpt-5-6-sol)\n- Coverage note: BenchLM currently has partial benchmark coverage for this model, so the overall score is conservative.\n\n## Agentic Benchmarks\n\n| Benchmark | Score |\n|-----------|-------|\n| [BrowseComp](/benchmarks/browsecomp) | 91.5% |\n| [OSWorld 2.0](/benchmarks/osworld2) | 72.6% |\n| [Terminal-Bench 4.0](/benchmarks/terminal-bench-4) | 57.90% |\n| [Terminal-Bench-Science 0.1](/benchmarks/terminal-bench-science) | 64.6% |\n| [ExploitGym](/benchmarks/exploitgym) | 42.4% |\n| [Agents' Last Exam](/benchmarks/agentslastexam) | 59.3% |\n| [AutomationBench](/benchmarks/automationbench) | 41.4% |\n| [HLE w/ tools](/benchmarks/hlewithtools) | 57.2% |\n| [GDPval-AA](/benchmarks/gdpvalaanormalized) | 52.1% |\n| [AA Briefcase](/benchmarks/aabriefcaseelo) | 1569 |\n| [AA Tau3 Banking](/benchmarks/aatau3banking) | 41.4% |\n",
+   "model": "GPT-6 Astra",
+   "url": "https://benchlm.ai/md/models/gpt-6-astra.md"
+  },
+  "gpt6luna": {
+   "benchlm_slug": "gpt-6-luna",
+   "cache_hit": true,
+   "fetched_at": "2026-09-27T07:16:46.473134+00:00",
+   "md": "# GPT-6 Luna Benchmark Scores & Performance\n\n> GPT-6 Luna by OpenAI scores 66.59/100 overall, ranking #22 out of 507 AI models.\n\nCanonical page: https://benchlm.ai/models/gpt-6-luna\n\nLast updated: September 25, 2026\n\n## Model Details\n\n| Property | Value |\n|----------|-------|\n| Creator | OpenAI |\n| Source Type | Proprietary |\n| Reasoning Type | Reasoning |\n| Context Window | 1.05M |\n| Official model card | [OpenAI GPT-6 Luna model documentation](https://developers.openai.com/api/docs/models/gpt-6-luna) |\n| Overall Score | 66.59/100 |\n| Overall Rank | #22 of 507 |\n\n## Family & Coverage\n\n- Family: GPT-6\n- Variant: luna (luna)\n- Benchmarks covered: 22 of 486\n- Sibling models: [GPT-6 Astra](/models/gpt-6-astra), [GPT-6 Sol](/models/gpt-6-sol)\n- Related earlier model: [GPT-5.6 Luna](/models/gpt-5-6-luna)\n- Coverage note: BenchLM currently has partial benchmark coverage for this model, so the overall score is conservative.\n\n## Agentic Benchmarks\n\n| Benchmark | Score |\n|-----------|-------|\n| [ExploitGym](/benchmarks/exploitgym) | 11.6% |\n| [GDPval-AA](/benchmarks/gdpvalaanormalized) | 43.4% |\n| [GDP.pdf](/benchmarks/aagdppdf) | 20.4% |\n\n## Coding Benchmarks\n\n| Benchmark | Score |\n|-----------|-------|\n| [DeepSWE](/benchmarks/deepswe) | 66.6% |\n| [AA-SciCode](/benchmarks/aascicode) | 54.6% |\n\n## Multimodal & Grounded Benchmarks\n\n| Benchmark | Score |\n|-----------|-------|\n| [AA-MMMU-Pro](/benchmarks/aammmupro) | 75.5% |\n\n## Reasoning Benchmarks\n\n| Benchmark | Score |\n|-----------|--",
+   "model": "GPT-6 Luna",
+   "url": "https://benchlm.ai/md/models/gpt-6-luna.md"
+  },
+  "gpt6sol": {
+   "benchlm_slug": "gpt-6-sol",
+   "cache_hit": true,
+   "fetched_at": "2026-09-27T07:16:45.375819+00:00",
+   "md": "# GPT-6 Sol Benchmark Scores & Performance\n\n> GPT-6 Sol by OpenAI scores 81.28/100 overall, ranking #4 out of 507 AI models.\n\nCanonical page: https://benchlm.ai/models/gpt-6-sol\n\nLast updated: September 25, 2026\n\n## Model Details\n\n| Property | Value |\n|----------|-------|\n| Creator | OpenAI |\n| Source Type | Proprietary |\n| Reasoning Type | Reasoning |\n| Context Window | 1.05M |\n| Official model card | [OpenAI GPT-6 Sol model documentation](https://developers.openai.com/api/docs/models/gpt-6-sol) |\n| Overall Score | 81.28/100 |\n| Overall Rank | #4 of 507 |\n\n## Family & Coverage\n\n- Family: GPT-6\n- Variant: sol (sol)\n- Benchmarks covered: 24 of 486\n- Sibling models: [GPT-6 Astra](/models/gpt-6-astra), [GPT-6 Luna](/models/gpt-6-luna)\n- Related earlier model: [GPT-5.6 Sol](/models/gpt-5-6-sol)\n- Coverage note: BenchLM currently has partial benchmark coverage for this model, so the overall score is conservative.\n\n## Agentic Benchmarks\n\n| Benchmark | Score |\n|-----------|-------|\n| [Agents' Last Exam](/benchmarks/agentslastexam) | 56.4% |\n| [AutomationBench](/benchmarks/automationbench) | 33.2% |\n| [OSWorld 2.0](/benchmarks/osworld2) | 60.5% |\n| [ExploitGym](/benchmarks/exploitgym) | 22.1% |\n| [GDPval-AA](/benchmarks/gdpvalaanormalized) | 49.3% |\n| [AA Briefcase](/benchmarks/aabriefcaseelo) | 1483 |\n| [AA AutomationBench](/benchmarks/aaautomationbench) | 61.6% |\n| [GDP.pdf](/benchmarks/aagdppdf) | 24.8% |\n\n## Coding Benchmarks\n\n| Benchmark | Score |\n|-----------|-------|\n| [DeepSW",
+   "model": "GPT-6 Sol",
+   "url": "https://benchlm.ai/md/models/gpt-6-sol.md"
+  },
+  "musespark12": {
+   "benchlm_slug": "muse-spark-1-2",
+   "cache_hit": true,
+   "fetched_at": "2026-09-27T07:16:46.798965+00:00",
+   "md": "# Muse Spark 1.2 Benchmark Scores & Performance\n\n> Muse Spark 1.2 by Meta scores 64.99/100 overall, ranking #28 out of 507 AI models.\n\nCanonical page: https://benchlm.ai/models/muse-spark-1-2\n\nLast updated: September 25, 2026\n\n## Model Details\n\n| Property | Value |\n|----------|-------|\n| Creator | Meta |\n| Source Type | Proprietary |\n| Reasoning Type | Reasoning |\n| Context Window | 1M |\n| Official model card | [Meta: Muse Spark 1.2 model page](https://developer.meta.com/ai/models/muse-spark/) |\n| Overall Score | 64.99/100 |\n| Overall Rank | #28 of 507 |\n\n## Family & Coverage\n\n- Family: Muse Spark\n- Variant: 1.2 (1.2)\n- Benchmarks covered: 22 of 486\n- Sibling models: [Muse Spark 1.1](/models/muse-spark-1-1), [Muse Spark](/models/muse-spark), [Muse Spark 1.3](/models/muse-spark-1-3)\n- Related earlier model: [Muse Spark 1.1](/models/muse-spark-1-1)\n- Coverage note: BenchLM currently has partial benchmark coverage for this model, so the overall score is conservative.\n\n## Agentic Benchmarks\n\n| Benchmark | Score |\n|-----------|-------|\n| [Terminal-Bench 2.1](/benchmarks/terminalbench21) | 82.9% |\n| [GDPval-AA](/benchmarks/gdpvalaa) | 1631 |\n| [GDPval-AA](/benchmarks/gdpvalaanormalized) | 49.1% |\n| [Terminal-Bench 2.1 (Vals)](/benchmarks/valsterminalbench21) | 69.7% |\n| [AA Agentic Index](/benchmarks/aaagenticindex) | 44.0% |\n\n## Coding Benchmarks\n\n| Benchmark | Score |\n|-----------|-------|\n| [Terminal-Bench 2.1](/benchmarks/terminalbench21) | 82.9% |\n| [DeepSWE](/benchmarks/deeps",
+   "model": "Muse Spark 1.2",
+   "url": "https://benchlm.ai/md/models/muse-spark-1-2.md"
+  }
+ },
+ "llmstats": {
+  "claudefable5": {
+   "cache_hit": true,
+   "context_hint": "1",
+   "fetched_at": "2026-09-27T07:16:48.617032+00:00",
+   "license_hint": "Proprietary",
+   "llmstats_slug": "claude-fable-5",
+   "price_hints": [
+    {
+     "kind": "input",
+     "value": "10.00"
+    },
+    {
+     "kind": "cached",
+     "value": "1.00"
+    },
+    {
+     "kind": "output",
+     "value": "50.00"
+    },
+    {
+     "kind": "input",
+     "value": "10.00"
+    },
+    {
+     "kind": "cached",
+     "value": "1.00"
+    },
+    {
+     "kind": "output",
+     "value": "50.00"
+    }
+   ],
+   "url": "https://llm-stats.com/models/claude-fable-5"
+  },
+  "claudefable51": {
+   "cache_hit": true,
+   "context_hint": "1",
+   "fetched_at": "2026-09-27T07:16:48.152865+00:00",
+   "license_hint": "Proprietary",
+   "llmstats_slug": "claude-fable-5-1",
+   "price_hints": [
+    {
+     "kind": "input",
+     "value": "10.00"
+    },
+    {
+     "kind": "cached",
+     "value": "0.250"
+    },
+    {
+     "kind": "output",
+     "value": "50.00"
+    },
+    {
+     "kind": "input",
+     "value": "10.00"
+    },
+    {
+     "kind": "cached",
+     "value": "0.250"
+    },
+    {
+     "kind": "output",
+     "value": "50.00"
+    }
+   ],
+   "url": "https://llm-stats.com/models/claude-fable-5-1"
+  },
+  "claudeopus47": {
+   "cache_hit": true,
+   "context_hint": "1",
+   "fetched_at": "2026-09-27T07:16:53.130732+00:00",
+   "license_hint": "Proprietary",
+   "llmstats_slug": "claude-opus-4-7",
+   "price_hints": [
+    {
+     "kind": "input",
+     "value": "5.00"
+    },
+    {
+     "kind": "output",
+     "value": "25.00"
+    },
+    {
+     "kind": "input",
+     "value": "5.00"
+    },
+    {
+     "kind": "output",
+     "value": "25.00"
+    },
+    {
+     "kind": "input",
+     "value": "5.00"
+    },
+    {
+     "kind": "output",
+     "value": "25.00"
+    }
+   ],
+   "url": "https://llm-stats.com/models/claude-opus-4-7"
+  },
+  "claudeopus47adaptive": {
+   "cache_hit": true,
+   "fetched_at": "2026-09-27T07:16:51.853774+00:00",
+   "llmstats_slug": "claude-opus-4-7-adaptive",
+   "url": "https://llm-stats.com/models/claude-opus-4-7-adaptive"
+  },
+  "claudeopus48": {
+   "cache_hit": true,
+   "context_hint": "1",
+   "fetched_at": "2026-09-27T07:16:50.775738+00:00",
+   "license_hint": "Proprietary",
+   "llmstats_slug": "claude-opus-4-8",
+   "price_hints": [
+    {
+     "kind": "input",
+     "value": "5.00"
+    },
+    {
+     "kind": "cached",
+     "value": "0.500"
+    },
+    {
+     "kind": "output",
+     "value": "25.00"
+    },
+    {
+     "kind": "input",
+     "value": "5.00"
+    },
+    {
+     "kind": "cached",
+     "value": "0.500"
+    },
+    {
+     "kind": "output",
+     "value": "25.00"
+    }
+   ],
+   "url": "https://llm-stats.com/models/claude-opus-4-8"
+  },
+  "claudeopus5": {
+   "cache_hit": true,
+   "context_hint": "1",
+   "fetched_at": "2026-09-27T07:16:48.468949+00:00",
+   "license_hint": "Proprietary",
+   "llmstats_slug": "claude-opus-5",
+   "price_hints": [
+    {
+     "kind": "input",
+     "value": "5.00"
+    },
+    {
+     "kind": "cached",
+     "value": "0.500"
+    },
+    {
+     "kind": "output",
+     "value": "25.00"
+    },
+    {
+     "kind": "input",
+     "value": "5.00"
+    },
+    {
+     "kind": "cached",
+     "value": "0.500"
+    },
+    {
+     "kind": "output",
+     "value": "25.00"
+    }
+   ],
+   "url": "https://llm-stats.com/models/claude-opus-5"
+  },
+  "claudeopus55": {
+   "cache_hit": true,
+   "context_hint": "1",
+   "fetched_at": "2026-09-27T07:16:47.964292+00:00",
+   "license_hint": "Proprietary",
+   "llmstats_slug": "claude-opus-5-5",
+   "price_hints": [
+    {
+     "kind": "input",
+     "value": "4.00"
+    },
+    {
+     "kind": "cached",
+     "value": "0.200"
+    },
+    {
+     "kind": "output",
+     "value": "20.00"
+    },
+    {
+     "kind": "input",
+     "value": "4.00"
+    },
+    {
+     "kind": "cached",
+     "value": "0.200"
+    },
+    {
+     "kind": "output",
+     "value": "20.00"
+    }
+   ],
+   "url": "https://llm-stats.com/models/claude-opus-5-5"
+  },
+  "claudesonnet5": {
+   "cache_hit": true,
+   "context_hint": "1",
+   "fetched_at": "2026-09-27T07:16:52.530391+00:00",
+   "license_hint": "Proprietary",
+   "llmstats_slug": "claude-sonnet-5",
+   "price_hints": [
+    {
+     "kind": "input",
+     "value": "2.00"
+    },
+    {
+     "kind": "cached",
+     "value": "0.200"
+    },
+    {
+     "kind": "output",
+     "value": "10.00"
+    },
+    {
+     "kind": "input",
+     "value": "2.00"
+    },
+    {
+     "kind": "cached",
+     "value": "0.200"
+    },
+    {
+     "kind": "output",
+     "value": "10.00"
+    }
+   ],
+   "url": "https://llm-stats.com/models/claude-sonnet-5"
+  },
+  "gpt52": {
+   "error": "HTTP Error 404: Not Found",
+   "url": "https://llm-stats.com/models/gpt-5-2"
+  },
+  "gpt53codex": {
+   "cache_hit": true,
+   "fetched_at": "2026-09-27T07:16:57.183643+00:00",
+   "llmstats_slug": "gpt-5-3-codex",
+   "url": "https://llm-stats.com/models/gpt-5-3-codex"
+  },
+  "gpt54": {
+   "cache_hit": true,
+   "fetched_at": "2026-09-27T07:16:52.123942+00:00",
+   "llmstats_slug": "gpt-5-4",
+   "url": "https://llm-stats.com/models/gpt-5-4"
+  },
+  "gpt55": {
+   "cache_hit": true,
+   "fetched_at": "2026-09-27T07:16:51.641077+00:00",
+   "llmstats_slug": "gpt-5-5",
+   "url": "https://llm-stats.com/models/gpt-5-5"
+  },
+  "gpt56luna": {
+   "cache_hit": true,
+   "fetched_at": "2026-09-27T07:16:53.547078+00:00",
+   "llmstats_slug": "gpt-5-6-luna",
+   "url": "https://llm-stats.com/models/gpt-5-6-luna"
+  },
+  "gpt56sol": {
+   "cache_hit": true,
+   "fetched_at": "2026-09-27T07:16:48.795188+00:00",
+   "llmstats_slug": "gpt-5-6-sol",
+   "url": "https://llm-stats.com/models/gpt-5-6-sol"
+  },
+  "gpt56terra": {
+   "cache_hit": true,
+   "fetched_at": "2026-09-27T07:16:49.392800+00:00",
+   "llmstats_slug": "gpt-5-6-terra",
+   "url": "https://llm-stats.com/models/gpt-5-6-terra"
+  },
+  "gpt6astra": {
+   "cache_hit": true,
+   "context_hint": "1.1",
+   "fetched_at": "2026-09-27T07:16:47.697439+00:00",
+   "license_hint": "Proprietary",
+   "llmstats_slug": "gpt-6-astra",
+   "price_hints": [
+    {
+     "kind": "input",
+     "value": "10.00"
+    },
+    {
+     "kind": "cached",
+     "value": "1.00"
+    },
+    {
+     "kind": "output",
+     "value": "50.00"
+    },
+    {
+     "kind": "input",
+     "value": "10.00"
+    },
+    {
+     "kind": "cached",
+     "value": "1.00"
+    },
+    {
+     "kind": "output",
+     "value": "50.00"
+    }
+   ],
+   "url": "https://llm-stats.com/models/gpt-6-astra"
+  },
+  "gpt6luna": {
+   "cache_hit": true,
+   "context_hint": "1.1",
+   "fetched_at": "2026-09-27T07:16:52.912218+00:00",
+   "license_hint": "Proprietary",
+   "llmstats_slug": "gpt-6-luna",
+   "price_hints": [
+    {
+     "kind": "input",
+     "value": "0.100"
+    },
+    {
+     "kind": "cached",
+     "value": "0.010"
+    },
+    {
+     "kind": "output",
+     "value": "0.500"
+    },
+    {
+     "kind": "input",
+     "value": "0.100"
+    },
+    {
+     "kind": "cached",
+     "value": "0.010"
+    },
+    {
+     "kind": "output",
+     "value": "0.500"
+    }
+   ],
+   "url": "https://llm-stats.com/models/gpt-6-luna"
+  },
+  "gpt6sol": {
+   "cache_hit": true,
+   "context_hint": "1.1",
+   "fetched_at": "2026-09-27T07:16:48.303943+00:00",
+   "license_hint": "Proprietary",
+   "llmstats_slug": "gpt-6-sol",
+   "price_hints": [
+    {
+     "kind": "input",
+     "value": "2.00"
+    },
+    {
+     "kind": "cached",
+     "value": "0.200"
+    },
+    {
+     "kind": "output",
+     "value": "10.00"
+    },
+    {
+     "kind": "input",
+     "value": "2.00"
+    },
+    {
+     "kind": "cached",
+     "value": "0.200"
+    },
+    {
+     "kind": "output",
+     "value": "10.00"
+    }
+   ],
+   "url": "https://llm-stats.com/models/gpt-6-sol"
+  },
+  "musespark12": {
+   "cache_hit": true,
+   "fetched_at": "2026-09-27T07:16:54.314954+00:00",
+   "llmstats_slug": "muse-spark-1-2",
+   "url": "https://llm-stats.com/models/muse-spark-1-2"
+  }
+ },
+ "retrieved_at": "2026-09-28_010619_5f09a1a1bb88",
+ "run_id": "2026-09-28_010619_5f09a1a1bb88",
+ "schema_version": 3,
+ "source_health": {
+  "benchlm_md": {
+   "attempted": true,
+   "attempted_count": 40,
+   "cache_hits": 40,
+   "complete": false,
+   "count": 40,
+   "enabled": true,
+   "failed_count": 0,
+   "fetched_at": "2026-09-28T01:06:54.708759+00:00",
+   "oldest_data_at": "2026-09-27T07:16:45.191612+00:00",
+   "reason": "",
+   "retrieval": {
+    "cache_hits": 40,
+    "elapsed_seconds": 0.004959199999575503,
+    "hosts": {},
+    "kind": "website",
+    "not_modified": 0,
+    "request_seconds": 0,
+    "requests": 0,
+    "response_bytes": 0,
+    "retries": 0,
+    "source": "benchlm"
+   },
+   "scope": "selected-pages",
+   "status": "complete"
+  },
+  "llmstats": {
+   "attempted": true,
+   "attempted_count": 40,
+   "cache_hits": 38,
+   "complete": false,
+   "count": 38,
+   "enabled": true,
+   "failed_count": 2,
+   "fetched_at": "2026-09-28T01:06:56.168156+00:00",
+   "oldest_data_at": "2026-09-27T07:16:47.697439+00:00",
+   "reason": "",
+   "retrieval": {
+    "cache_hits": 38,
+    "elapsed_seconds": 1.4593874999991385,
+    "hosts": {
+     "llm-stats.com": {
+      "request_seconds": 1.4546287999983178,
+      "requests": 2,
+      "response_bytes": 148564,
+      "retries": 0
+     }
+    },
+    "kind": "website",
+    "not_modified": 0,
+    "request_seconds": 1.4546287999983178,
+    "requests": 2,
+    "response_bytes": 148564,
+    "retries": 0,
+    "source": "llmstats"
+   },
+   "scope": "selected-pages",
+   "status": "partial"
+  },
+  "vals": {
+   "attempted": true,
+   "attempted_count": 8,
+   "cache_hits": 8,
+   "complete": false,
+   "count": 8,
+   "enabled": true,
+   "failed_count": 0,
+   "fetched_at": "2026-09-28T01:06:56.169172+00:00",
+   "oldest_data_at": "2026-09-27T07:16:58.248153+00:00",
+   "reason": "",
+   "retrieval": {
+    "cache_hits": 8,
+    "elapsed_seconds": 0.0009839999984251335,
+    "hosts": {},
+    "kind": "website",
+    "not_modified": 0,
+    "request_seconds": 0,
+    "requests": 0,
+    "response_bytes": 0,
+    "retries": 0,
+    "source": "vals"
+   },
+   "scope": "selected-pages",
+   "status": "complete"
+  }
+ },
+ "vals": {
+  "claudefable5": {
+   "accuracy_hints": [
+    "3.90",
+    "3.90",
+    "3.90",
+    "3.90",
+    "24.47",
+    "24.47",
+    "18.46",
+    "18.46"
+   ],
+   "cache_hit": true,
+   "cost_per_test_hint": "",
+   "fetched_at": "2026-09-27T07:16:58.791206+00:00",
+   "html_len": 326363,
+   "latency_hint": "4 s",
+   "url": "https://www.vals.ai/models/anthropic_claude-fable-5",
+   "vals_href": "/models/anthropic_claude-fable-5"
+  },
+  "claudefable51": {
+   "accuracy_hints": [
+    "2.70",
+    "0.24",
+    "2.70",
+    "0.24",
+    "35.03",
+    "35.03",
+    "1.54",
+    "1.54"
+   ],
+   "cache_hit": true,
+   "cost_per_test_hint": "",
+   "fetched_at": "2026-09-27T07:16:58.375126+00:00",
+   "html_len": 393799,
+   "latency_hint": "4 s",
+   "url": "https://www.vals.ai/models/anthropic_claude-fable-5-1",
+   "vals_href": "/models/anthropic_claude-fable-5-1"
+  },
+  "claudeopus5": {
+   "accuracy_hints": [
+    "0.42",
+    "0.42",
+    "0.42",
+    "0.42",
+    "32.1",
+    "32.1",
+    "31.90",
+    "31.90"
+   ],
+   "cache_hit": true,
+   "cost_per_test_hint": "",
+   "fetched_at": "2026-09-27T07:16:58.521034+00:00",
+   "html_len": 404989,
+   "latency_hint": "4 s",
+   "url": "https://www.vals.ai/models/anthropic_claude-opus-5",
+   "vals_href": "/models/anthropic_claude-opus-5"
+  },
+  "claudeopus55": {
+   "accuracy_hints": [
+    "37.13",
+    "37.13",
+    "5.29",
+    "91.43",
+    "91.43",
+    "0.45",
+    "49.55",
+    "49.55"
+   ],
+   "cache_hit": true,
+   "cost_per_test_hint": "22.30",
+   "fetched_at": "2026-09-27T07:16:58.248153+00:00",
+   "html_len": 308022,
+   "latency_hint": "4 s",
+   "url": "https://www.vals.ai/models/anthropic_claude-opus-5-5",
+   "vals_href": "/models/anthropic_claude-opus-5-5"
+  },
+  "gpt56luna": {
+   "accuracy_hints": [
+    "44.55",
+    "44.55",
+    "67.29",
+    "67.29",
+    "44.22",
+    "44.22",
+    "1.25",
+    "1.25"
+   ],
+   "cache_hit": true,
+   "cost_per_test_hint": "",
+   "fetched_at": "2026-09-27T07:16:59.181844+00:00",
+   "html_len": 345382,
+   "latency_hint": "4 s",
+   "url": "https://www.vals.ai/models/openai_gpt-5.6-luna",
+   "vals_href": "/models/openai_gpt-5.6-luna"
+  },
+  "gpt56sol": {
+   "accuracy_hints": [
+    "23.1",
+    "23.1",
+    "1.04",
+    "2.5",
+    "2.5",
+    "89.1",
+    "89.1",
+    "1.5"
+   ],
+   "cache_hit": true,
+   "cost_per_test_hint": "",
+   "fetched_at": "2026-09-27T07:16:59.050047+00:00",
+   "html_len": 388716,
+   "latency_hint": "6 S",
+   "url": "https://www.vals.ai/models/openai_gpt-5.6-sol",
+   "vals_href": "/models/openai_gpt-5.6-sol"
+  },
+  "gpt6astra": {
+   "accuracy_hints": [
+    "0.00",
+    "0.32",
+    "0.32",
+    "29.03",
+    "29.03",
+    "67.74",
+    "67.74",
+    "52.59"
+   ],
+   "cache_hit": true,
+   "cost_per_test_hint": "",
+   "fetched_at": "2026-09-27T07:16:58.650941+00:00",
+   "html_len": 316533,
+   "latency_hint": "4 s",
+   "url": "https://www.vals.ai/models/openai_gpt-6-astra",
+   "vals_href": "/models/openai_gpt-6-astra"
+  },
+  "musespark13": {
+   "accuracy_hints": [
+    "0.00",
+    "0.24",
+    "0.24",
+    "18.68",
+    "18.68",
+    "1.44",
+    "23.75",
+    "23.75"
+   ],
+   "cache_hit": true,
+   "cost_per_test_hint": "",
+   "fetched_at": "2026-09-27T07:16:58.916278+00:00",
+   "html_len": 241923,
+   "latency_hint": "4 s",
+   "url": "https://www.vals.ai/models/meta_muse_spark_1_3_max",
+   "vals_href": "/models/meta_muse_spark_1_3_max"
+  }
+ }
+}

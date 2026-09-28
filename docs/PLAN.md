@@ -17,9 +17,10 @@
 - **Done and live-verified:** Phase 0 (0a–d), Phase 1 (CI), Phase 2 (identity), Phase 3 (provenance), Phase 4 (evidence maintenance). Each phase's Status note below says what landed and where it differs from the original text. Live evidence is in the Status table and `docs/run-notes.md`.
 - **Done offline, owner review pending (step 8):** Phase 5 (UX and accessibility), commits `686dd45` (code), `0701cd6` (CI a11y job) and `d2354bb` (docs). See its Status note. It changes only report rendering, so it needs no special live run. The owner's next ordinary run shows it on real data, and `validate_bundle` now also checks page structure on that run.
 - **CI:** GitHub Actions runs `python -B tools/ci.py` on Windows and Linux × Python 3.11 and 3.13, a ruff job, and an `a11y` job (axe-core, keyboard pass and 390px checks on the golden bundle, with screenshots uploaded as the `a11y-screenshots` artifact).
-  - `tools/ci.py` runs: fixture staleness check, unit checks, 101 unittest tests, golden replay + smoke + coverage + `audit_provenance`, and the same for `recorded_*` once that fixture exists.
-- **Latest owner live run:** `2026-09-27_112035_c0dfcdeef530`, from before Phase 5. Smoke 0 failures, 0 identity conflicts, 3,666 observations, audit 0 orphans.
+  - `tools/ci.py` runs: fixture staleness check, unit checks, 136 unittest tests, golden replay + smoke + coverage + `audit_provenance`, and the same for `recorded_*` once that fixture exists.
+- **Latest owner live run:** `2026-09-28_010619_5f09a1a1bb88` (step 7 run 2, complete coverage). Smoke 0 failures, 0 identity conflicts, 8,724 observations, audit 0 orphans (run-notes).
   - Every run on 09-27 after ~10:00 UTC had **partial coverage only because LLM Stats' daily quota was spent** (it resets 00:00 UTC). That's expected, not a bug.
+  - Known issue: LLM Stats website pages `gpt-5-2` and `gemini-3-pro` return 404 every run (stale slugs; website health stays `partial` truthfully). Negative caching was deferred in the 2026-09-28 project review.
 - **Changes from sessions 2–3 that aren't obvious from the plan text:**
   - The golden fixture is synthetic (`tests/fixtures/make_golden.py`, `--check` in CI). The owner chose `record`, so `tools/record_fixture.py` writes `tests/fixtures/recorded_*.json`, which CI replays when present.
   - Replay flags `--as-of` and `--registry` fix the evidence day and registry.
@@ -29,15 +30,14 @@
   - `tools/golden_bundle.py <dir>` replays the golden fixture and prints the bundle path.
 
 **Owner items (independent of the phase work; don't block on them):**
-- **Step 4 (record fixture), after 00:00 UTC:**
-  - Run `run.ps1`, then `python tools/record_fixture.py`, then commit `tests/fixtures`.
-  - It was refused three times on 09-27 (quota), and nothing has been pushed yet.
-  - The local session can run it with the owner's go-ahead. When the push lands, check that the CI run shows `== recorded replay` and `== recorded provenance audit` green.
+- **Step 4 (record fixture): done 2026-09-28.** `tests/fixtures/recorded_*.json` from `2026-09-28_010619_5f09a1a1bb88` (58 of 1,136 models), committed in `2e0757a`; CI `36365144923` shows `== recorded replay` and `== recorded provenance audit` green.
   - If the recorded fixture shows the AA response's non-`data` keys, revisit the Phase 4 "AA API version field" item.
 - **Step R (evidence refresh), due before 2026-10-04:** the owner ran `refresh_evidence.py list` but hasn't confirmed anything yet. If they paste what they saw, run the `confirm`/`retire`/`version-confirm` commands for them, then commit `analysis/research.json` and `docs/run-notes.md`.
 - **Step 8 (UX review):** screenshots were sent in session 3. The owner still needs to try their next run's site by keyboard. Fix anything they report within Phase 5's scope.
 
-**Current work: Phase 6 (retrieval efficiency and observability).** "Measure first" is **done and live-baselined** (`2026-09-27_131528_052735b81989`, run-notes); all four optimisation bullets are **implemented and offline-green** (135 tests): jittered retries, capped Retry-After on 429/503, conditional 304 revalidation for catalogs/BenchLM JSON, parallel fetch bounded to 4 threads with fixed output order, `llmstats_daily_budget` (default 0 = today's behaviour). Next: the live two-run before/after check (step 7), which needs a quota window and owner approval.
+**Current work: none dispatched.** Phase 6 is done (below; run-notes 2026-09-28). Next in roadmap order is Phase 7: planned (`.sw/comms/archive/phase6-measure-first/events/2026-09-27T163800Z-phase7-plan.md`), Q1–Q5 defaults approved, dispatch awaiting owner approval.
+
+**Phase 6 (retrieval efficiency and observability), history.** "Measure first" is **done and live-baselined** (`2026-09-27_131528_052735b81989`, run-notes); all four optimisation bullets are **implemented and offline-green** (135 tests): jittered retries, capped Retry-After on 429/503, conditional 304 revalidation for catalogs/BenchLM JSON, parallel fetch bounded to 4 threads with fixed output order, `llmstats_daily_budget` (default 0 = today's behaviour). The live before/after pair (step 7) ran 2026-09-28 (`005753`, `010619`; run-notes): identical completeness, body bytes −55% via 304s; requests did not fall (304s still count as requests; run 2 also retried LLM Stats' upstream 5xx). Owner accepted this 2026-09-28 and reworded "Done when" to "requests or bytes". **Phase 6 is done**; recorded fixture committed in `2e0757a`, CI recorded jobs green.
 1. Start with "Measure first": a shared `retrieval/http.py` with per-host counters, then `source_health` metrics and the Retrieval table on the Confidence page.
 2. Take one baseline live run before any optimisation. The first run of step 7 is that baseline. Step 7 needs two runs a few minutes apart, and costs about 38 LLM Stats requests.
 3. Replay tests use recorded fixtures and never touch the network.
@@ -57,7 +57,7 @@ After Phase 6 comes Phase 7.
   - Offline experiments use `pipeline.py --snapshot … --state-dir replay-runs --db replay-history.sqlite` (gitignored) or `tools/golden_bundle.py`.
 - **API keys in child processes.** A `powershell -File` child started from an automation shell may not see keys set at Windows User scope. Before launching `run.ps1` from a tool, inject each needed key, for example `$env:LLM_STATS_API_KEY = [System.Environment]::GetEnvironmentVariable('LLM_STATS_API_KEY','User')`. Do the same for `ANTHROPIC_API_KEY` and any other key the run needs; see run-notes 2026-09-26.
 - **Keep `.ps1` files UTF-8 with BOM.** Windows PowerShell 5.1 misreads them without it (run-notes 2026-09-26).
-- **Before every push:** `python -B tools/ci.py` and `ruff check --select F401,F811,F821,F841 .`; CI runs both on every push. If they aren't installed: `python -m pip install -r requirements.lock ruff==0.15.8`.
+- **Before every push:** `python -B tools/ci.py` and `git diff --check`; CI additionally runs ruff on every push. Owner decision 2026-09-27: no local ruff (uninstalled; CI is the ruff arbiter). If the lock deps aren't installed: `python -m pip install -r requirements.lock`.
 - **Browser a11y check (optional locally; CI always runs it):** needs Node 22.
   - Run `npm ci --prefix tools/a11y` and `npm exec --prefix tools/a11y -- playwright install chromium` (Playwright 1.56.1).
   - Then `python -B tools/golden_bundle.py <dir>` and `node tools/a11y/check.mjs <bundle> --shots <dir>`.
@@ -382,7 +382,7 @@ You replay your latest real snapshot through the new code into `replay-runs/` an
   - Interrupted pagination stays `partial`; existing tests cover this.
 - **Replay tests** built from recorded fixtures, with no network and no quota use, for: 429 then success, `Retry-After`, a 304 (not modified) reuse, a budget cutoff, and parallel fetches with fixed output order.
 
-**Done when:** a before/after pair of live runs shows fewer requests with identical completeness; quota use is visible and within budget; validation never touches the network.
+**Done when:** a before/after pair of live runs shows fewer requests or bytes with identical completeness (a 304 is still a request; it saves the body); quota use is visible and within budget; validation never touches the network.
 
 ---
 
@@ -457,11 +457,11 @@ Run every command in PowerShell from `C:\DevProjects\ModelAnalysis`. Start with 
 | 3 | — | — | ✅ Done: live run `095157_f0e75f9fb295`, smoke 0 failures |
 | 3b | — | — | Live run checkpoint: expect no "no AA benchmark pinned" warning, 2 inherited estimates, `ok research registry current` |
 | 3c | — | — | ✅ Done: LLM Stats failure was the daily quota |
-| 4 | **After 00:00 UTC** (LLM Stats quota reset) | ~10 min | `run.ps1`, then `record_fixture.py`, commit `tests/fixtures`. (7a ✅ done in run `112035`.) Tries at 10:43, 11:03, 11:20 UTC 09-27 were correctly refused (quota) |
+| 4 | ✅ **Done 2026-09-28** | — | Recorded from `010619`, committed `2e0757a`, CI recorded jobs green. (7a ✅ done in run `112035`.) |
 | 5 | — | — | ✅ Done: 0 splits; 2 aliases added |
 | 6 | — | — | ✅ Done: run `110352_9cb7c4c6bb66`, 0 conflicts, smoke 0 failures |
 | 6b | Any run after 00:00 UTC | — | Informational: Zen `catalog_changed` noise should be gone (0 events vs ~82) | Live run checkpoint (first run after rule 3 sets baselines only) |
-| R | **Before 2026-10-04** | ~15 min | Evidence refresh with `tools/refresh_evidence.py` (see Step R) |
+| R | **Before 2026-10-04** | ~15 min | Evidence refresh with `tools/refresh_evidence.py` (see Step R). **Deferred by owner 2026-09-27 to a later plan** — entries lose eligibility by rule once expired |
 | 7 | After Phase 6 | ~10 min | Live run checkpoint (Phase 6 needs two runs); Phase 3's is 7a above |
 | 8 | **Now** (Phase 5 landed) | ~10 min | Review the screenshots sent in session 3 and try your next run's site by keyboard (see Step 8) |
 

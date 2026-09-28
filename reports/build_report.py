@@ -131,10 +131,12 @@ def reliability_tables(a):
         retrieval.append([name, recorded("requests"), recorded("response_bytes"),
                           recorded("request_seconds"), recorded("elapsed_seconds"),
                           recorded("retries"), recorded("cache_hits"),
+                          recorded("not_modified"),
                           quota_text("before"), quota_text("after")])
     yield ("Retrieval — recorded fetch metrics; retained on replay, not new activity",
            ["Source", "Requests (attempts)", "Body bytes", "HTTP seconds", "Elapsed seconds",
-            "Retries", "Cache hits", "Quota before (remaining / day)", "Quota after (remaining / day)"], retrieval)
+            "Retries", "Cache hits", "Revalidated (304)",
+            "Quota before (remaining / day)", "Quota after (remaining / day)"], retrieval)
 
 
 def reliability_markdown(a):

@@ -18,19 +18,22 @@ if __package__ in (None, ""):
     sys.path[0] = str(Path(__file__).resolve().parents[1])
 from pipeline_common import atomic_json, safe_error, utc_now, source_status, load_config, SCHEMA_VERSION
 from analysis.common import TIERS, kebab, norm
-from retrieval.http import SourceClient
+from retrieval.http import SourceClient, _ERROR_LOG_LOCK
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 class FetchContext:
-    def __init__(self, source, config, cache_dir, error_log, client=None):
+    def __init__(self, source, config, error_log, client=None, cache_dir=None):
         self.source, self.config = source, config
-        self.cache_dir, self.error_log = Path(cache_dir), Path(error_log)
+        self.cache_dir = Path(cache_dir) if cache_dir is not None else None
+        self.error_log = Path(error_log)
         self.client = client or SourceClient(source, "website", log=self.log_err)
 
     def log_err(self, msg):
-        self.error_log.parent.mkdir(parents=True, exist_ok=True)
-        with self.error_log.open("a", encoding="utf-8") as f:
-            f.write(f"{utc_now()} {safe_error(msg)}\n")
+        line = f"{utc_now()} {safe_error(msg)}\n"
+        with _ERROR_LOG_LOCK:
+            self.error_log.parent.mkdir(parents=True, exist_ok=True)
+            with self.error_log.open("a", encoding="utf-8") as f:
+                f.write(line)
 
 
 def _cache_path(ctx, slug):
@@ -220,11 +223,9 @@ def fetch_vals_pages(ctx, snap, allowlist):
             break
         tail = href.split("/models/", 1)[-1] if "/models/" in href else href
         key = norm(tail.replace("_", " ").replace("-", " "))
-        match = None
-        for slug in allow_norms:
-            if slug and (slug in key or key in slug):
-                match = slug
-                break
+        # Exact key, else the longest allowlisted slug inside it (opus-5-5 beats opus-5).
+        match = key if key in allow_norms else max(
+            (slug for slug in allow_norms if slug and slug in key), key=len, default=None) if key else None
         if not match:
             continue
         cached = cache_get(ctx, tail)
@@ -278,7 +279,7 @@ def main(input_path=None, output_dir=None, cache_dir=None, config=None):
     out["source_health"] = {}
     for src in ("benchlm_md", "llmstats", "vals"):
         source = "benchlm" if src == "benchlm_md" else src
-        ctx = FetchContext(source, cfg, cache, raw / "_errors.log")
+        ctx = FetchContext(source, cfg, raw / "_errors.log", cache_dir=cache)
         disabled = source in cfg["disabled_sources"]
         pages = out[src] = {} if disabled else fetchers[src](ctx)
         failed = sum("error" in v for v in pages.values())

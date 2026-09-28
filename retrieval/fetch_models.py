@@ -7,7 +7,6 @@ import datetime
 import hashlib
 import json
 import math
-import threading
 import urllib.error
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -17,13 +16,11 @@ if __package__ in (None, ""):
 from pipeline_common import (apply_credentials, atomic_json, new_run_id, utc_now, safe_error,
                              source_status, load_config, SOURCES, PROVIDERS, SCHEMA_VERSION)
 from analysis.common import norm
-from retrieval.http import SourceClient
+from retrieval.http import SourceClient, _ERROR_LOG_LOCK
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # Independent sources share one bounded pool; llmstats runs after its inputs, in main.
 MAX_FETCH_THREADS = 4
-# One shared _errors.log: concurrent sources must never interleave their lines.
-_ERROR_LOG_LOCK = threading.Lock()
 
 class FetchContext:
     def __init__(self, source, config, error_log, client=None, cache_dir=None):

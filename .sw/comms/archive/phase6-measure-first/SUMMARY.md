@@ -1,0 +1,32 @@
+# phase6-measure-first - summary
+
+- **Outcome:** Phase 6 done: measurement + 4 optimisations live-verified (pair 005753/010619: identical completeness, bytes -55%); recorded fixture 2e0757a, CI recorded jobs green; Done-when reworded to requests-or-bytes by owner.
+- **Closed:** 2026-09-28 01:35:46Z by biscuitdoesstuff at 2e0757ae6eba30e52f2561ce037ba940fe662177
+- **Events:** 26, kept in `events/` for evidence; read this summary instead.
+
+- 2026-09-27T124624Z-owner-assignment.md
+- 2026-09-27T125236Z-owner-progress.md
+- 2026-09-27T130440Z-owner-progress.md
+- 2026-09-27T131500Z-owner-progress.md
+- 2026-09-27T131914Z-owner-progress.md
+- 2026-09-27T141336Z-owner-progress.md
+- 2026-09-27T143917Z-owner-progress.md
+- 2026-09-27T145200Z-owner-progress.md
+- 2026-09-27T150500Z-owner-progress.md
+- 2026-09-27T152222Z-owner-progress.md
+- 2026-09-27T153500Z-owner-progress.md
+- 2026-09-27T154000Z-owner-progress.md
+- 2026-09-27T155500Z-project-review-review.md
+- 2026-09-27T160500Z-owner-progress.md
+- 2026-09-27T161500Z-owner-progress.md
+- 2026-09-27T163800Z-owner-progress.md
+- 2026-09-27T163800Z-phase7-plan.md
+- 2026-09-27T164300Z-owner-progress.md
+- 2026-09-27T164300Z-project-review-plan-review.md
+- 2026-09-27T170000Z-owner-progress.md
+- 2026-09-27T171200Z-owner-progress.md
+- 2026-09-27T172500Z-owner-progress.md
+- 2026-09-27T221011Z-leader-progress.md
+- 2026-09-28T010000Z-leader-progress.md
+- 2026-09-28T011500Z-leader-progress.md
+- 2026-09-28T013514Z-leader-close.md

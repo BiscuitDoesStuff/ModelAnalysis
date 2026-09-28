@@ -1,0 +1,25 @@
+# phase6-measure-first - progress - 2026-09-27T170000Z - owner
+
+- **Author / audience:** Project Leader for the owner; owner decisions on the open-items list (Yes = do now / approve, No = defer to later plan).
+- **Approval:** Owner decisions below; step-by-steps handed to owner in chat. No code changes by agent.
+- **Scope / acceptance:** Record decisions 1–10 + hand exact owner commands. Troubleshooting stays aligned with PLAN.
+- **Status:** in_progress; awaiting owner execution (commit+push now; pair at ~5pm owner-local). Live pair still blocked on quota window (00:00 UTC 2026-09-28).
+- **Branch / base:** biscuit-worktree at c5d40aa + uncommitted D1 fix (6 files, +20/−17) + untracked records; in sync with origin/biscuit-worktree; origin/main at PR #2 merge 8466483.
+- **Checked revision / changed:** Leader docs only: docs/PLAN.md (pre-push rule → ci.py + diff-check, local ruff removed, CI arbiter; R row marked deferred) + this event. No code touched.
+- **Owners / dependencies:** Owner runs steps 1, 5, 2, 3 below. Leader runs pair follow-through (smoke/audit/recorder/run-notes/close) on go-ahead.
+- **Decisions (owner, 2026-09-27 ~17:00 UTC):**
+  - 1 YES: final commit+push now (c5d40aa + D1 fix + records).
+  - 2 YES: live pair at ~5pm owner-local, two go-aheads (Leader ASKS each).
+  - 3 YES: keyboard review on next run's site.
+  - 4 NO (deferred): step R evidence refresh → later plan. Consequence flagged: entries lose eligibility by rule once expired (window ends 2026-10-04).
+  - 5 YES: delete local ruff, accept CI as arbiter. Standing pre-push rule updated in PLAN accordingly.
+  - 6 YES: Phase 7 Q1–Q5 defaults approved as-is.
+  - 7 SOLO: no other users intended; `.sw/config.json` stays as-is. Closed.
+  - 8 YES: Leader executes pair follow-through on go-ahead.
+  - 9 YES: Phase 6 close-out after verification (run-notes + `sw comms close`).
+  - 10 NO (deferred): Phase 7 implementation dispatch → later plan. This supersedes the 160500Z "Phase 7 authorized" — no Phase 7 code until a future plan re-authorizes it. Plan + review artifacts stay on file.
+  - Trailing "6." in the owner message was uninterpretable; ignored — owner to restate if it meant something.
+- **Validation:** `git diff --check` clean (implicit in pending pre-push gates). Owner runs `python -B tools/ci.py` before commit. CI arbiter for ruff.
+- **Not validated / risks:** Live pair + recorder still pending window. If run 1 shows llmstats refused → record and stop, no debugging rabbit hole (per 145200Z).
+- **Publication:** Owner owns all commits/pushes. Agents publish nothing.
+- **Next action:** Owner: steps A–C from chat (uninstall ruff → gates → commit+push → CI check; then 5pm runs; then keyboard pass). Leader: pair follow-through + close-out on go-ahead.
