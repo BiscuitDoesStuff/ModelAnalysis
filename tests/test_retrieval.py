@@ -153,6 +153,19 @@ class CacheTests(unittest.TestCase):
             atomic_json(fw._cache_path(ctx, "legacy"), {"url": "old"})
             self.assertIsNone(fw.cache_get(ctx, "legacy"))
 
+    def test_vals_pages_match_exact_or_longest_model_key(self):
+        # Allowlist order must not decide the match: opus-5 sorts first but is only a prefix of opus-5-5.
+        allowlist = [{"slug": "claudeopus5"}, {"slug": "claudeopus55"}]
+        hrefs = ["/models/anthropic_claude-opus-5-5", "/models/anthropic_claude-opus-5", "/models/"]
+        snap = {"vals": {"models": [{"href": h} for h in hrefs]}}
+        with tempfile.TemporaryDirectory() as tmp:
+            ctx = fw.FetchContext("vals", load_config(), Path(tmp) / "errors", cache_dir=tmp)
+            with patch.object(ctx.client, "get_text", side_effect=lambda url, **kw: url), \
+                 patch("sys.stdout", io.StringIO()):
+                pages = fw.fetch_vals_pages(ctx, snap, allowlist)
+        self.assertEqual({k: v["vals_href"] for k, v in pages.items()},
+                         {"claudeopus55": hrefs[0], "claudeopus5": hrefs[1]})
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,0 +1,21 @@
+# project-review-20260928 - review - 2026-09-28T031222Z - biscuitdoesstuff
+
+- **Author / audience:** Project Leader (Claude Opus 5.5 session) for the owner.
+- **Approval:** Owner asked for a project review in chat 2026-09-28 (~02:40 UTC); chose "Health + correctness", inline, read-only.
+- **Scope / acceptance:** Whole repo: PLAN/run-notes/Git/CI consistency, config vs code, invariants actually enforced, and a correctness pass over `retrieval/`, `pipeline.py`, `pipeline_common.py`, `analysis/`, `reports/` hot spots, fixtures. Read-only; no fixes in this event. Excluded: `run.ps1` execution, network, a11y/visual review (step 8).
+- **Status:** complete
+- **Branch / base:** biscuit-worktree @ `ccfc6f8` (in sync with origin; CI `36370723472` + sw-validate `36370723445` success); `origin/main` @ `8466483`, 5 commits behind the worktree.
+- **Checked revision / changed:** Reviewed `1b3a9ab`..`ccfc6f8` (tree identical for code). The uncommitted paths listed by the event skeleton belong to the follow-up assignment event, not this review.
+- **Owners / dependencies:** Owner decides fixes; Leader implements approved Execution Light items.
+- **Decisions / remaining:** Findings, most severe first:
+  - **C1 (medium)** `retrieval/fetch_websites.py:227-230`: Vals pages matched to the first allowlist slug by substring in either direction. `/models/anthropic_claude-opus-5-5` also matches `claudeopus5`; correct today only because Opus 5.5 sorts first by AA score. `meta_muse_spark_1_3_max` lands on base `musespark13`; an href ending `/models/` (empty key) matches the first slug. Effect: Vals hint observations attached to the wrong model.
+  - **C2 (low)** `retrieval/fetch_models.py:66,577-580`: mixed 304 + fresh components stamp fresh bodies with the older reuse time; `fetched_at` then stays pinned. Display-only (no staleness logic reads it).
+  - **C3 (low, plausible)** `retrieval/http.py:135`: a 200 with non-JSON body is retried as `ValueError` (3 attempts); for LLM Stats each may spend quota. Unobserved.
+  - **C4 / H3 (low)** `retrieval/fetch_websites.py:199-208`: failed website pages are never cached; `llm-stats.com/models/gpt-5-2` and `/gemini-3-pro` 404 every run (stale slugs) → 2 requests/run, LLM Stats website health permanently `partial`.
+  - **H1 (docs)** `docs/PLAN.md:20` said 101 unittest tests (actual 135); line 37 heading still "Current work: Phase 6".
+  - **H2 (info)** `origin/main` 5 commits behind `biscuit-worktree`; PR to main is the owner's.
+  - Verified OK: atomic publish + recovery; prune limited to manifested published bundles, pointer protected; retry/Retry-After; quota never invented; per-source clients (only the locked error log is shared); secret redaction; recorded fixtures contain no credential patterns; `or 0` sites in analysis/reports are filters/counts, not displayed unknowns; `config.example.json` keys = keys read in code; `ci.yml` runs `tools/ci.py` + ruff + a11y.
+- **Validation:** Leader, 2026-09-28 ~02:45–03:05 UTC: `python -B -m unittest discover -s tests -p "test_*.py"` → 135 OK; config-key comparison script; `Select-String` credential scan over `tests/fixtures/recorded_*.json` → no hits; website failures read from `runs/bundles/2026-09-28_010619_5f09a1a1bb88/raw/*_websites.json` (read-only).
+- **Not validated / risks:** C3 not reproduced; full line-by-line read covered `retrieval/` and `pipeline.py` fully, `analysis/`/`reports/` by targeted search only.
+- **Publication:** local-only until a human pushes
+- **Next action:** Owner approved the fix plan (C1 + H1; C2/C3/C4 deferred) — see the assignment event.

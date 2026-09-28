@@ -223,11 +223,9 @@ def fetch_vals_pages(ctx, snap, allowlist):
             break
         tail = href.split("/models/", 1)[-1] if "/models/" in href else href
         key = norm(tail.replace("_", " ").replace("-", " "))
-        match = None
-        for slug in allow_norms:
-            if slug and (slug in key or key in slug):
-                match = slug
-                break
+        # Exact key, else the longest allowlisted slug inside it (opus-5-5 beats opus-5).
+        match = key if key in allow_norms else max(
+            (slug for slug in allow_norms if slug and slug in key), key=len, default=None) if key else None
         if not match:
             continue
         cached = cache_get(ctx, tail)
