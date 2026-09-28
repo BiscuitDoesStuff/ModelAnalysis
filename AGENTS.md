@@ -2,11 +2,12 @@
 
 ## Project identity
 
-ModelAnalysis takes local, on-use snapshots of LLM catalogs, free routes, prices and benchmark evidence into Markdown, Excel, JSON, an offline dashboard and a static site. Implemented state lives in `docs/PLAN.md` (handoff section first, then phase Status notes), dated evidence in `docs/run-notes.md`, execution history in the latest events under `.sw/comms/tasks/<task-id>/`, and published truth in Git (`main` baseline, owner's `biscuit-worktree`). Currently authorized: the Phase 6 post-quota-window live pair plus fixture recording (owner-approved, procedure in the latest `phase6-measure-first` event and PLAN steps 4/7), and the standing owner items in the PLAN handoff (steps 4, R, 8). Phase 7 and anything beyond are roadmap order, not approval.
+ModelAnalysis takes local, on-use snapshots of LLM catalogs, free routes, prices and benchmark evidence into Markdown, Excel, JSON, an offline dashboard and a static site. Implemented state lives in `docs/PLAN.md` (handoff section first, then phase Status notes), dated evidence in `docs/run-notes.md`, execution history in the latest events under `.sw/comms/tasks/<task-id>/`, and published truth in Git (`main` baseline, owner's `biscuit-worktree`).
 
 ## Architecture invariants
 
 Owned by this project. Rules an agent must never break:
+
 - `source_health`/`website_health` flow analyze → history overlay → pipeline → reports untouched; renderers never reinterpret missing evidence (unknown is not zero) and replay never touches the network.
 - One shared report renderer (`build_report.reliability_tables` + `reports/ui.py`) feeds the dashboard and the site; new tables/pages must use `ui.*` or `validate_bundle` fails the run.
 - Retrieval measures without changing behaviour: same requests, retries, completeness and cached `fetched_at`; quota readings come only from existing account calls, never invented.
@@ -14,6 +15,7 @@ Owned by this project. Rules an agent must never break:
 - Agents never commit, push, or run `run.ps1` (quota spend + real history writes); the owner approves and publishes.
 
 <!-- sw:begin core -->
+
 ## Required startup
 
 The harness auto-loads this file; do not re-read it. Before a meaningful change:
@@ -59,9 +61,11 @@ OpenCode is the shared harness; other harnesses are optional local adapters.
 `.sw/workspace.md` owns roles, approved-plan execution, permissions, tiers, and
 runtime checks. `.sw/collaboration.md` owns task records, messages, branches,
 and integration. Credentials, machine paths, and model choices stay local.
+
 <!-- sw:end core -->
 
 <!-- sw:begin profile -->
+
 ## Profile: generic
 
 Validation order for code changes: (1) the project's build or type check,
@@ -69,4 +73,5 @@ Validation order for code changes: (1) the project's build or type check,
 interactive checks only when a real session exists, (4) `git diff --check` and
 trailing-whitespace checks on new files. Discover the actual commands from the
 repository (README, package manifest, CI workflow) instead of assuming them.
+
 <!-- sw:end profile -->
